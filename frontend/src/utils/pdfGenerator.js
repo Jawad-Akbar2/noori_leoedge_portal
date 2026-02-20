@@ -1,7 +1,7 @@
 /**
  * PDF Generator Utility
  * Generates PDF reports
- * Note: Install with: npm install jspdf html2canvas
+ * Note: Requires npm install jspdf html2canvas
  */
 
 export async function generatePayrollPDF(employeeName, summary, totals) {
@@ -72,7 +72,7 @@ export async function generatePayrollPDF(employeeName, summary, totals) {
     document.body.removeChild(container);
   } catch (error) {
     console.error('PDF generation error:', error);
-    alert('Failed to generate PDF. Make sure jspdf and html2canvas are installed.');
+    alert('Failed to generate PDF. Make sure jspdf and html2canvas are installed: npm install jspdf html2canvas');
   }
 }
 
@@ -152,6 +152,6 @@ export async function generateSalarySlipPDF(employee, dailyBreakdown, totals) {
     pdf.save(`salary-slip-${employee.employeeNumber}-${new Date().toISOString().split('T')[0]}.pdf`);
   } catch (error) {
     console.error('Salary slip PDF error:', error);
-    alert('Failed to generate salary slip PDF.');
+    alert('Failed to generate salary slip PDF. Make sure jspdf and html2canvas are installed.');
   }
 }

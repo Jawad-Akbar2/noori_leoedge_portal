@@ -1,0 +1,36 @@
+{
+  "version": 2,
+  "projectSettings": {
+    "sourceFilesOutsideRootDirectory": true
+  },
+  "buildCommand": "echo 'Build skipped for monorepo'",
+  "installCommand": "npm install --prefix backend && npm install --prefix frontend",
+  "env": {
+    "MONGODB_URI": "@mongodb_uri",
+    "JWT_SECRET": "@jwt_secret",
+    "FRONTEND_URL": "@frontend_url",
+    "REACT_APP_API_URL": "/api"
+  },
+  "functions": {
+    "backend/server.js": {
+      "memory": 512,
+      "maxDuration": 30
+    }
+  },
+  "routes": [
+    {
+      "src": "/api/(.*)",
+      "dest": "backend/server.js",
+      "methods": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
+    },
+    {
+      "src": "/(.*)",
+      "dest": "frontend/build/index.html",
+      "status": 200
+    },
+    {
+      "src": "/static/(.*)",
+      "dest": "frontend/build/static/$1"
+    }
+  ]
+}

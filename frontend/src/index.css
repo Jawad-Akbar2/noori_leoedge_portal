@@ -2,20 +2,24 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Global Styles */
 * {
   margin: 0;
   padding: 0;
   box-sizing: border-box;
 }
 
+html {
+  scroll-behavior: smooth;
+}
+
 body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans',
-    'Helvetica Neue',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
     sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background-color: #f5f7fa;
+  background-color: #f3f4f6;
 }
 
 code {
@@ -42,15 +46,27 @@ code {
   background: #94a3b8;
 }
 
-/* Responsive Typography */
-@media (max-width: 768px) {
-  html {
-    font-size: 14px;
-  }
+/* Animation for spinner */
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
 }
 
-@media (max-width: 480px) {
-  html {
-    font-size: 13px;
+.animate-spin {
+  animation: spin 1s linear infinite;
+}
+
+/* Modal backdrop */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  z-index: 40;
+}
+
+/* Responsive utility */
+@media (max-width: 768px) {
+  body {
+    font-size: 14px;
   }
 }

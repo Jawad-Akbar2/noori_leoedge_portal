@@ -1,5 +1,4 @@
 import { useState, useCallback } from 'react';
-import { authService } from '../services/auth';
 
 export function useAuth() {
   const [user, setUser] = useState(() => {
@@ -12,22 +11,38 @@ export function useAuth() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  const login = useCallback(async (email, password, isAdmin = false) => {
+  const login = useCallback(async (email, password) => {
     setLoading(true);
     setError(null);
 
     try {
-      const data = isAdmin
-        ? await authService.adminLogin(email, password)
-        : await authService.employeeLogin(email, password);
+      const response = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password })
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.message || 'Login failed');
+      }
+
+      const data = await response.json();
+
+      if (!data.user.role) {
+        throw new Error('No role assigned. Contact administrator.');
+      }
 
       setUser(data.user);
-      setRole(isAdmin ? 'admin' : 'employee');
+      setRole(data.user.role);
+
+      localStorage.setItem('token', data.token);
+      localStorage.setItem('user', JSON.stringify(data.user));
+      localStorage.setItem('role', data.user.role);
 
       return data;
     } catch (err) {
-      const message = err.response?.data?.message || 'Login failed';
-      setError(message);
+      setError(err.message);
       throw err;
     } finally {
       setLoading(false);
@@ -35,16 +50,16 @@ export function useAuth() {
   }, []);
 
   const logout = useCallback(() => {
+    setUser(null);
+    setRole(null);
     localStorage.removeItem('token');
     localStorage.removeItem('user');
     localStorage.removeItem('role');
-    setUser(null);
-    setRole(null);
   }, []);
 
   const isAuthenticated = useCallback(() => {
-    return !!localStorage.getItem('token');
-  }, []);
+    return !!localStorage.getItem('token') && !!user;
+  }, [user]);
 
   return {
     user,

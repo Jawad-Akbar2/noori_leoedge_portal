@@ -1,36 +1,60 @@
-const express = require('express');
-const router = express.Router();
-const Employee = require('../models/Employee');
-const jwt = require('jsonwebtoken');
-const { v4: uuidv4 } = require('uuid');
-const bcrypt = require('bcryptjs');
-const { auth } = require('../middleware/auth');
+import express from 'express';
+import jwt from 'jsonwebtoken';
+import { v4 as uuidv4 } from 'uuid';
+import Employee from '../models/Employee.js';
 
-// Admin Login
-router.post('/admin/login', async (req, res) => {
+const router = express.Router();
+
+// **LOGIN ENDPOINT: Single endpoint, no role parameter**
+// Backend determines role from department field
+router.post('/login', async (req, res) => {
   try {
     const { email, password } = req.body;
+
+    if (!email || !password) {
+      return res.status(400).json({ message: 'Email and password required' });
+    }
+
+    const employee = await Employee.findOne({ email, isDeleted: false });
     
-    const admin = await Employee.findOne({ email, department: 'Manager' });
-    if (!admin) return res.status(401).json({ message: 'Invalid credentials' });
-    
-    const isMatch = await admin.comparePassword(password);
-    if (!isMatch) return res.status(401).json({ message: 'Invalid credentials' });
-    
+    if (!employee) {
+      return res.status(401).json({ message: 'Invalid credentials' });
+    }
+
+    if (employee.status === 'Inactive' && !employee.inviteToken) {
+      return res.status(401).json({ message: 'Account not activated. Please check your email for activation link.' });
+    }
+
+    const isMatch = await employee.comparePassword(password);
+    if (!isMatch) {
+      return res.status(401).json({ message: 'Invalid credentials' });
+    }
+
+    // Determine role based on department
+    const role = employee.department === 'Manager' ? 'admin' : 'employee';
+
+    // Create JWT token
     const token = jwt.sign(
-      { id: admin._id, role: 'admin' },
+      { 
+        id: employee._id, 
+        email: employee.email,
+        role: role
+      },
       process.env.JWT_SECRET,
       { expiresIn: process.env.JWT_EXPIRE }
     );
-    
+
     res.json({
       token,
       user: {
-        id: admin._id,
-        email: admin.email,
-        firstName: admin.firstName,
-        lastName: admin.lastName,
-        role: 'admin'
+        id: employee._id,
+        email: employee.email,
+        firstName: employee.firstName,
+        lastName: employee.lastName,
+        department: employee.department,
+        role: role,
+        employeeNumber: employee.employeeNumber,
+        status: employee.status
       }
     });
   } catch (error) {
@@ -38,7 +62,7 @@ router.post('/admin/login', async (req, res) => {
   }
 });
 
-// Employee Onboarding (Join via Token)
+// Employee Onboarding
 router.post('/employee/onboard', async (req, res) => {
   try {
     const { token, firstName, lastName, password, bankDetails } = req.body;
@@ -62,8 +86,10 @@ router.post('/employee/onboard', async (req, res) => {
     
     await employee.save();
     
+    const role = employee.department === 'Manager' ? 'admin' : 'employee';
+    
     const authToken = jwt.sign(
-      { id: employee._id, role: 'employee' },
+      { id: employee._id, role: role },
       process.env.JWT_SECRET,
       { expiresIn: process.env.JWT_EXPIRE }
     );
@@ -76,40 +102,8 @@ router.post('/employee/onboard', async (req, res) => {
         email: employee.email,
         firstName: employee.firstName,
         lastName: employee.lastName,
-        role: 'employee'
-      }
-    });
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-});
-
-// Employee Login
-router.post('/employee/login', async (req, res) => {
-  try {
-    const { email, password } = req.body;
-    
-    const employee = await Employee.findOne({ email, status: 'Active' });
-    if (!employee) return res.status(401).json({ message: 'Invalid credentials' });
-    
-    const isMatch = await employee.comparePassword(password);
-    if (!isMatch) return res.status(401).json({ message: 'Invalid credentials' });
-    
-    const token = jwt.sign(
-      { id: employee._id, role: 'employee' },
-      process.env.JWT_SECRET,
-      { expiresIn: process.env.JWT_EXPIRE }
-    );
-    
-    res.json({
-      token,
-      user: {
-        id: employee._id,
-        email: employee.email,
-        firstName: employee.firstName,
-        lastName: employee.lastName,
-        department: employee.department,
-        role: 'employee'
+        role: role,
+        status: employee.status
       }
     });
   } catch (error) {
@@ -126,21 +120,29 @@ router.post('/validate-token', async (req, res) => {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     const user = await Employee.findById(decoded.id).select('-password -tempPassword');
     
-    res.json({ valid: true, user, role: decoded.role });
+    if (!user) return res.status(404).json({ message: 'User not found' });
+    
+    const role = decoded.role || (user.department === 'Manager' ? 'admin' : 'employee');
+    
+    res.json({ 
+      valid: true, 
+      user: { ...user.toObject(), role },
+      role 
+    });
   } catch (error) {
     res.status(401).json({ message: 'Invalid token' });
   }
 });
 
-// Change Password (Employee)
-router.post('/change-password', auth, async (req, res) => {
+// Change Password
+router.post('/change-password', async (req, res) => {
   try {
+    const token = req.headers.authorization?.split(' ')[1];
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
     const { newPassword } = req.body;
-    const employee = await Employee.findById(req.userId);
 
-    if (!employee) {
-      return res.status(404).json({ message: 'Employee not found' });
-    }
+    const employee = await Employee.findById(decoded.id);
+    if (!employee) return res.status(404).json({ message: 'Employee not found' });
 
     employee.password = newPassword;
     await employee.save();
@@ -151,4 +153,4 @@ router.post('/change-password', auth, async (req, res) => {
   }
 });
 
-module.exports = router;
+export default router;

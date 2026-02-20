@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { LogOut, User, Settings, Bell, Menu, X } from 'lucide-react';
+import { LogOut, User, Bell, Menu, X } from 'lucide-react';
 import { logout, getUser } from '../../services/auth';
 import toast from 'react-hot-toast';
 
@@ -8,7 +8,6 @@ export default function Header({ onMenuClick }) {
   const navigate = useNavigate();
   const user = getUser();
   const [showDropdown, setShowDropdown] = useState(false);
-  const [notifications, setNotifications] = useState(0);
 
   const handleLogout = () => {
     logout();
@@ -17,19 +16,19 @@ export default function Header({ onMenuClick }) {
   };
 
   return (
-    <header className="bg-white shadow sticky top-0 z-40">
+    <header className="bg-white shadow sticky top-0 z-40 border-b border-gray-200">
       <div className="flex items-center justify-between p-4 md:p-6">
         {/* Left: Menu Button */}
         <button
           onClick={onMenuClick}
-          className="md:hidden text-gray-600 hover:text-gray-800"
+          className="text-gray-600 hover:text-gray-800 transition"
         >
           <Menu size={24} />
         </button>
 
         {/* Center: Title */}
-        <h1 className="text-xl md:text-2xl font-bold text-gray-800 flex-1 text-center md:text-left">
-          HR Employee Portal
+        <h1 className="text-lg md:text-xl font-bold text-gray-800 flex-1 text-center md:text-left ml-4 md:ml-0">
+          NOORI
         </h1>
 
         {/* Right: User Menu */}
@@ -37,11 +36,6 @@ export default function Header({ onMenuClick }) {
           {/* Notifications */}
           <button className="relative p-2 text-gray-600 hover:text-gray-800 rounded-lg hover:bg-gray-100 transition">
             <Bell size={20} />
-            {notifications > 0 && (
-              <span className="absolute top-1 right-1 w-5 h-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center">
-                {notifications}
-              </span>
-            )}
           </button>
 
           {/* User Dropdown */}
@@ -70,32 +64,19 @@ export default function Header({ onMenuClick }) {
 
                 <button
                   onClick={() => {
-                    navigate(localStorage.getItem('role') === 'admin' 
-                      ? '/admin/dashboard' 
-                      : '/employee/profile');
+                    const role = localStorage.getItem('role');
+                    navigate(role === 'admin' ? '/admin/profile' : '/employee/profile');
                     setShowDropdown(false);
                   }}
-                  className="w-full flex items-center gap-2 px-4 py-2 text-left text-gray-700 hover:bg-gray-50 transition"
+                  className="w-full flex items-center gap-2 px-4 py-2 text-left text-gray-700 hover:bg-gray-50 transition text-sm border-b"
                 >
                   <User size={18} />
                   My Profile
                 </button>
 
                 <button
-                  onClick={() => {
-                    setShowDropdown(false);
-                  }}
-                  className="w-full flex items-center gap-2 px-4 py-2 text-left text-gray-700 hover:bg-gray-50 transition"
-                >
-                  <Settings size={18} />
-                  Settings
-                </button>
-
-                <div className="border-t border-gray-200"></div>
-
-                <button
                   onClick={handleLogout}
-                  className="w-full flex items-center gap-2 px-4 py-2 text-left text-red-600 hover:bg-red-50 transition"
+                  className="w-full flex items-center gap-2 px-4 py-2 text-left text-red-600 hover:bg-red-50 transition text-sm"
                 >
                   <LogOut size={18} />
                   Logout

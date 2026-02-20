@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react'; 
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { Users, Clock, DollarSign, Menu, X } from 'lucide-react';
@@ -41,7 +41,7 @@ export default function AdminDashboard() {
   return (
     <div className="flex h-screen bg-gray-100">
       {/* Sidebar */}
-      <Sidebar isOpen={sidebarOpen} toggleSidebar={() => setSidebarOpen(!sidebarOpen)} />
+      {/* ❌ REMOVED: Sidebar is already rendered in AdminLayout */}
 
       {/* Main Content */}
       <div className="flex-1 overflow-auto">
@@ -61,16 +61,12 @@ export default function AdminDashboard() {
 
         {/* Dashboard Content */}
         <main className="p-4 md:p-6">
-          {/* FIX: Changed condition to check for loading OR null stats. 
-              This prevents the crash if fetchStats fails. 
-          */}
           {loading || !stats ? (
             <div className="text-center py-12">
               <p>{loading ? "Loading..." : "Failed to load stats. Please refresh."}</p>
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {/* Total Employees Block */}
               <DashboardStats
                 title="Total Employees"
                 value={stats.totalEmployees}
@@ -79,7 +75,6 @@ export default function AdminDashboard() {
                 onClick={() => navigate('/admin/employees')}
               />
 
-              {/* Attendance Today Block */}
               <DashboardStats
                 title="Attendance Today"
                 value={`${stats.presentToday} Present`}
@@ -88,7 +83,6 @@ export default function AdminDashboard() {
                 onClick={() => navigate('/admin/attendance')}
               />
 
-              {/* Live Payroll Block */}
               <DashboardStats
                 title="Live Payroll"
                 value="PKR 12,450.00"

@@ -55,52 +55,64 @@ export default function PayrollReports() {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // SECTION 1: Fetch Attendance
+  // SECTION 1: Fetch Attendance Overview
   const fetchAttendanceOverview = async () => {
     setAttendanceLoading(true);
     try {
       const token = localStorage.getItem('token');
+      const apiUrl = process.env.REACT_APP_API_URL || '/api';
+      
       const response = await axios.post(
-        '/api/payroll/attendance-overview',
-        { fromDate: attendanceFromDate, toDate: attendanceToDate, filterType: attendanceFilter },
+        `${apiUrl}/payroll/attendance-overview`,
+        { 
+          fromDate: attendanceFromDate, 
+          toDate: attendanceToDate, 
+          filterType: attendanceFilter 
+        },
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
       setAttendanceChart(response.data.chartData);
       setAttendanceList(response.data.detailedList);
     } catch (error) {
+      console.error('Error fetching attendance:', error);
       toast.error('Failed to load attendance data');
     } finally {
       setAttendanceLoading(false);
     }
   };
 
-  // SECTION 2: Fetch Performance
+  // SECTION 2: Fetch Performance Overview
   const fetchPerformanceOverview = async () => {
     setPerformanceLoading(true);
     try {
       const token = localStorage.getItem('token');
+      const apiUrl = process.env.REACT_APP_API_URL || '/api';
+      
       const response = await axios.post(
-        '/api/payroll/performance-overview',
+        `${apiUrl}/payroll/performance-overview`,
         { fromDate: performanceFromDate, toDate: performanceToDate },
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
       setPerformanceData(response.data.performance);
     } catch (error) {
+      console.error('Error fetching performance:', error);
       toast.error('Failed to load performance data');
     } finally {
       setPerformanceLoading(false);
     }
   };
 
-  // SECTION 3: Fetch Salary
+  // SECTION 3: Fetch Salary Summary
   const fetchSalarySummary = async () => {
     setSalaryLoading(true);
     try {
       const token = localStorage.getItem('token');
+      const apiUrl = process.env.REACT_APP_API_URL || '/api';
+      
       const response = await axios.post(
-        '/api/payroll/salary-summary',
+        `${apiUrl}/payroll/salary-summary`,
         { fromDate: salaryFromDate, toDate: salaryToDate },
         { headers: { Authorization: `Bearer ${token}` } }
       );
@@ -108,18 +120,21 @@ export default function PayrollReports() {
       setSalarySummary(response.data.summary);
       setSalaryTotals(response.data.totals);
     } catch (error) {
+      console.error('Error fetching salary:', error);
       toast.error('Failed to load salary data');
     } finally {
       setSalaryLoading(false);
     }
   };
 
-  // Fetch employee breakdown
+  // Fetch employee detailed breakdown
   const fetchEmployeeBreakdown = async (empId) => {
     try {
       const token = localStorage.getItem('token');
+      const apiUrl = process.env.REACT_APP_API_URL || '/api';
+      
       const response = await axios.get(
-        `/api/payroll/employee-breakdown/${empId}`,
+        `${apiUrl}/payroll/employee-breakdown/${empId}`,
         {
           params: {
             fromDate: salaryFromDate,
@@ -132,6 +147,7 @@ export default function PayrollReports() {
       setEmployeeBreakdown(response.data);
       setSelectedEmployee(empId);
     } catch (error) {
+      console.error('Error fetching breakdown:', error);
       toast.error('Failed to load employee breakdown');
     }
   };
@@ -262,28 +278,11 @@ export default function PayrollReports() {
 
   return (
     <div className="flex h-screen bg-gray-100">
-      {/* Sidebar */}
-      <div
-        className={`${
-          sidebarOpen ? 'w-64' : 'w-20'
-        } bg-gray-900 text-white transition-all duration-300 hidden md:block`}
-      >
-        <div className="p-4">
-          <h2 className="text-xl font-bold text-blue-400">HR Portal</h2>
-        </div>
-      </div>
-
       {/* Main Content */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Header */}
         <header className="bg-white shadow sticky top-0 z-30">
           <div className="flex items-center justify-between p-4 md:p-6">
-            <button
-              onClick={() => setSidebarOpen(!sidebarOpen)}
-              className="md:hidden text-gray-600"
-            >
-              {sidebarOpen ? <X size={24} /> : <Menu size={24} />}
-            </button>
             <h1 className="text-2xl font-bold text-gray-800">Payroll Reports</h1>
             <button
               onClick={() => handleExport('csv')}

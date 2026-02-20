@@ -1,31 +1,60 @@
 import React, { useState } from 'react';
 import axios from 'axios';
-import { X } from 'lucide-react';
+import { X, Clock } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 export default function CorrectionRequestModal({ onClose, onSubmit }) {
-  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
-  const [fromTime, setFromTime] = useState('09:00');
-  const [toTime, setToTime] = useState('18:00');
-  const [reason, setReason] = useState('');
+  const [formData, setFormData] = useState({
+    date: '',
+    fromTime: '',
+    toTime: '',
+    reason: ''
+  });
   const [loading, setLoading] = useState(false);
+
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({ ...prev, [name]: value }));
+  };
+
+  const isValidTime = (time) => {
+    const regex = /^([0-1][0-9]|2[0-3]):[0-5][0-9]$/;
+    return regex.test(time);
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
 
+    if (!formData.date) {
+      toast.error('Please select a date');
+      return;
+    }
+
+    if (!formData.fromTime || !formData.toTime) {
+      toast.error('Please provide corrected times');
+      return;
+    }
+
+    if (!isValidTime(formData.fromTime) || !isValidTime(formData.toTime)) {
+      toast.error('Times must be in HH:mm format');
+      return;
+    }
+
+    if (!formData.reason.trim()) {
+      toast.error('Please provide a reason');
+      return;
+    }
+
     setLoading(true);
     try {
       const token = localStorage.getItem('token');
-      await axios.post('/api/requests/correction/submit', {
-        date,
-        fromTime,
-        toTime,
-        reason
-      }, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      await axios.post(
+        '/api/requests/correction/submit',
+        formData,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
 
-      toast.success('Correction request submitted successfully!');
+      toast.success('Correction request submitted successfully');
       onSubmit();
       onClose();
     } catch (error) {
@@ -37,76 +66,82 @@ export default function CorrectionRequestModal({ onClose, onSubmit }) {
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-lg max-w-md w-full">
-        {/* Header */}
-        <div className="border-b p-6 flex items-center justify-between">
-          <h2 className="text-xl font-bold text-gray-800">Request Attendance Correction</h2>
+      <div className="bg-white rounded-lg max-w-md w-full p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-2xl font-bold text-gray-800">Request Correction</h2>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
             <X size={24} />
           </button>
         </div>
 
-        {/* Form */}
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Date *</label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Date</label>
             <input
               type="date"
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
+              name="date"
+              value={formData.date}
+              onChange={handleChange}
               required
+              max={new Date().toISOString().split('T')[0]}
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
             />
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">From Time *</label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">From Time</label>
               <input
-                type="time"
-                value={fromTime}
-                onChange={(e) => setFromTime(e.target.value)}
+                type="text"
+                name="fromTime"
+                value={formData.fromTime}
+                onChange={handleChange}
+                placeholder="09:00"
                 required
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
               />
+              <p className="text-xs text-gray-500 mt-1">HH:mm format</p>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">To Time *</label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">To Time</label>
               <input
-                type="time"
-                value={toTime}
-                onChange={(e) => setToTime(e.target.value)}
+                type="text"
+                name="toTime"
+                value={formData.toTime}
+                onChange={handleChange}
+                placeholder="18:00"
                 required
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
               />
+              <p className="text-xs text-gray-500 mt-1">HH:mm format</p>
             </div>
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Reason *</label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Reason</label>
             <textarea
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
+              name="reason"
+              value={formData.reason}
+              onChange={handleChange}
               required
               rows="4"
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-              placeholder="Why do you need this correction?..."
-            />
+              placeholder="Explain why you need this correction..."
+            ></textarea>
           </div>
 
-          {/* Buttons */}
-          <div className="flex gap-4 pt-4 border-t">
+          <div className="flex gap-3">
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition font-medium"
+              className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={loading}
-              className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium disabled:opacity-50"
+              className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition disabled:opacity-50"
             >
               {loading ? 'Submitting...' : 'Submit Request'}
             </button>

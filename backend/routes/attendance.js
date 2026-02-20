@@ -1,50 +1,15 @@
-const express = require('express');
+import express from 'express';
+import AttendanceLog from '../models/AttendanceLog.js';
+import Employee from '../models/Employee.js';
+import { adminAuth } from '../middleware/auth.js';
+import { calculateHours, isLate, isValidTime } from '../utils/timeCalculator.js';
+import { parseCSV, sortCSVRows, mergeWithDatabase } from '../utils/csvParser.js'; // Added CSV utilities
+
 const router = express.Router();
-const AttendanceLog = require('../models/AttendanceLog');
-const Employee = require('../models/Employee');
-const { adminAuth, employeeAuth, authAny } = require('../middleware/auth'); // ✅ Added authAny
-const csv = require('csv-parse');
-const { v4: uuidv4 } = require('uuid');
 
-// Helper: Calculate hours between two times (24-hour safe)
-function calculateHours(startTime, endTime) {
-  if (!startTime || !endTime) return 0;
 
-  const [startHour, startMin] = startTime.split(':').map(Number);
-  const [endHour, endMin] = endTime.split(':').map(Number);
-  
-  let start = startHour * 60 + startMin;
-  let end = endHour * 60 + endMin;
-  
-  // Handle overnight shift
-  if (end < start) {
-    end += 24 * 60;
-  }
-  
-  return (end - start) / 60;
-}
 
-// Helper: Validate time format (HH:mm)
-function isValidTime(time) {
-  if (!time) return false;
-  const regex = /^([0-1][0-9]|2[0-3]):[0-5][0-9]$/;
-  return regex.test(time);
-}
-
-// Helper: Check if time is late
-function isLate(inTime, shiftStart) {
-  if (!inTime || !shiftStart) return false;
-  
-  const [inH, inM] = inTime.split(':').map(Number);
-  const [shiftH, shiftM] = shiftStart.split(':').map(Number);
-  
-  const inMinutes = inH * 60 + inM;
-  const shiftMinutes = shiftH * 60 + shiftM;
-  
-  return inMinutes > shiftMinutes;
-}
-
-// **1. Generate Worksheet (No Gaps)**
+// **Generate Worksheet (No Gaps)**
 router.post('/worksheet', adminAuth, async (req, res) => {
   try {
     const { fromDate, toDate } = req.body;
@@ -56,7 +21,6 @@ router.post('/worksheet', adminAuth, async (req, res) => {
     const start = new Date(fromDate);
     const end = new Date(toDate);
 
-    // Get all active employees
     const employees = await Employee.find({
       status: 'Active',
       isArchived: false,
@@ -65,21 +29,17 @@ router.post('/worksheet', adminAuth, async (req, res) => {
 
     const worksheet = [];
 
-    // Iterate through all dates
     for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
       const currentDate = new Date(d);
       currentDate.setHours(0, 0, 0, 0);
 
-      // Iterate through all employees
       for (const emp of employees) {
-        // Find existing record
         const existing = await AttendanceLog.findOne({
           empId: emp._id,
           date: currentDate
         });
 
         if (existing) {
-          // Use existing record
           worksheet.push({
             _id: existing._id,
             date: existing.date,
@@ -97,7 +57,6 @@ router.post('/worksheet', adminAuth, async (req, res) => {
             isModified: false
           });
         } else {
-          // Create virtual row
           worksheet.push({
             date: currentDate,
             empId: emp._id,
@@ -125,7 +84,6 @@ router.post('/worksheet', adminAuth, async (req, res) => {
       }
     }
 
-    // Sort: Date ascending, then EmpNumber, then Name
     worksheet.sort((a, b) => {
       const dateCompare = new Date(a.date) - new Date(b.date);
       if (dateCompare !== 0) return dateCompare;
@@ -138,11 +96,12 @@ router.post('/worksheet', adminAuth, async (req, res) => {
 
     res.json({ worksheet, total: worksheet.length });
   } catch (error) {
+    console.error('Error in worksheet:', error);
     res.status(500).json({ message: error.message });
   }
 });
 
-// **2. Save Attendance Row (Upsert)**
+// **Save Single Row (UPSERT - No duplicates)**
 router.post('/save-row', adminAuth, async (req, res) => {
   try {
     const {
@@ -215,7 +174,7 @@ router.post('/save-row', adminAuth, async (req, res) => {
           },
           manualOverride: true,
           metadata: {
-            lastUpdatedBy: req.admin._id,
+            lastUpdatedBy: req.userId,
             source: 'manual'
           },
           updatedAt: new Date()
@@ -225,15 +184,16 @@ router.post('/save-row', adminAuth, async (req, res) => {
     );
 
     res.json({
-      message: 'Attendance saved successfully',
+      message: 'Attendance saved successfully (upserted)',
       record: attendance
     });
   } catch (error) {
+    console.error('Error in save-row:', error);
     res.status(500).json({ message: error.message });
   }
 });
 
-// **3. Save All (Bulk Upsert)**
+// **Bulk Save (UPSERT all, no duplicates)**
 router.post('/save-batch', adminAuth, async (req, res) => {
   try {
     const { attendanceData } = req.body;
@@ -251,6 +211,7 @@ router.post('/save-batch', adminAuth, async (req, res) => {
       const dateObj = new Date(record.date);
       dateObj.setHours(0, 0, 0, 0);
 
+      // Calculate financials
       let hoursPerDay = 0;
       let basePay = 0;
       let otAmount = 0;
@@ -293,7 +254,7 @@ router.post('/save-batch', adminAuth, async (req, res) => {
               },
               manualOverride: true,
               metadata: {
-                lastUpdatedBy: req.admin._id,
+                lastUpdatedBy: req.userId,
                 source: 'manual'
               },
               updatedAt: new Date()
@@ -309,194 +270,103 @@ router.post('/save-batch', adminAuth, async (req, res) => {
     }
 
     res.json({
-      message: `${bulkOps.length} attendance records saved successfully`
+      message: `${bulkOps.length} attendance records saved successfully (upserted)`
     });
+  } catch (error) {
+    console.error('Error in save-batch:', error);
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// **Get Attendance Range**
+router.get('/range', adminAuth, async (req, res) => {
+  try {
+    const { fromDate, toDate } = req.query;
+
+    const attendance = await AttendanceLog.find({
+      date: { $gte: new Date(fromDate), $lte: new Date(toDate) },
+      isDeleted: false
+    }).populate('empId', 'firstName lastName email').sort({ date: 1 });
+
+    res.json({ attendance });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
 });
 
-// **4. CSV Import (Deterministic, Progressive Completion)**
+// ------------------ NEW CSV Import Route ------------------
 router.post('/csv-import', adminAuth, async (req, res) => {
   try {
     const { csvContent } = req.body;
+    if (!csvContent) return res.status(400).json({ message: 'CSV content is required' });
 
-    if (!csvContent) {
-      return res.status(400).json({ message: 'CSV content required' });
-    }
+    const parsedRows = sortCSVRows(parseCSV(csvContent));
+    let importedCount = 0;
 
-    const batchId = uuidv4();
-    const rows = csvContent.trim().split('\n').slice(1);
-    const parsed = [];
-
-    for (const row of rows) {
-      const [empId, name, dateTime, type] = row.split('|').map(s => s.trim());
-
-      if (!empId || !dateTime || type === undefined) continue;
-
-      const [datePart, timePart] = dateTime.split(' ');
-      const [month, day, year] = datePart.split('/');
-      const date = new Date(year, parseInt(month) - 1, day);
-      date.setHours(0, 0, 0, 0);
-
-      parsed.push({
-        empId: empId.trim(),
-        name: name.trim(),
-        date,
-        time: timePart.trim(),
-        type: parseInt(type)
-      });
-    }
-
-    parsed.sort((a, b) => {
-      const dateCompare = a.date - b.date;
-      if (dateCompare !== 0) return dateCompare;
-
-      const empCompare = a.empId.localeCompare(b.empId);
-      if (empCompare !== 0) return empCompare;
-
-      if (a.type !== b.type) return a.type - b.type;
-
-      return a.time.localeCompare(b.time);
-    });
-
-    const bulkOps = [];
-    const processed = {};
-
-    for (let i = 0; i < parsed.length; i++) {
-      const record = parsed[i];
-      const employee = await Employee.findOne({ employeeNumber: record.empId });
+    for (const row of parsedRows) {
+      const employee = await Employee.findOne({ employeeNumber: row.empId });
       if (!employee) continue;
 
-      const key = `${employee._id}-${record.date.toISOString()}`;
+      const dateObj = new Date(row.date);
+      dateObj.setHours(0, 0, 0, 0);
 
-      if (!processed[key]) {
-        processed[key] = { in: null, out: null, date: record.date, empId: employee._id };
-      }
+      const existing = await AttendanceLog.findOne({ empId: employee._id, date: dateObj });
 
-      if (record.type === 0) {
-        if (!processed[key].in) processed[key].in = record.time;
-      } else if (record.type === 1) {
-        const [shiftH, shiftM] = employee.shift.start.split(':').map(Number);
-        const shiftStartMinutes = shiftH * 60 + shiftM;
-
-        const [outH, outM] = record.time.split(':').map(Number);
-        const outMinutes = outH * 60 + outM;
-
-        const diffMinutes = (outMinutes - shiftStartMinutes + 1440) % 1440;
-
-        if (diffMinutes <= 14 * 60) {
-          if (!processed[key].out) processed[key].out = record.time;
-        }
-      }
-    }
-
-    for (const key in processed) {
-      const { in: csvIn, out: csvOut, date, empId } = processed[key];
-      const employee = await Employee.findById(empId);
-
-      const existing = await AttendanceLog.findOne({ empId, date });
-
-      let finalIn = csvIn;
-      let finalOut = csvOut;
-
-      if (existing && !existing.manualOverride) {
-        finalIn = csvIn && existing.inOut.in ?
-          (csvIn < existing.inOut.in ? csvIn : existing.inOut.in) :
-          (csvIn || existing.inOut.in);
-
-        finalOut = csvOut && existing.inOut.out ?
-          (csvOut > existing.inOut.out ? csvOut : existing.inOut.out) :
-          (csvOut || existing.inOut.out);
-      }
+      const mergedInOut = mergeWithDatabase(
+        row.type === 0 ? row.time : null,
+        row.type === 1 ? row.time : null,
+        existing?.inOut?.in || null,
+        existing?.inOut?.out || null,
+        existing?.manualOverride || false
+      );
 
       let hoursPerDay = 0;
       let basePay = 0;
+      let otAmount = 0;
       let finalDayEarning = 0;
 
-      if (finalIn && finalOut) {
-        hoursPerDay = calculateHours(finalIn, finalOut);
+      if (mergedInOut.in && mergedInOut.out) {
+        hoursPerDay = calculateHours(mergedInOut.in, mergedInOut.out);
         basePay = hoursPerDay * employee.hourlyRate;
         finalDayEarning = basePay;
-      } else if ((finalIn && !finalOut) || (!finalIn && finalOut)) {
-        hoursPerDay = calculateHours(employee.shift.start, employee.shift.end);
-        basePay = hoursPerDay * employee.hourlyRate;
-        finalDayEarning = basePay * 0.5;
       }
 
-      bulkOps.push({
-        updateOne: {
-          filter: { empId, date },
-          update: {
-            $set: {
-              empNumber: employee.employeeNumber,
-              empName: `${employee.firstName} ${employee.lastName}`,
-              department: employee.department,
-              status: finalIn && finalOut ? 
-                (isLate(finalIn, employee.shift.start) ? 'Late' : 'Present') : 'Absent',
-              inOut: { in: finalIn || null, out: finalOut || null },
-              shift: employee.shift,
-              hourlyRate: employee.hourlyRate,
-              financials: {
-                hoursPerDay,
-                basePay,
-                deduction: 0,
-                otMultiplier: 1,
-                otHours: 0,
-                otAmount: 0,
-                finalDayEarning
-              },
-              manualOverride: false,
-              csvSource: {
-                importedAt: new Date(),
-                csvBatch: batchId
-              },
-              metadata: {
-                lastUpdatedBy: req.admin._id,
-                source: 'csv'
-              },
-              updatedAt: new Date()
-            }
-          },
-          upsert: true
-        }
-      });
+      await AttendanceLog.findOneAndUpdate(
+        { empId: employee._id, date: dateObj },
+        {
+          $set: {
+            empNumber: employee.employeeNumber,
+            empName: `${employee.firstName} ${employee.lastName}`,
+            department: employee.department,
+            status: 'Present',
+            inOut: mergedInOut,
+            shift: employee.shift,
+            hourlyRate: employee.hourlyRate,
+            financials: {
+              hoursPerDay,
+              basePay,
+              deduction: 0,
+              otMultiplier: 1,
+              otHours: 0,
+              otAmount,
+              finalDayEarning
+            },
+            manualOverride: false,
+            metadata: { source: 'csv-import', lastUpdatedBy: req.userId },
+            updatedAt: new Date()
+          }
+        },
+        { upsert: true, new: true, runValidators: true }
+      );
+
+      importedCount++;
     }
 
-    if (bulkOps.length > 0) await AttendanceLog.bulkWrite(bulkOps);
-
-    res.json({
-      message: `CSV imported: ${bulkOps.length} records processed`,
-      batchId
-    });
+    res.json({ message: `${importedCount} attendance records imported successfully.` });
   } catch (error) {
+    console.error('Error in CSV import:', error);
     res.status(500).json({ message: error.message });
   }
 });
 
-// **5. Get Attendance Range (Admin or Employee)**
-// ✅ UPDATED: Changed from a try/catch hack to the authAny middleware
-router.get('/range', authAny, async (req, res) => {
-  try {
-    const { fromDate, toDate, empId } = req.query;
-
-    // ✅ Security check: If not admin, force filter by logged-in user's ID
-    const targetEmpId = req.role === 'admin' ? (empId || req.userId) : req.userId;
-
-    const query = {
-      date: { $gte: new Date(fromDate), $lte: new Date(toDate) },
-      empId: targetEmpId,
-      isDeleted: false
-    };
-
-    const attendance = await AttendanceLog.find(query)
-      .populate('empId', 'firstName lastName email')
-      .sort({ date: 1 });
-
-    return res.json({ attendance });
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-});
-
-module.exports = router;
+export default router;

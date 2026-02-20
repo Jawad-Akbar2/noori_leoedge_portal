@@ -1,18 +1,23 @@
-const express = require('express');
-const router = express.Router();
-const LeaveRequest = require('../models/LeaveRequest');
-const CorrectionRequest = require('../models/CorrectionRequest');
-const AttendanceLog = require('../models/AttendanceLog');
-const Employee = require('../models/Employee');
-const jwt = require('jsonwebtoken');
+import express from 'express';
+import jwt from 'jsonwebtoken';
+import LeaveRequest from '../models/LeaveRequest.js';
+import CorrectionRequest from '../models/CorrectionRequest.js';
+import AttendanceLog from '../models/AttendanceLog.js';
+import Employee from '../models/Employee.js';
+import { calculateHours } from '../utils/timeCalculator.js';
 
+const router = express.Router();
+
+// Middleware
 const auth = async (req, res, next) => {
   try {
     const token = req.headers.authorization?.split(' ')[1];
+    if (!token) return res.status(401).json({ message: 'Unauthorized' });
+
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     const user = await Employee.findById(decoded.id);
     req.user = user;
-    req.role = decoded.role;
+    req.role = decoded.role || (user.department === 'Manager' ? 'admin' : 'employee');
     req.userId = decoded.id;
     next();
   } catch (error) {
@@ -218,17 +223,41 @@ router.patch('/leave/:requestId/approve', auth, async (req, res) => {
     // Update attendance records for each day
     const currentDate = new Date(leaveRequest.fromDate);
     while (currentDate <= leaveRequest.toDate) {
-      const dateStr = currentDate.toISOString().split('T')[0];
+      const dateObj = new Date(currentDate);
+      dateObj.setHours(0, 0, 0, 0);
+
+      const employee = await Employee.findById(leaveRequest.empId);
+      const hoursPerDay = calculateHours(employee.shift.start, employee.shift.end);
+      const basePay = hoursPerDay * employee.hourlyRate;
+
       await AttendanceLog.findOneAndUpdate(
+        { empId: leaveRequest.empId, date: dateObj },
         {
-          empId: leaveRequest.empId,
-          date: new Date(dateStr)
+          $set: {
+            status: 'Leave',
+            empNumber: employee.employeeNumber,
+            empName: `${employee.firstName} ${employee.lastName}`,
+            department: employee.department,
+            shift: employee.shift,
+            hourlyRate: employee.hourlyRate,
+            financials: {
+              hoursPerDay,
+              basePay,
+              deduction: 0,
+              otMultiplier: 1,
+              otHours: 0,
+              otAmount: 0,
+              finalDayEarning: basePay
+            },
+            metadata: {
+              source: 'leave_approval',
+              lastUpdatedBy: req.userId
+            }
+          }
         },
-        {
-          status: 'Leave'
-        },
-        { upsert: true }
+        { upsert: true, new: true }
       );
+
       currentDate.setDate(currentDate.getDate() + 1);
     }
     
@@ -273,20 +302,53 @@ router.patch('/correction/:requestId/approve', auth, async (req, res) => {
     correctionRequest.approvedBy = req.userId;
     correctionRequest.approvedAt = new Date();
     await correctionRequest.save();
-    
-    // Update attendance record
-    await AttendanceLog.findOneAndUpdate(
+
+    // Get employee for calculations
+    const employee = await Employee.findById(correctionRequest.empId);
+    if (!employee) return res.status(404).json({ message: 'Employee not found' });
+
+    // Calculate new financials
+    const hoursPerDay = calculateHours(correctionRequest.correctedInTime, correctionRequest.correctedOutTime);
+    const basePay = hoursPerDay * employee.hourlyRate;
+    const finalDayEarning = basePay;
+
+    // UPSERT attendance
+    const dateObj = new Date(correctionRequest.date);
+    dateObj.setHours(0, 0, 0, 0);
+
+    const attendance = await AttendanceLog.findOneAndUpdate(
+      { empId: correctionRequest.empId, date: dateObj },
       {
-        empId: correctionRequest.empId,
-        date: correctionRequest.date
+        $set: {
+          inOut: {
+            in: correctionRequest.correctedInTime,
+            out: correctionRequest.correctedOutTime
+          },
+          financials: {
+            hoursPerDay,
+            basePay,
+            deduction: 0,
+            otMultiplier: 1,
+            otHours: 0,
+            otAmount: 0,
+            finalDayEarning
+          },
+          status: 'Present',
+          metadata: {
+            lastUpdatedBy: req.userId,
+            source: 'correction_approval'
+          },
+          updatedAt: new Date()
+        }
       },
-      {
-        'inOut.in': correctionRequest.correctedInTime,
-        'inOut.out': correctionRequest.correctedOutTime
-      }
+      { upsert: true, new: true }
     );
     
-    res.json({ message: 'Correction request approved', correctionRequest });
+    res.json({ 
+      message: 'Correction request approved and attendance updated',
+      correctionRequest,
+      updatedAttendance: attendance
+    });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -313,4 +375,4 @@ router.patch('/correction/:requestId/reject', auth, async (req, res) => {
   }
 });
 
-module.exports = router;
+export default router;

@@ -7,41 +7,123 @@ import Login from './components/Auth/Login';
 import EmployeeOnboarding from './components/Auth/EmployeeOnboarding';
 import ProtectedRoute from './components/Auth/ProtectedRoute';
 
-// Admin Pages
+// Layouts (ALREADY EXIST, just use them differently)
 import AdminDashboard from './components/Admin/AdminDashboard';
+import AdminSidebar from './components/Admin/Sidebar';
+import Header from './components/Common/Header';
+
+import EmployeeDashboard from './components/Employee/EmployeeDashboard';
+import EmployeeSidebar from './components/Employee/EmployeeSidebar';
+
+// Admin Pages
 import ManageEmployees from './components/Admin/ManageEmployees';
 import ManualAttendance from './components/Admin/ManualAttendance';
 import PayrollReports from './components/Admin/PayrollReports';
 import NotificationCenter from './components/Admin/NotificationCenter';
 
 // Employee Pages
-import EmployeeDashboard from './components/Employee/EmployeeDashboard';
 import AttendanceHistory from './components/Employee/AttendanceHistory';
 import MySalary from './components/Employee/MySalary';
 import MyRequests from './components/Employee/MyRequests';
 import Profile from './components/Employee/Profile';
 
+// NEW: Admin Layout Wrapper (inline, reuses existing components)
+function AdminLayoutWrapper() {
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+
+  React.useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  const handleMenuClick = () => {
+    setSidebarOpen(!sidebarOpen);
+  };
+
+  return (
+    <div className="flex h-screen bg-gray-100">
+      {/* PERSISTENT SIDEBAR */}
+      <AdminSidebar isOpen={sidebarOpen} isMobile={isMobile} />
+
+      {/* Overlay for mobile */}
+      {isMobile && sidebarOpen && (
+        <div
+          className="fixed inset-0 bg-black bg-opacity-50 z-20"
+          onClick={() => setSidebarOpen(false)}
+        ></div>
+      )}
+
+      {/* MAIN CONTENT */}
+      <div className="flex-1 flex flex-col overflow-hidden">
+        <Header onMenuClick={handleMenuClick} />
+        <div className="flex-1 overflow-auto">
+          <Routes>
+            <Route path="/dashboard" element={<AdminDashboard />} />
+            <Route path="/employees" element={<ManageEmployees />} />
+            <Route path="/attendance" element={<ManualAttendance />} />
+            <Route path="/payroll" element={<PayrollReports />} />
+            <Route path="/notifications" element={<NotificationCenter />} />
+            <Route path="/" element={<Navigate to="/dashboard" replace />} />
+          </Routes>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// NEW: Employee Layout Wrapper (inline, reuses existing components)
+function EmployeeLayoutWrapper() {
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+
+  React.useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  const handleMenuClick = () => {
+    setSidebarOpen(!sidebarOpen);
+  };
+
+  return (
+    <div className="flex h-screen bg-gray-100">
+      {/* PERSISTENT SIDEBAR */}
+      <EmployeeSidebar isOpen={sidebarOpen} isMobile={isMobile} />
+
+      {/* Overlay for mobile */}
+      {isMobile && sidebarOpen && (
+        <div
+          className="fixed inset-0 bg-black bg-opacity-50 z-20"
+          onClick={() => setSidebarOpen(false)}
+        ></div>
+      )}
+
+      {/* MAIN CONTENT */}
+      <div className="flex-1 flex flex-col overflow-hidden">
+        <Header onMenuClick={handleMenuClick} />
+        <div className="flex-1 overflow-auto">
+          <Routes>
+            <Route path="/dashboard" element={<EmployeeDashboard />} />
+            <Route path="/attendance" element={<AttendanceHistory />} />
+            <Route path="/salary" element={<MySalary />} />
+            <Route path="/requests" element={<MyRequests />} />
+            <Route path="/profile" element={<Profile />} />
+            <Route path="/" element={<Navigate to="/dashboard" replace />} />
+          </Routes>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Validate token on app load
-    const validateToken = async () => {
-      try {
-        const token = localStorage.getItem('token');
-        if (token) {
-          // Token exists, user is authenticated
-        }
-      } catch (error) {
-        localStorage.removeItem('token');
-        localStorage.removeItem('user');
-        localStorage.removeItem('role');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    validateToken();
+    setLoading(false);
   }, []);
 
   if (loading) {
@@ -49,7 +131,7 @@ export default function App() {
       <div className="flex items-center justify-center min-h-screen bg-gray-100">
         <div className="text-center">
           <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-4"></div>
-          <p className="text-gray-600 font-medium">Loading HR Portal...</p>
+          <p className="text-gray-600 font-medium">Loading...</p>
         </div>
       </div>
     );
@@ -62,91 +144,27 @@ export default function App() {
         <Route path="/login" element={<Login />} />
         <Route path="/join/:token" element={<EmployeeOnboarding />} />
 
-        {/* Admin Routes */}
+        {/* Admin Routes - Nested with persistent layout */}
         <Route
-          path="/admin/dashboard"
+          path="/admin/*"
           element={
             <ProtectedRoute requiredRole="admin">
-              <AdminDashboard />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/admin/employees"
-          element={
-            <ProtectedRoute requiredRole="admin">
-              <ManageEmployees />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/admin/attendance"
-          element={
-            <ProtectedRoute requiredRole="admin">
-              <ManualAttendance />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/admin/payroll"
-          element={
-            <ProtectedRoute requiredRole="admin">
-              <PayrollReports />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/admin/notifications"
-          element={
-            <ProtectedRoute requiredRole="admin">
-              <NotificationCenter />
+              <AdminLayoutWrapper />
             </ProtectedRoute>
           }
         />
 
-        {/* Employee Routes */}
+        {/* Employee Routes - Nested with persistent layout */}
         <Route
-          path="/employee/dashboard"
+          path="/employee/*"
           element={
             <ProtectedRoute requiredRole="employee">
-              <EmployeeDashboard />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/employee/attendance"
-          element={
-            <ProtectedRoute requiredRole="employee">
-              <AttendanceHistory />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/employee/salary"
-          element={
-            <ProtectedRoute requiredRole="employee">
-              <MySalary />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/employee/requests"
-          element={
-            <ProtectedRoute requiredRole="employee">
-              <MyRequests />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/employee/profile"
-          element={
-            <ProtectedRoute requiredRole="employee">
-              <Profile />
+              <EmployeeLayoutWrapper />
             </ProtectedRoute>
           }
         />
 
-        {/* Catch All */}
+        {/* Default redirect */}
         <Route
           path="/"
           element={
@@ -157,6 +175,8 @@ export default function App() {
             )
           }
         />
+
+        {/* Catch all */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Router>

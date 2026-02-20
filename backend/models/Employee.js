@@ -1,5 +1,5 @@
-const mongoose = require('mongoose');
-const bcrypt = require('bcryptjs');
+import mongoose from 'mongoose';
+import bcryptjs from 'bcryptjs';
 
 const employeeSchema = new mongoose.Schema({
   email: {
@@ -28,12 +28,16 @@ const employeeSchema = new mongoose.Schema({
     enum: ['IT', 'Customer Support', 'Manager', 'Marketing', 'HR', 'Finance'],
     required: true
   },
+  role: {
+    type: String,
+    enum: ['admin', 'employee'],
+    default: 'employee',
+    index: true
+  },
   joiningDate: {
     type: Date,
     required: true
   },
-
-  // Shift Times (24-hour format HH:mm)
   shift: {
     start: {
       type: String,
@@ -58,45 +62,34 @@ const employeeSchema = new mongoose.Schema({
       }
     }
   },
-
   hourlyRate: {
     type: Number,
     required: true,
     min: 0
   },
-
   status: {
     type: String,
     enum: ['Active', 'Inactive', 'Frozen'],
-    default: 'Inactive'
+    default: 'Inactive',
+    index: true
   },
-
   isArchived: {
     type: Boolean,
     default: false
   },
-
   password: String,
   tempPassword: String,
   inviteToken: String,
   inviteTokenExpires: Date,
-
   bank: {
     bankName: String,
     accountName: String,
     accountNumber: String
   },
-
-  securityQuestions: [{
-    question: String,
-    answer: String
-  }],
-
   isDeleted: {
     type: Boolean,
     default: false
   },
-
   createdAt: {
     type: Date,
     default: Date.now
@@ -111,21 +104,44 @@ const employeeSchema = new mongoose.Schema({
 employeeSchema.pre('save', async function(next) {
   if (!this.isModified('password') && !this.isModified('tempPassword')) return next();
   
-  if (this.password) {
-    const salt = await bcrypt.genSalt(10);
-    this.password = await bcrypt.hash(this.password, salt);
+  try {
+    if (this.password) {
+      const salt = await bcryptjs.genSalt(10);
+      this.password = await bcryptjs.hash(this.password, salt);
+    }
+    
+    if (this.tempPassword) {
+      const salt = await bcryptjs.genSalt(10);
+      this.tempPassword = await bcryptjs.hash(this.tempPassword, salt);
+    }
+    
+    next();
+  } catch (error) {
+    next(error);
   }
-  
-  if (this.tempPassword) {
-    const salt = await bcrypt.genSalt(10);
-    this.tempPassword = await bcrypt.hash(this.tempPassword, salt);
-  }
-  
-  next();
 });
 
+// Method to compare passwords
 employeeSchema.methods.comparePassword = async function(enteredPassword) {
-  return await bcrypt.compare(enteredPassword, this.password);
+  return await bcryptjs.compare(enteredPassword, this.password);
 };
 
-module.exports = mongoose.model('Employee', employeeSchema);
+// Method to check if employee is eligible for leave (3 months)
+employeeSchema.methods.isLeaveEligible = function() {
+  const now = new Date();
+  const joinDate = new Date(this.joiningDate);
+  const daysElapsed = Math.floor((now - joinDate) / (1000 * 60 * 60 * 24));
+  return daysElapsed >= 90;
+};
+
+// Method to get days until leave eligibility
+employeeSchema.methods.getDaysUntilLeaveEligible = function() {
+  const now = new Date();
+  const joinDate = new Date(this.joiningDate);
+  const daysElapsed = Math.floor((now - joinDate) / (1000 * 60 * 60 * 24));
+  return Math.max(0, 90 - daysElapsed);
+};
+
+const Employee = mongoose.model('Employee', employeeSchema);
+
+export default Employee;

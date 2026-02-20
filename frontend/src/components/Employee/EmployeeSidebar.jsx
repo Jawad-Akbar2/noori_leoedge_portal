@@ -1,72 +1,88 @@
 import React from 'react';
-import { useNavigate } from 'react-router-dom';
-import { LayoutDashboard, Clock, FileText, DollarSign, User, LogOut } from 'lucide-react';
+import { Link, useLocation } from 'react-router-dom';
+import {
+  LayoutDashboard,
+  Clock,
+  DollarSign,
+  FileText,
+  User,
+  LogOut,
+  ChevronLeft
+} from 'lucide-react';
 import { logout } from '../../services/auth';
+import toast from 'react-hot-toast';
+import { useNavigate } from 'react-router-dom';
 
-export default function EmployeeSidebar({ isOpen, toggleSidebar }) {
+export default function EmployeeSidebar({ isOpen, isMobile }) {
+  const location = useLocation();
   const navigate = useNavigate();
 
   const menuItems = [
-    { label: 'My Dashboard', icon: <LayoutDashboard size={20} />, path: '/employee/dashboard' },
-    { label: 'Attendance History', icon: <Clock size={20} />, path: '/employee/attendance' },
-    { label: 'My Requests', icon: <FileText size={20} />, path: '/employee/requests' },
-    { label: 'My Salary', icon: <DollarSign size={20} />, path: '/employee/salary' },
-    { label: 'Profile', icon: <User size={20} />, path: '/employee/profile' }
+    { icon: LayoutDashboard, label: 'Dashboard', path: '/employee/dashboard' },
+    { icon: Clock, label: 'Attendance', path: '/employee/attendance' },
+    { icon: DollarSign, label: 'Salary', path: '/employee/salary' },
+    { icon: FileText, label: 'My Requests', path: '/employee/requests' },
+    { icon: User, label: 'Profile', path: '/employee/profile' }
   ];
+
+  const isActive = (path) => location.pathname === path;
 
   const handleLogout = () => {
     logout();
+    toast.success('Logged out successfully');
     navigate('/login');
   };
 
   return (
     <>
-      {/* Overlay */}
-      {isOpen && (
-        <div
-          className="fixed inset-0 bg-black bg-opacity-50 md:hidden z-20"
-          onClick={toggleSidebar}
-        ></div>
-      )}
-
       {/* Sidebar */}
-      <aside
-        className={`fixed md:relative w-64 bg-gray-900 text-white h-screen transition-transform duration-300 z-30 md:z-0 ${
-          isOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
-        }`}
+      <div
+        className={`${
+          isOpen ? 'w-64' : 'w-20'
+        } bg-gray-900 text-white transition-all duration-300 flex flex-col h-screen fixed md:relative z-30 md:z-auto`}
       >
-        <div className="p-6">
-          <h2 className="text-2xl font-bold text-blue-400">HR Portal</h2>
-          <p className="text-sm text-gray-400 mt-2">Employee Portal</p>
+        {/* Logo/Header */}
+        <div className="p-6 border-b border-gray-800">
+          <h1
+            className={`font-bold text-blue-400 transition-all ${
+              isOpen ? 'text-2xl' : 'text-center text-xl'
+            }`}
+          >
+            {isOpen ? 'HR Portal' : 'HR'}
+          </h1>
         </div>
 
-        <nav className="space-y-2 px-4">
+        {/* Menu Items */}
+        <nav className="flex-1 p-4 space-y-2">
           {menuItems.map((item) => (
-            <button
+            <Link
               key={item.path}
-              onClick={() => {
-                navigate(item.path);
-                toggleSidebar();
-              }}
-              className="w-full flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-gray-800 transition-colors text-left text-sm font-medium"
+              to={item.path}
+              className={`flex items-center gap-4 px-4 py-3 rounded-lg transition ${
+                isActive(item.path)
+                  ? 'bg-blue-600 text-white'
+                  : 'text-gray-300 hover:bg-gray-800'
+              }`}
             >
-              {item.icon}
-              <span>{item.label}</span>
-            </button>
+              <item.icon size={20} className="flex-shrink-0" />
+              {isOpen && <span className="text-sm font-medium">{item.label}</span>}
+            </Link>
           ))}
         </nav>
 
-        {/* Logout */}
-        <div className="absolute bottom-6 left-4 right-4">
+        {/* Logout Button */}
+        <div className="p-4 border-t border-gray-800">
           <button
             onClick={handleLogout}
-            className="w-full flex items-center gap-3 px-4 py-3 rounded-lg bg-red-600 hover:bg-red-700 transition-colors text-left text-sm font-medium"
+            className="flex items-center gap-4 w-full px-4 py-3 rounded-lg text-gray-300 hover:bg-red-600 hover:text-white transition"
           >
-            <LogOut size={20} />
-            <span>Logout</span>
+            <LogOut size={20} className="flex-shrink-0" />
+            {isOpen && <span className="text-sm font-medium">Logout</span>}
           </button>
         </div>
-      </aside>
+      </div>
+
+      {/* Mobile backdrop - handled in parent layout */}
     </>
   );
 }

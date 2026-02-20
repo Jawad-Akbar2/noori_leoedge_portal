@@ -1,11 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { adminLogin, employeeLogin, isAuthenticated } from '../../services/auth';
-import toast from 'react-hot-toast';
 import { LogIn, Eye, EyeOff, AlertCircle } from 'lucide-react';
+import axios from 'axios';
+import toast from 'react-hot-toast';
 
 export default function Login() {
-  const [userType, setUserType] = useState('admin');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -13,20 +12,12 @@ export default function Login() {
   const [rememberMe, setRememberMe] = useState(false);
   const navigate = useNavigate();
 
+  // If already logged in, redirect
   useEffect(() => {
-    // If already authenticated, redirect to dashboard
-    if (isAuthenticated()) {
+    const token = localStorage.getItem('token');
+    if (token) {
       const role = localStorage.getItem('role');
       navigate(role === 'admin' ? '/admin/dashboard' : '/employee/dashboard');
-    }
-
-    // Load saved credentials if remember me was checked
-    const savedEmail = localStorage.getItem('savedEmail');
-    const savedUserType = localStorage.getItem('savedUserType');
-    if (savedEmail) {
-      setEmail(savedEmail);
-      setUserType(savedUserType || 'admin');
-      setRememberMe(true);
     }
   }, [navigate]);
 
@@ -34,61 +25,72 @@ export default function Login() {
     e.preventDefault();
     
     if (!email || !password) {
-      toast.error('Please enter email and password');
+      toast.error('Email and password required');
       return;
     }
 
     setLoading(true);
 
     try {
-      if (userType === 'admin') {
-        await adminLogin(email, password);
-        toast.success('Welcome Admin!');
-      } else {
-        await employeeLogin(email, password);
-        toast.success('Welcome!');
+      // SINGLE LOGIN ENDPOINT - No role parameter
+      const response = await axios.post('/api/auth/login', {
+        email,
+        password
+      });
+
+      const { token, user } = response.data;
+
+      // Backend returns role: 'admin' or 'employee'
+      if (!user.role) {
+        toast.error('Authentication failed: No role assigned. Contact admin.');
+        setLoading(false);
+        return;
       }
 
-      // Save credentials if remember me is checked
+      // Store token and user info
+      localStorage.setItem('token', token);
+      localStorage.setItem('user', JSON.stringify(user));
+      localStorage.setItem('role', user.role);
+
+      // Save credentials if remember me
       if (rememberMe) {
         localStorage.setItem('savedEmail', email);
-        localStorage.setItem('savedUserType', userType);
       } else {
         localStorage.removeItem('savedEmail');
-        localStorage.removeItem('savedUserType');
       }
 
-      navigate(userType === 'admin' ? '/admin/dashboard' : '/employee/dashboard');
+      toast.success(`Welcome, ${user.firstName}!`);
+
+      // AUTO-ROUTE based on role returned from backend
+      if (user.role === 'admin') {
+        navigate('/admin/dashboard');
+      } else if (user.role === 'employee') {
+        navigate('/employee/dashboard');
+      } else {
+        toast.error('Unknown role. Contact system administrator.');
+        setLoading(false);
+        return;
+      }
     } catch (error) {
-      const errorMsg = error.response?.data?.message || 'Login failed. Please try again.';
+      const errorMsg = error.response?.data?.message || 'Login failed';
       toast.error(errorMsg);
     } finally {
       setLoading(false);
     }
   };
 
-  const fillAdminCredentials = () => {
-    setUserType('admin');
-    setEmail('admin@example.com');
-    setPassword('Admin@123456');
-  };
-
-  const fillEmployeeCredentials = () => {
-    setUserType('employee');
-    setEmail('employee@example.com');
-    setPassword('Employee@123456');
-  };
+  // Load saved email if exists
+  useEffect(() => {
+    const savedEmail = localStorage.getItem('savedEmail');
+    if (savedEmail) {
+      setEmail(savedEmail);
+      setRememberMe(true);
+    }
+  }, []);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-600 via-blue-700 to-blue-800 flex items-center justify-center p-4">
-      {/* Background Pattern */}
-      <div className="absolute inset-0 opacity-10">
-        <div className="absolute top-0 left-0 w-96 h-96 bg-white rounded-full filter blur-3xl"></div>
-        <div className="absolute bottom-0 right-0 w-96 h-96 bg-white rounded-full filter blur-3xl"></div>
-      </div>
-
-      {/* Login Card */}
-      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md p-8 md:p-12">
+    <div className="min-h-screen bg-gradient-to-br from-blue-600 to-blue-800 flex items-center justify-center p-4">
+      <div className="bg-white rounded-lg shadow-2xl w-full max-w-md p-8 md:p-12">
         {/* Header */}
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-100 rounded-full mb-4">
@@ -101,7 +103,7 @@ export default function Login() {
         {/* Info Alert */}
         <div className="bg-blue-50 border-l-4 border-blue-500 p-4 rounded mb-6">
           <p className="text-sm text-blue-800">
-            <span className="font-semibold">Demo Credentials:</span>
+            <span className="font-semibold">Test Credentials:</span>
             <br />
             Admin: admin@example.com / Admin@123456
             <br />
@@ -109,31 +111,8 @@ export default function Login() {
           </p>
         </div>
 
-        {/* User Type Selection */}
-        <div className="flex gap-4 mb-8">
-          <button
-            onClick={() => setUserType('admin')}
-            className={`flex-1 py-3 rounded-lg font-semibold transition-all duration-200 ${
-              userType === 'admin'
-                ? 'bg-blue-600 text-white shadow-lg scale-105'
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-            }`}
-          >
-            Admin
-          </button>
-          <button
-            onClick={() => setUserType('employee')}
-            className={`flex-1 py-3 rounded-lg font-semibold transition-all duration-200 ${
-              userType === 'employee'
-                ? 'bg-blue-600 text-white shadow-lg scale-105'
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-            }`}
-          >
-            Employee
-          </button>
-        </div>
-
-        {/* Login Form */}
+        {/* NOTE: NO ROLE SELECTION UI */}
+        {/* Login Form - Email & Password ONLY */}
         <form onSubmit={handleSubmit} className="space-y-4 mb-6">
           <div>
             <label className="block text-sm font-semibold text-gray-700 mb-2">Email Address</label>
@@ -142,9 +121,9 @@ export default function Login() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
+              disabled={loading}
               className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-colors"
               placeholder="your@email.com"
-              disabled={loading}
             />
           </div>
 
@@ -156,9 +135,9 @@ export default function Login() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
+                disabled={loading}
                 className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-colors"
                 placeholder="••••••••"
-                disabled={loading}
               />
               <button
                 type="button"
@@ -176,11 +155,11 @@ export default function Login() {
               id="rememberMe"
               checked={rememberMe}
               onChange={(e) => setRememberMe(e.target.checked)}
-              className="w-4 h-4 rounded border-gray-300"
               disabled={loading}
+              className="w-4 h-4 rounded border-gray-300"
             />
             <label htmlFor="rememberMe" className="text-sm text-gray-600">
-              Remember me
+              Remember email
             </label>
           </div>
 
@@ -193,32 +172,10 @@ export default function Login() {
           </button>
         </form>
 
-        {/* Quick Demo Fill */}
-        <div className="border-t pt-6">
-          <p className="text-center text-sm text-gray-600 mb-4">Quick Demo Access:</p>
-          <div className="grid grid-cols-2 gap-3">
-            <button
-              onClick={fillAdminCredentials}
-              className="px-4 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition text-sm font-medium"
-            >
-              Fill Admin
-            </button>
-            <button
-              onClick={fillEmployeeCredentials}
-              className="px-4 py-2 bg-green-100 text-green-700 rounded-lg hover:bg-green-200 transition text-sm font-medium"
-            >
-              Fill Employee
-            </button>
-          </div>
+        {/* Info Message */}
+        <div className="text-center text-sm text-gray-600">
+          <p>Role will be automatically determined upon login</p>
         </div>
-      </div>
-
-      {/* Info Banner */}
-      <div className="absolute top-4 left-4 right-4 text-white text-center text-sm">
-        <p className="flex items-center justify-center gap-2">
-          <AlertCircle size={16} />
-          This is a demo application. Use provided credentials for testing.
-        </p>
       </div>
     </div>
   );

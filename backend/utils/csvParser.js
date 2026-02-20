@@ -5,13 +5,13 @@
  */
 
 // Validate time format (HH:mm)
-function isValidTime(time) {
+export function isValidTime(time) {
   const regex = /^([0-1][0-9]|2[0-3]):[0-5][0-9]$/;
   return regex.test(time);
 }
 
 // Parse CSV content
-function parseCSV(csvContent) {
+export function parseCSV(csvContent) {
   const lines = csvContent.trim().split('\n');
   const parsed = [];
 
@@ -58,7 +58,7 @@ function parseCSV(csvContent) {
 }
 
 // Sort CSV rows (Deterministic)
-function sortCSVRows(rows) {
+export function sortCSVRows(rows) {
   return rows.sort((a, b) => {
     // Primary: Date ascending
     const dateCompare = a.date - b.date;
@@ -77,7 +77,7 @@ function sortCSVRows(rows) {
 }
 
 // Apply 14-hour pairing rule
-function applyPairingRule(inTime, outTime, shiftStartTime) {
+export function applyPairingRule(inTime, outTime, shiftStartTime) {
   const [inH, inM] = inTime.split(':').map(Number);
   const [outH, outM] = outTime.split(':').map(Number);
   const [shiftH, shiftM] = shiftStartTime.split(':').map(Number);
@@ -95,7 +95,7 @@ function applyPairingRule(inTime, outTime, shiftStartTime) {
 }
 
 // Merge CSV with database (Progressive completion)
-function mergeWithDatabase(csvIn, csvOut, dbIn, dbOut, manualOverride) {
+export function mergeWithDatabase(csvIn, csvOut, dbIn, dbOut, manualOverride) {
   // If manual override, don't change anything
   if (manualOverride) {
     return { in: dbIn, out: dbOut };
@@ -116,7 +116,7 @@ function mergeWithDatabase(csvIn, csvOut, dbIn, dbOut, manualOverride) {
   return { in: finalIn, out: finalOut };
 }
 
-module.exports = {
+export default {
   parseCSV,
   sortCSVRows,
   applyPairingRule,

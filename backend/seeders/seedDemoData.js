@@ -1,16 +1,18 @@
-const mongoose = require('mongoose');
-const Employee = require('../models/Employee');
-const AttendanceLog = require('../models/AttendanceLog');
-require('dotenv').config();
+import mongoose from 'mongoose';
+import Employee from '../models/Employee.js';
+import AttendanceLog from '../models/AttendanceLog.js';
+import dotenv from 'dotenv';
+
+dotenv.config();
 
 async function seedDemoData() {
   try {
     await mongoose.connect(process.env.MONGODB_URI);
-    console.log('Connected to MongoDB');
+    console.log('✓ Connected to MongoDB');
 
-    // Clear existing demo data
+    // Clear existing attendance logs
     await AttendanceLog.deleteMany({ isDeleted: false });
-    console.log('Cleared existing attendance logs');
+    console.log('✓ Cleared existing attendance logs');
 
     // Get all active employees
     const employees = await Employee.find({
@@ -19,7 +21,7 @@ async function seedDemoData() {
       isDeleted: false
     });
 
-    console.log(`Found ${employees.length} active employees`);
+    console.log(`✓ Found ${employees.length} active employees`);
 
     // Generate attendance for last 30 days
     const today = new Date();
@@ -93,13 +95,13 @@ async function seedDemoData() {
     // Insert attendance records
     if (attendanceRecords.length > 0) {
       await AttendanceLog.insertMany(attendanceRecords);
-      console.log(`Created ${attendanceRecords.length} attendance records`);
+      console.log(`✓ Created ${attendanceRecords.length} attendance records`);
     }
 
-    console.log('Demo data seeding complete!');
+    console.log('✓ Demo data seeding complete!');
     process.exit(0);
   } catch (error) {
-    console.error('Seeding error:', error);
+    console.error('✗ Seeding error:', error.message);
     process.exit(1);
   }
 }

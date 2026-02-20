@@ -1,7 +1,6 @@
-const mongoose = require('mongoose');
+import mongoose from 'mongoose';
 
 const attendanceLogSchema = new mongoose.Schema({
-  // Primary Keys
   date: {
     type: Date,
     required: true,
@@ -13,162 +12,147 @@ const attendanceLogSchema = new mongoose.Schema({
     required: true,
     index: true
   },
-  
-  // Employee Details (Snapshot at time of record)
   empNumber: {
     type: String,
     required: true,
     index: true
   },
-  empName: String,
-  department: String,
-
-  // Status
+  empName: {
+    type: String,
+    required: true
+  },
+  department: {
+    type: String,
+    required: true
+  },
   status: {
     type: String,
     enum: ['Present', 'Late', 'Leave', 'Absent'],
-    required: true,
-    default: 'Absent'
+    default: 'Absent',
+    index: true
   },
-
-  // Time (24-hour format HH:mm)
   inOut: {
     in: {
       type: String,
-      default: null
+      validate: {
+        validator: function(v) {
+          if (!v) return true;
+          return /^([0-1][0-9]|2[0-3]):[0-5][0-9]$/.test(v);
+        },
+        message: 'Invalid time format'
+      }
     },
     out: {
       type: String,
-      default: null
+      validate: {
+        validator: function(v) {
+          if (!v) return true;
+          return /^([0-1][0-9]|2[0-3]):[0-5][0-9]$/.test(v);
+        },
+        message: 'Invalid time format'
+      }
     }
   },
-
-  // Snapshot of Employee Profile (Frozen at time of record)
   shift: {
     start: {
       type: String,
       required: true,
-      default: '09:00'
+      validate: {
+        validator: function(v) {
+          return /^([0-1][0-9]|2[0-3]):[0-5][0-9]$/.test(v);
+        },
+        message: 'Invalid shift time format'
+      }
     },
     end: {
       type: String,
       required: true,
-      default: '18:00'
+      validate: {
+        validator: function(v) {
+          return /^([0-1][0-9]|2[0-3]):[0-5][0-9]$/.test(v);
+        },
+        message: 'Invalid shift time format'
+      }
     }
   },
   hourlyRate: {
     type: Number,
-    required: true
+    required: true,
+    min: 0
   },
-
-  // Financials
   financials: {
     hoursPerDay: {
       type: Number,
-      default: 0
+      default: 0,
+      min: 0
     },
     basePay: {
       type: Number,
-      default: 0
+      default: 0,
+      min: 0
     },
     deduction: {
       type: Number,
-      default: 0
+      default: 0,
+      min: 0
     },
     otMultiplier: {
       type: Number,
-      enum: [1, 1.5, 2],
-      default: 1
+      default: 1,
+      enum: [1, 1.5, 2]
     },
     otHours: {
       type: Number,
-      default: 0
+      default: 0,
+      min: 0
     },
     otAmount: {
       type: Number,
-      default: 0
+      default: 0,
+      min: 0
     },
     finalDayEarning: {
       type: Number,
-      default: 0
+      default: 0,
+      min: 0
     }
   },
-
-  // Manual Override Protection
   manualOverride: {
     type: Boolean,
     default: false
   },
-
-  // CSV Processing
-  csvSource: {
-    importedAt: Date,
-    csvBatch: String
-  },
-
-  // Metadata
   metadata: {
-    lastUpdatedBy: mongoose.Schema.Types.ObjectId,
-    isDisputed: {
-      type: Boolean,
-      default: false
-    },
-    notes: String,
     source: {
       type: String,
-      enum: ['manual', 'csv', 'system'],
-      default: 'manual'
-    }
+      enum: ['system', 'manual', 'csv', 'correction_approval', 'leave_approval'],
+      default: 'system'
+    },
+    notes: String,
+    lastUpdatedBy: mongoose.Schema.Types.ObjectId,
+    csvImportBatch: String
   },
-
   isDeleted: {
     type: Boolean,
-    default: false
+    default: false,
+    index: true
   },
-
   createdAt: {
     type: Date,
-    default: Date.now
+    default: Date.now,
+    index: true
   },
   updatedAt: {
     type: Date,
-    default: Date.now
+    default: Date.now,
+    index: true
   }
-}, { timestamps: true });
+}, { 
+  timestamps: true
+});
 
-// Unique index to prevent duplicates: employee + date
+// Compound index to ensure one record per employee per date
 attendanceLogSchema.index({ empId: 1, date: 1 }, { unique: true });
 
-// Calculate daily earning
-attendanceLogSchema.methods.calculateDayEarning = function() {
-  const { hoursPerDay, basePay, otAmount, deduction } = this.financials;
-  
-  if (this.status === 'Absent' || (!this.inOut.in && !this.inOut.out)) {
-    this.financials.finalDayEarning = 0;
-    return 0;
-  }
+const AttendanceLog = mongoose.model('AttendanceLog', attendanceLogSchema);
 
-  if (this.status === 'Leave') {
-    // Full day pay for leave
-    this.financials.finalDayEarning = basePay || (hoursPerDay * this.hourlyRate);
-    return this.financials.finalDayEarning;
-  }
-
-  if (this.inOut.in && !this.inOut.out) {
-    // Only in time: 50% of base pay
-    this.financials.finalDayEarning = (basePay * 0.5) + otAmount - deduction;
-  } else if (!this.inOut.in && this.inOut.out) {
-    // Only out time: 50% of base pay
-    this.financials.finalDayEarning = (basePay * 0.5) + otAmount - deduction;
-  } else if (this.inOut.in && this.inOut.out) {
-    // Full day
-    this.financials.finalDayEarning = basePay + otAmount - deduction;
-  }
-
-  // Never negative
-  this.financials.finalDayEarning = Math.max(0, this.financials.finalDayEarning);
-  
-  return this.financials.finalDayEarning;
-};
-
-module.exports = mongoose.model('AttendanceLog', attendanceLogSchema);
+export default AttendanceLog;

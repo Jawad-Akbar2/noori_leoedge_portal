@@ -3,7 +3,7 @@
  * Validates common input patterns
  */
 
-const { body, validationResult } = require('express-validator');
+import { body, validationResult } from 'express-validator';
 
 // Validate time format (HH:mm)
 const validateTime = (fieldName) => {
@@ -63,7 +63,7 @@ const handleValidationErrors = (req, res, next) => {
   next();
 };
 
-module.exports = {
+export {
   validateTime,
   validateEmail,
   validateEmployeeCreation,
@@ -71,3 +71,5 @@ module.exports = {
   validateLeaveRequest,
   handleValidationErrors
 };
+
+export default { validateTime, validateEmail, validateEmployeeCreation, validateAttendanceUpdate, validateLeaveRequest, handleValidationErrors };

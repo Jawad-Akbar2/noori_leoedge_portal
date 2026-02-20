@@ -1,62 +1,50 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import axios from 'axios';
-import { X } from 'lucide-react';
+import { X, Calendar } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 export default function LeaveRequestModal({ onClose, onSubmit }) {
-  const [fromDate, setFromDate] = useState(new Date().toISOString().split('T')[0]);
-  const [toDate, setToDate] = useState(new Date().toISOString().split('T')[0]);
-  const [leaveType, setLeaveType] = useState('Sick Leave');
-  const [reason, setReason] = useState('');
+  const [formData, setFormData] = useState({
+    fromDate: '',
+    toDate: '',
+    leaveType: 'Holiday Leave',
+    reason: ''
+  });
   const [loading, setLoading] = useState(false);
-  const [eligibility, setEligibility] = useState(null);
 
-  useEffect(() => {
-    checkEligibility();
-  }, []);
-
-  const checkEligibility = async () => {
-    try {
-      const token = localStorage.getItem('token');
-      const user = JSON.parse(localStorage.getItem('user'));
-      const response = await axios.get(`/api/employees/${user.id}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-
-      const joiningDate = new Date(response.data.joiningDate);
-      const now = new Date();
-      const daysElapsed = Math.floor((now - joiningDate) / (1000 * 60 * 60 * 24));
-      
-      setEligibility({
-        canApply: daysElapsed >= 90,
-        daysUntilEligible: Math.max(0, 90 - daysElapsed)
-      });
-    } catch (error) {
-      console.error('Error checking eligibility:', error);
-    }
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({ ...prev, [name]: value }));
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    if (!eligibility?.canApply) {
-      toast.error(`You can apply for leave after ${eligibility?.daysUntilEligible} days`);
+    if (!formData.fromDate || !formData.toDate) {
+      toast.error('Please select both dates');
+      return;
+    }
+
+    if (new Date(formData.fromDate) > new Date(formData.toDate)) {
+      toast.error('From date must be before to date');
+      return;
+    }
+
+    if (!formData.reason.trim()) {
+      toast.error('Please provide a reason');
       return;
     }
 
     setLoading(true);
     try {
       const token = localStorage.getItem('token');
-      await axios.post('/api/requests/leave/submit', {
-        fromDate,
-        toDate,
-        leaveType,
-        reason
-      }, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      await axios.post(
+        '/api/requests/leave/submit',
+        formData,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
 
-      toast.success('Leave request submitted successfully!');
+      toast.success('Leave request submitted successfully');
       onSubmit();
       onClose();
     } catch (error) {
@@ -68,55 +56,46 @@ export default function LeaveRequestModal({ onClose, onSubmit }) {
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-lg max-w-md w-full max-h-[90vh] overflow-y-auto">
-        {/* Header */}
-        <div className="sticky top-0 bg-white border-b p-6 flex items-center justify-between">
-          <h2 className="text-xl font-bold text-gray-800">Apply for Leave</h2>
+      <div className="bg-white rounded-lg max-w-md w-full p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-2xl font-bold text-gray-800">Apply for Leave</h2>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
             <X size={24} />
           </button>
         </div>
 
-        {/* Eligibility Warning */}
-        {!eligibility?.canApply && (
-          <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 m-6">
-            <p className="text-yellow-700 text-sm">
-              You can apply for leave after <strong>{eligibility?.daysUntilEligible} days</strong> from your joining date.
-            </p>
-          </div>
-        )}
-
-        {/* Form */}
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">From Date *</label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">From Date</label>
             <input
               type="date"
-              value={fromDate}
-              onChange={(e) => setFromDate(e.target.value)}
+              name="fromDate"
+              value={formData.fromDate}
+              onChange={handleChange}
               required
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">To Date *</label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">To Date</label>
             <input
               type="date"
-              value={toDate}
-              onChange={(e) => setToDate(e.target.value)}
+              name="toDate"
+              value={formData.toDate}
+              onChange={handleChange}
               required
-              min={fromDate}
+              min={formData.fromDate}
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Leave Type *</label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Leave Type</label>
             <select
-              value={leaveType}
-              onChange={(e) => setLeaveType(e.target.value)}
-              required
+              name="leaveType"
+              value={formData.leaveType}
+              onChange={handleChange}
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
             >
               <option value="Holiday Leave">Holiday Leave</option>
@@ -126,30 +105,30 @@ export default function LeaveRequestModal({ onClose, onSubmit }) {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Reason *</label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Reason</label>
             <textarea
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
+              name="reason"
+              value={formData.reason}
+              onChange={handleChange}
               required
               rows="4"
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-              placeholder="Provide reason for your leave..."
-            />
+              placeholder="Provide reason for leave..."
+            ></textarea>
           </div>
 
-          {/* Buttons */}
-          <div className="flex gap-4 pt-4 border-t">
+          <div className="flex gap-3">
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition font-medium"
+              className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition"
             >
               Cancel
             </button>
             <button
               type="submit"
-              disabled={loading || !eligibility?.canApply}
-              className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium disabled:opacity-50"
+              disabled={loading}
+              className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition disabled:opacity-50"
             >
               {loading ? 'Submitting...' : 'Submit Request'}
             </button>

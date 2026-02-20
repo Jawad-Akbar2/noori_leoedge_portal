@@ -1,33 +1,48 @@
-const mongoose = require('mongoose');
+import mongoose from 'mongoose';
 
 const correctionRequestSchema = new mongoose.Schema({
   empId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Employee',
+    required: true,
+    index: true
+  },
+  empNumber: {
+    type: String,
     required: true
   },
-  empNumber: String,
-  empName: String,
+  empName: {
+    type: String,
+    required: true
+  },
   date: {
     type: Date,
-    required: true
+    required: true,
+    index: true
   },
   correctionType: {
     type: String,
-    enum: ['In-Time', 'Out-Time', 'Both'],
+    enum: ['In', 'Out', 'Both'],
     required: true
   },
   originalInTime: String,
   correctedInTime: String,
   originalOutTime: String,
   correctedOutTime: String,
-  reason: String,
+  reason: {
+    type: String,
+    required: true
+  },
   status: {
     type: String,
     enum: ['Pending', 'Approved', 'Rejected'],
-    default: 'Pending'
+    default: 'Pending',
+    index: true
   },
-  approvedBy: mongoose.Schema.Types.ObjectId,
+  approvedBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Employee'
+  },
   approvedAt: Date,
   rejectionReason: String,
   isDeleted: {
@@ -36,7 +51,8 @@ const correctionRequestSchema = new mongoose.Schema({
   },
   createdAt: {
     type: Date,
-    default: Date.now
+    default: Date.now,
+    index: true
   },
   updatedAt: {
     type: Date,
@@ -44,4 +60,6 @@ const correctionRequestSchema = new mongoose.Schema({
   }
 }, { timestamps: true });
 
-module.exports = mongoose.model('CorrectionRequest', correctionRequestSchema);
+const CorrectionRequest = mongoose.model('CorrectionRequest', correctionRequestSchema);
+
+export default CorrectionRequest;

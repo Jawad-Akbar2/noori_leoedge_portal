@@ -1,11 +1,12 @@
-const express = require('express');
-const router = express.Router();
-const AttendanceLog = require('../models/AttendanceLog');
-const Employee = require('../models/Employee');
-const { adminAuth, authAny } = require('../middleware/auth'); // ✅ Added authAny
-const axios = require('axios'); 
+import express from 'express';
+import AttendanceLog from '../models/AttendanceLog.js';
+import Employee from '../models/Employee.js';
+import { adminAuth } from '../middleware/auth.js';
+import { isLate, calculateHours } from '../utils/timeCalculator.js';
 
-// Helper: Get company month dates
+const router = express.Router();
+
+// Helper: Get company month dates (18th to 17th)
 function getCompanyMonthDates(date = new Date()) {
   const year = date.getFullYear();
   const month = date.getMonth();
@@ -22,19 +23,6 @@ function getCompanyMonthDates(date = new Date()) {
   }
 
   return { startDate, endDate };
-}
-
-// Helper: Check if time is late
-function isLate(inTime, shiftStartTime) {
-  if (!inTime || !shiftStartTime) return false;
-
-  const [inH, inM] = inTime.split(':').map(Number);
-  const [shiftH, shiftM] = shiftStartTime.split(':').map(Number);
-
-  const inMinutes = inH * 60 + inM;
-  const shiftMinutes = shiftH * 60 + shiftM;
-
-  return inMinutes > shiftMinutes;
 }
 
 // **SECTION 1: Attendance & Discipline Overview**
@@ -130,6 +118,7 @@ router.post('/attendance-overview', adminAuth, async (req, res) => {
       summary: statusCount
     });
   } catch (error) {
+    console.error('Error in attendance-overview:', error);
     res.status(500).json({ message: error.message });
   }
 });
@@ -178,6 +167,7 @@ router.post('/performance-overview', adminAuth, async (req, res) => {
 
     res.json({ performance });
   } catch (error) {
+    console.error('Error in performance-overview:', error);
     res.status(500).json({ message: error.message });
   }
 });
@@ -236,18 +226,14 @@ router.post('/salary-summary', adminAuth, async (req, res) => {
 
     res.json({ summary, totals });
   } catch (error) {
+    console.error('Error in salary-summary:', error);
     res.status(500).json({ message: error.message });
   }
 });
 
-// ✅ UPDATED: Changed adminAuth to authAny & added logic check
-router.get('/employee/:empId', authAny, async (req, res) => {
+// **Employee Detailed Breakdown**
+router.get('/employee-breakdown/:empId', adminAuth, async (req, res) => {
   try {
-    // ✅ Security: Ensure employees can only see their own data
-    if (req.role !== 'admin' && req.userId.toString() !== req.params.empId) {
-      return res.status(403).json({ message: 'Unauthorized: Access restricted to your own data' });
-    }
-
     const { fromDate, toDate } = req.query;
 
     const start = new Date(fromDate);
@@ -294,6 +280,7 @@ router.get('/employee/:empId', authAny, async (req, res) => {
       totals
     });
   } catch (error) {
+    console.error('Error in employee-breakdown:', error);
     res.status(500).json({ message: error.message });
   }
 });
@@ -317,11 +304,12 @@ router.get('/live-payroll', adminAuth, async (req, res) => {
       asOf: new Date()
     });
   } catch (error) {
+    console.error('Error in live-payroll:', error);
     res.status(500).json({ message: error.message });
   }
 });
 
-// ✅ UPDATED: Removed external axios call for internal logic consistency
+// **Export Payroll (CSV)**
 router.post('/export', adminAuth, async (req, res) => {
   try {
     const { fromDate, toDate, format } = req.body;
@@ -336,19 +324,31 @@ router.post('/export', adminAuth, async (req, res) => {
       isDeleted: false
     });
 
-    const employees = await Employee.find({ status: 'Active', isDeleted: false });
+    const employees = await Employee.find({
+      status: 'Active',
+      isArchived: false,
+      isDeleted: false
+    });
 
-    const summary = employees.map(emp => {
+    const summary = [];
+
+    for (const emp of employees) {
       const empRecords = attendance.filter(a => a.empId.toString() === emp._id.toString());
-      return {
+
+      const basicEarned = empRecords.reduce((sum, r) => sum + (r.financials?.basePay || 0), 0);
+      const otTotal = empRecords.reduce((sum, r) => sum + (r.financials?.otAmount || 0), 0);
+      const deductionTotal = empRecords.reduce((sum, r) => sum + (r.financials?.deduction || 0), 0);
+      const netPayable = empRecords.reduce((sum, r) => sum + (r.financials?.finalDayEarning || 0), 0);
+
+      summary.push({
         empNumber: emp.employeeNumber,
         name: `${emp.firstName} ${emp.lastName}`,
-        basicEarned: empRecords.reduce((sum, r) => sum + (r.financials?.basePay || 0), 0).toFixed(2),
-        otTotal: empRecords.reduce((sum, r) => sum + (r.financials?.otAmount || 0), 0).toFixed(2),
-        deductionTotal: empRecords.reduce((sum, r) => sum + (r.financials?.deduction || 0), 0).toFixed(2),
-        netPayable: empRecords.reduce((sum, r) => sum + (r.financials?.finalDayEarning || 0), 0).toFixed(2)
-      };
-    });
+        basicEarned: parseFloat(basicEarned.toFixed(2)),
+        otTotal: parseFloat(otTotal.toFixed(2)),
+        deductionTotal: parseFloat(deductionTotal.toFixed(2)),
+        netPayable: parseFloat(netPayable.toFixed(2))
+      });
+    }
 
     if (format === 'csv') {
       let csv = 'Employee Number,Name,Basic Earned,OT Total,Deductions,Net Payable\n';
@@ -358,12 +358,14 @@ router.post('/export', adminAuth, async (req, res) => {
 
       res.setHeader('Content-Type', 'text/csv');
       res.setHeader('Content-Disposition', 'attachment; filename="payroll.csv"');
-      return res.send(csv);
+      res.send(csv);
+    } else {
+      res.json({ summary });
     }
-    res.status(400).json({ message: 'Unsupported format' });
   } catch (error) {
+    console.error('Error in export:', error);
     res.status(500).json({ message: error.message });
   }
 });
 
-module.exports = router;
+export default router;

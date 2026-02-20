@@ -13,15 +13,10 @@ export default function ManualAttendance() {
   const [searchTerm, setSearchTerm] = useState('');
   const [showDrawer, setShowDrawer] = useState(false);
   const [selectedRow, setSelectedRow] = useState(null);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   const [editingRow, setEditingRow] = useState(null);
 
   useEffect(() => {
-    const handleResize = () => setIsMobile(window.innerWidth < 768);
-    window.addEventListener('resize', handleResize);
     fetchWorksheet();
-    return () => window.removeEventListener('resize', handleResize);
   }, []);
 
   useEffect(() => {
@@ -55,7 +50,6 @@ export default function ManualAttendance() {
       );
     }
 
-    // Sort by date, then employee number
     filtered.sort((a, b) => {
       const dateCompare = new Date(a.date) - new Date(b.date);
       if (dateCompare !== 0) return dateCompare;
@@ -65,7 +59,6 @@ export default function ManualAttendance() {
     setFilteredWorksheet(filtered);
   };
 
-  // Calculate daily earning based on row data
   const calculateEarning = (row) => {
     const { status, inOut, financials, shift, hourlyRate } = row;
 
@@ -97,7 +90,6 @@ export default function ManualAttendance() {
 
       return Math.max(0, basePay + otAmount - deduction);
     } else if (inOut?.in || inOut?.out) {
-      // Only one time: 50% base pay
       const [shiftH, shiftM] = shift.start.split(':').map(Number);
       const [endH, endM] = shift.end.split(':').map(Number);
       const hoursPerDay = ((endH * 60 + endM) - (shiftH * 60 + shiftM)) / 60;
@@ -237,7 +229,6 @@ export default function ManualAttendance() {
       updated.financials = { ...updated.financials, [finField]: value };
     }
 
-    // Recalculate earning
     const earning = calculateEarning(updated);
     updated.financials.finalDayEarning = earning;
 
@@ -251,28 +242,11 @@ export default function ManualAttendance() {
 
   return (
     <div className="flex h-screen bg-gray-100">
-      {/* Sidebar */}
-      <div
-        className={`${
-          sidebarOpen ? 'w-64' : 'w-20'
-        } bg-gray-900 text-white transition-all duration-300 hidden md:block`}
-      >
-        <div className="p-4">
-          <h2 className="text-xl font-bold text-blue-400">HR Portal</h2>
-        </div>
-      </div>
-
       {/* Main Content */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Header */}
         <header className="bg-white shadow sticky top-0 z-30">
           <div className="flex items-center justify-between p-4 md:p-6">
-            <button
-              onClick={() => setSidebarOpen(!sidebarOpen)}
-              className="md:hidden text-gray-600"
-            >
-              {sidebarOpen ? <X size={24} /> : <Menu size={24} />}
-            </button>
             <h1 className="text-2xl font-bold text-gray-800">Manual Attendance</h1>
             <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center text-white font-bold">
               A

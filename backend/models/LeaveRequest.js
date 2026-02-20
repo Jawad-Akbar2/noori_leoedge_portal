@@ -1,13 +1,20 @@
-const mongoose = require('mongoose');
+import mongoose from 'mongoose';
 
 const leaveRequestSchema = new mongoose.Schema({
   empId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Employee',
+    required: true,
+    index: true
+  },
+  empNumber: {
+    type: String,
     required: true
   },
-  empNumber: String,
-  empName: String,
+  empName: {
+    type: String,
+    required: true
+  },
   leaveType: {
     type: String,
     enum: ['Holiday Leave', 'Sick Leave', 'Casual Leave'],
@@ -21,13 +28,20 @@ const leaveRequestSchema = new mongoose.Schema({
     type: Date,
     required: true
   },
-  reason: String,
+  reason: {
+    type: String,
+    required: true
+  },
   status: {
     type: String,
     enum: ['Pending', 'Approved', 'Rejected'],
-    default: 'Pending'
+    default: 'Pending',
+    index: true
   },
-  approvedBy: mongoose.Schema.Types.ObjectId,
+  approvedBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Employee'
+  },
   approvedAt: Date,
   rejectionReason: String,
   isDeleted: {
@@ -36,7 +50,8 @@ const leaveRequestSchema = new mongoose.Schema({
   },
   createdAt: {
     type: Date,
-    default: Date.now
+    default: Date.now,
+    index: true
   },
   updatedAt: {
     type: Date,
@@ -44,4 +59,6 @@ const leaveRequestSchema = new mongoose.Schema({
   }
 }, { timestamps: true });
 
-module.exports = mongoose.model('LeaveRequest', leaveRequestSchema);
+const LeaveRequest = mongoose.model('LeaveRequest', leaveRequestSchema);
+
+export default LeaveRequest;

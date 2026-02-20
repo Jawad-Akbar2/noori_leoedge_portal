@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { X, Save } from 'lucide-react';
+import { X, Save, AlertCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
 
-export default function EditEmployeeModal({ employee, onClose, onSave }) {
+export default function EditEmployeeModal({ employee, onClose }) {
   const [activeTab, setActiveTab] = useState('basic');
   const [loading, setLoading] = useState(false);
+  const [dataLoading, setDataLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
@@ -19,22 +21,41 @@ export default function EditEmployeeModal({ employee, onClose, onSave }) {
   });
 
   useEffect(() => {
-    if (employee) {
-      setFormData({
-        firstName: employee.firstName || '',
-        lastName: employee.lastName || '',
-        email: employee.email || '',
-        employeeNumber: employee.employeeNumber || '',
-        department: employee.department || 'IT',
-        joiningDate: employee.joiningDate
-          ? new Date(employee.joiningDate).toISOString().split('T')[0]
-          : '',
-        shift: employee.shift || { start: '09:00', end: '18:00' },
-        hourlyRate: employee.hourlyRate || 0,
-        bank: employee.bank || { bankName: '', accountName: '', accountNumber: '' }
-      });
-    }
-  }, [employee]);
+    // CRITICAL: Load latest employee data from backend
+    const loadEmployeeData = async () => {
+      setDataLoading(true);
+      setError(null);
+      try {
+        const token = localStorage.getItem('token');
+        const response = await axios.get(
+          `/api/employees/${employee._id}`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+
+        // Populate form with fresh backend data (not stale frontend state)
+        setFormData({
+          firstName: response.data.firstName || '',
+          lastName: response.data.lastName || '',
+          email: response.data.email || '',
+          employeeNumber: response.data.employeeNumber || '',
+          department: response.data.department || 'IT',
+          joiningDate: response.data.joiningDate
+            ? new Date(response.data.joiningDate).toISOString().split('T')[0]
+            : '',
+          shift: response.data.shift || { start: '09:00', end: '18:00' },
+          hourlyRate: response.data.hourlyRate || 0,
+          bank: response.data.bank || { bankName: '', accountName: '', accountNumber: '' }
+        });
+        
+        setDataLoading(false);
+      } catch (err) {
+        setError('Failed to load employee data. Employee may no longer exist.');
+        setDataLoading(false);
+      }
+    };
+
+    loadEmployeeData();
+  }, [employee._id]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -89,11 +110,11 @@ export default function EditEmployeeModal({ employee, onClose, onSave }) {
       return;
     }
     if (!isValidTime(formData.shift.start)) {
-      toast.error('Invalid shift start time');
+      toast.error('Invalid shift start time (HH:mm format)');
       return;
     }
     if (!isValidTime(formData.shift.end)) {
-      toast.error('Invalid shift end time');
+      toast.error('Invalid shift end time (HH:mm format)');
       return;
     }
     if (formData.hourlyRate <= 0) {
@@ -118,7 +139,6 @@ export default function EditEmployeeModal({ employee, onClose, onSave }) {
       );
 
       toast.success('Employee updated successfully');
-      onSave();
       onClose();
     } catch (error) {
       toast.error(error.response?.data?.message || 'Failed to update employee');
@@ -126,6 +146,39 @@ export default function EditEmployeeModal({ employee, onClose, onSave }) {
       setLoading(false);
     }
   };
+
+  // ERROR STATE: Cannot render if data failed to load
+  if (error) {
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+        <div className="bg-white rounded-lg w-full max-w-md p-6">
+          <div className="flex items-center gap-3 mb-4 text-red-600">
+            <AlertCircle size={24} />
+            <h2 className="text-lg font-bold">Error Loading Employee</h2>
+          </div>
+          <p className="text-gray-600 mb-6">{error}</p>
+          <button
+            onClick={onClose}
+            className="w-full px-4 py-2 bg-gray-300 text-gray-800 rounded-lg hover:bg-gray-400 transition"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // LOADING STATE
+  if (dataLoading) {
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+        <div className="bg-white rounded-lg w-full max-w-md p-6 text-center">
+          <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mb-4"></div>
+          <p className="text-gray-600">Loading employee information...</p>
+        </div>
+      </div>
+    );
+  }
 
   if (!employee) return null;
 
@@ -156,7 +209,7 @@ export default function EditEmployeeModal({ employee, onClose, onSave }) {
               className={`flex-1 px-4 py-3 font-medium border-b-2 transition ${
                 activeTab === 'basic'
                   ? 'border-blue-500 text-blue-600'
-                  : 'border-transparent text-gray-600'
+                  : 'border-transparent text-gray-600 hover:text-gray-800'
               }`}
             >
               Basic Info
@@ -166,7 +219,7 @@ export default function EditEmployeeModal({ employee, onClose, onSave }) {
               className={`flex-1 px-4 py-3 font-medium border-b-2 transition ${
                 activeTab === 'shift'
                   ? 'border-blue-500 text-blue-600'
-                  : 'border-transparent text-gray-600'
+                  : 'border-transparent text-gray-600 hover:text-gray-800'
               }`}
             >
               Shift & Salary
@@ -176,7 +229,7 @@ export default function EditEmployeeModal({ employee, onClose, onSave }) {
               className={`flex-1 px-4 py-3 font-medium border-b-2 transition ${
                 activeTab === 'bank'
                   ? 'border-blue-500 text-blue-600'
-                  : 'border-transparent text-gray-600'
+                  : 'border-transparent text-gray-600 hover:text-gray-800'
               }`}
             >
               Bank Details
@@ -326,7 +379,6 @@ export default function EditEmployeeModal({ employee, onClose, onSave }) {
                   onChange={handleInputChange}
                   step="10"
                   min="0"
-                  inputMode="numeric"
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                 />
               </div>
@@ -345,7 +397,7 @@ export default function EditEmployeeModal({ employee, onClose, onSave }) {
               {/* Snapshot Notice */}
               <div className="bg-yellow-50 p-4 rounded-lg border border-yellow-200">
                 <p className="text-sm text-yellow-800">
-                  <span className="font-semibold">Note:</span> Changes to shift times and hourly rate will apply to future attendance records only. Historical records will retain their original snapshot values.
+                  <span className="font-semibold">⚠️ Note:</span> Changes to shift times and hourly rate apply to future attendance records only. Historical records retain their original snapshot values.
                 </p>
               </div>
             </div>
@@ -390,7 +442,6 @@ export default function EditEmployeeModal({ employee, onClose, onSave }) {
                   name="bank.accountNumber"
                   value={formData.bank.accountNumber}
                   onChange={handleInputChange}
-                  inputMode="numeric"
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                 />
               </div>

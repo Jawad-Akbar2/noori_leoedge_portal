@@ -1,12 +1,12 @@
 /**
  * Excel Exporter Utility
  * Exports data to Excel format using SheetJS
+ * Note: Requires npm install xlsx
  */
-
-// Note: Install with: npm install xlsx
 
 export function exportToExcel(data, sheetName = 'Sheet1', fileName = 'export.xlsx') {
   try {
+    // Dynamic import for optional dependency
     const XLSX = require('xlsx');
 
     if (!data || data.length === 0) {
@@ -42,7 +42,7 @@ export function exportToExcel(data, sheetName = 'Sheet1', fileName = 'export.xls
     XLSX.writeFile(wb, fileName);
   } catch (error) {
     console.error('Excel export error:', error);
-    alert('Failed to export to Excel. Make sure xlsx is installed.');
+    alert('Failed to export to Excel. Make sure xlsx is installed: npm install xlsx');
   }
 }
 
