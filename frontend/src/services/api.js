@@ -6,7 +6,7 @@
 import axios from 'axios';
 
 // For Vercel, default to /api if no env variable is set
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+const API_BASE_URL = process.env.REACT_APP_API_URL || '/api';
 
 // Create axios instance with default config
 const apiClient = axios.create({

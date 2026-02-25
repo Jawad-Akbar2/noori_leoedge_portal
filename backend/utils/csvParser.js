@@ -1,15 +1,29 @@
 /**
  * CSV Parser Utility - FINAL VERSION
  * Format: empid | firstname | lastname | date(dd/mm/yyyy) | time(HH:mm) | status(0=in, 1=out)
+ * Supports both pipe (|) and comma (,) delimiters — auto-detected per file
  */
 
 import { normalizeTime, isValidNormalizedTime } from './timeNormalizer.js';
 import { parseDate, formatDate } from './dateUtils.js';
 
+/**
+ * Detect delimiter used in CSV content (pipe or comma)
+ */
+function detectDelimiter(csvContent) {
+  const firstLine = csvContent.trim().split('\n')[0] || '';
+  const pipeCount = (firstLine.match(/\|/g) || []).length;
+  const commaCount = (firstLine.match(/,/g) || []).length;
+  return pipeCount >= commaCount ? '|' : ',';
+}
+
 export function parseCSV(csvContent) {
   const lines = csvContent.trim().split('\n');
   const parsed = [];
   const errors = [];
+
+  // Auto-detect delimiter
+  const delimiter = detectDelimiter(csvContent);
 
   // Skip header line if present
   let startIndex = 0;
@@ -22,13 +36,13 @@ export function parseCSV(csvContent) {
     if (!line) continue;
 
     const rowNumber = i + 1; // 1-based for user display
-    const parts = line.split('|').map(p => p.trim());
+    const parts = line.split(delimiter).map(p => p.trim());
 
     // Validate columns
     if (parts.length < 6) {
       errors.push({
         rowNumber,
-        error: `Invalid format. Expected 6 columns separated by |, got ${parts.length}`,
+        error: `Invalid format. Expected 6 columns separated by "${delimiter}", got ${parts.length}`,
         rawLine: line
       });
       continue;

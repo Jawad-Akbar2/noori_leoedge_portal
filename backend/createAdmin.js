@@ -31,7 +31,7 @@ const createAdmin = async () => {
             joiningDate: new Date(),
             hourlyRate: 0,
             status: "Active",
-            password: "Admin@123"
+            password: "Admin@123456"
         });
 
         await admin.save();
