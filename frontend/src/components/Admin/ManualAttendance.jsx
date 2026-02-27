@@ -160,7 +160,7 @@ function AttendanceFormModal({ mode = 'add', record = null, onClose, onSuccess }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col">
 
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b">
@@ -173,7 +173,8 @@ function AttendanceFormModal({ mode = 'add', record = null, onClose, onSuccess }
         </div>
 
         {/* Body */}
-        <div className="px-6 py-5 space-y-4">
+          <div className="px-6 py-5 space-y-4 overflow-auto flex-1">
+
 
           {/* Employee — only in Add mode */}
           {!isEdit && (
@@ -338,7 +339,7 @@ function AttendanceFormModal({ mode = 'add', record = null, onClose, onSuccess }
         </div>
 
         {/* Footer */}
-        <div className="flex justify-end gap-3 px-6 py-4 border-t bg-gray-50 rounded-b-2xl">
+  <div className="flex justify-end gap-3 px-6 py-4 border-t bg-gray-50 rounded-b-2xl">
           <button
             onClick={onClose}
             disabled={saving}
