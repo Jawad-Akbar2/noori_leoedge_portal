@@ -27,8 +27,22 @@ function getCompanyMonthDates(date = new Date()) {
 }
 
 function parseDateRange(fromDate, toDate) {
-  const start = parseDDMMYYYY(fromDate);
-  const end = parseDDMMYYYY(toDate);
+  const parseInputDate = (value) => {
+    if (!value) return null;
+
+    // Support both dd/mm/yyyy and native input date format (yyyy-mm-dd).
+    if (String(value).includes("/")) {
+      return parseDDMMYYYY(value);
+    }
+
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) return null;
+    parsed.setHours(0, 0, 0, 0);
+    return parsed;
+  };
+
+  const start = parseInputDate(fromDate);
+  const end = parseInputDate(toDate);
 
   if (!start || !end) return null;
 
@@ -36,6 +50,11 @@ function parseDateRange(fromDate, toDate) {
   end.setHours(23, 59, 59, 999);
 
   return { start, end };
+}
+
+function normalizeNumber(value) {
+  const num = Number(value);
+  return Number.isFinite(num) ? num : 0;
 }
 
 // **SECTION 1: Attendance & Discipline Overview**
@@ -292,6 +311,122 @@ router.post("/salary-summary", adminAuth, async (req, res) => {
     res.json({ summary, totals });
   } catch (error) {
     console.error("Error in salary-summary:", error);
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// Full payroll report with per-day details for each employee in the selected date range.
+router.post("/report", adminAuth, async (req, res) => {
+  try {
+    const { fromDate, toDate, search = "" } = req.body;
+    const range = parseDateRange(fromDate, toDate);
+
+    if (!range) {
+      return res.status(400).json({ message: "Invalid date format. Use dd/mm/yyyy or yyyy-mm-dd" });
+    }
+
+    const { start, end } = range;
+
+    const employees = await Employee.find({
+      status: "Active",
+      isArchived: false,
+      isDeleted: false,
+    }).sort({ firstName: 1, lastName: 1 });
+
+    const attendanceRecords = await AttendanceLog.find({
+      date: { $gte: start, $lte: end },
+      isDeleted: false,
+    }).sort({ date: 1 });
+
+    const searchTerm = String(search || "").trim().toLowerCase();
+
+    const report = employees
+      .map((employee) => {
+        const fullName = `${employee.firstName} ${employee.lastName}`;
+
+        if (
+          searchTerm &&
+          !fullName.toLowerCase().includes(searchTerm) &&
+          !String(employee.employeeNumber || "").toLowerCase().includes(searchTerm)
+        ) {
+          return null;
+        }
+
+        const records = attendanceRecords.filter(
+          (item) => item.empId.toString() === employee._id.toString(),
+        );
+
+        // Daily rows preserve deduction/OT details for nested UI rendering.
+        const dailyAttendance = records.map((row) => {
+          const basePay = normalizeNumber(row.financials?.basePay);
+          const deduction = normalizeNumber(row.financials?.deduction);
+          const otAmount = normalizeNumber(row.financials?.otAmount);
+          const finalEarning = normalizeNumber(row.financials?.finalDayEarning);
+
+          return {
+            date: formatDate(row.date),
+            status: row.status,
+            inTime: row.inOut?.in || "--",
+            outTime: row.inOut?.out || "--",
+            hoursPerDay: normalizeNumber(row.financials?.hoursPerDay),
+            basePay,
+            deduction,
+            otAmount,
+            finalEarning,
+            deductionDetails: row.financials?.deductionDetails || [],
+            otDetails: row.financials?.otDetails || [],
+          };
+        });
+
+        // Aggregate totals from the daily rows to keep parent + nested table fully consistent.
+        const totals = dailyAttendance.reduce(
+          (acc, day) => {
+            acc.basePay += day.basePay;
+            acc.deduction += day.deduction;
+            acc.otAmount += day.otAmount;
+            acc.finalEarning += day.finalEarning;
+            return acc;
+          },
+          { basePay: 0, deduction: 0, otAmount: 0, finalEarning: 0 },
+        );
+
+        return {
+          empId: employee._id,
+          empNumber: employee.employeeNumber,
+          name: fullName,
+          totals: {
+            basePay: Number(totals.basePay.toFixed(2)),
+            deduction: Number(totals.deduction.toFixed(2)),
+            otAmount: Number(totals.otAmount.toFixed(2)),
+            finalEarning: Number(totals.finalEarning.toFixed(2)),
+          },
+          dailyAttendance,
+        };
+      })
+      .filter(Boolean);
+
+    const grandTotals = report.reduce(
+      (acc, employee) => {
+        acc.basePay += employee.totals.basePay;
+        acc.deduction += employee.totals.deduction;
+        acc.otAmount += employee.totals.otAmount;
+        acc.finalEarning += employee.totals.finalEarning;
+        return acc;
+      },
+      { basePay: 0, deduction: 0, otAmount: 0, finalEarning: 0 },
+    );
+
+    res.json({
+      report,
+      grandTotals: {
+        basePay: Number(grandTotals.basePay.toFixed(2)),
+        deduction: Number(grandTotals.deduction.toFixed(2)),
+        otAmount: Number(grandTotals.otAmount.toFixed(2)),
+        finalEarning: Number(grandTotals.finalEarning.toFixed(2)),
+      },
+    });
+  } catch (error) {
+    console.error("Error in payroll report:", error);
     res.status(500).json({ message: error.message });
   }
 });

@@ -7,6 +7,7 @@ import {
 } from 'recharts';
 import { Calendar, Download, Menu, X } from 'lucide-react';
 import toast from 'react-hot-toast';
+import payrollAPI from '../../routes/payrollRoutes';
 
 export default function PayrollReports() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -59,8 +60,8 @@ export default function PayrollReports() {
   const [salarySummary, setSalarySummary] = useState([]);
   const [salaryTotals, setSalaryTotals] = useState({});
   const [salaryLoading, setSalaryLoading] = useState(false);
-  const [selectedEmployee, setSelectedEmployee] = useState(null);
-  const [employeeBreakdown, setEmployeeBreakdown] = useState(null);
+  const [salarySearch, setSalarySearch] = useState('');
+  const [expandedEmployees, setExpandedEmployees] = useState({});
 
   const COLORS = ['#10b981', '#f59e0b', '#3b82f6', '#ef4444'];
 
@@ -119,21 +120,14 @@ export default function PayrollReports() {
     }
   };
 
-  // SECTION 3: Fetch Salary Summary
+  // SECTION 3: Fetch full Payroll Report (parent totals + nested daily rows)
   const fetchSalarySummary = async () => {
     setSalaryLoading(true);
     try {
-      const token = localStorage.getItem('token');
-      const apiUrl = process.env.REACT_APP_API_URL || '/api';
-      
-      const response = await axios.post(
-        `${apiUrl}/payroll/salary-summary`,
-        { fromDate: salaryFromDate, toDate: salaryToDate },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-
-      setSalarySummary(response.data.summary);
-      setSalaryTotals(response.data.totals);
+      // Data flow: request date range + optional search; backend responds with totals and per-day details.
+      const response = await payrollAPI.getPayrollReport(salaryFromDate, salaryToDate, salarySearch);
+      setSalarySummary(response.report || []);
+      setSalaryTotals(response.grandTotals || {});
     } catch (error) {
       console.error('Error fetching salary:', error);
       toast.error('Failed to load salary data');
@@ -142,29 +136,8 @@ export default function PayrollReports() {
     }
   };
 
-  // Fetch employee detailed breakdown
-  const fetchEmployeeBreakdown = async (empId) => {
-    try {
-      const token = localStorage.getItem('token');
-      const apiUrl = process.env.REACT_APP_API_URL || '/api';
-      
-      const response = await axios.get(
-        `${apiUrl}/payroll/employee-breakdown/${empId}`,
-        {
-          params: {
-            fromDate: salaryFromDate,
-            toDate: salaryToDate
-          },
-          headers: { Authorization: `Bearer ${token}` }
-        }
-      );
-
-      setEmployeeBreakdown(response.data);
-      setSelectedEmployee(empId);
-    } catch (error) {
-      console.error('Error fetching breakdown:', error);
-      toast.error('Failed to load employee breakdown');
-    }
+  const toggleEmployeeExpansion = (empId) => {
+    setExpandedEmployees((prev) => ({ ...prev, [empId]: !prev[empId] }));
   };
 
   // Quick preset handlers
@@ -277,7 +250,7 @@ export default function PayrollReports() {
     if (format === 'csv') {
       let csv = 'Employee Number,Name,Basic Earned,OT Total,Deductions,Net Payable\n';
       salarySummary.forEach(emp => {
-        csv += `${emp.empNumber},"${emp.name}",${emp.basicEarned},${emp.otTotal},${emp.deductionTotal},${emp.netPayable}\n`;
+        csv += `${emp.empNumber},"${emp.name}",${emp.totals.basePay},${emp.totals.otAmount},${emp.totals.deduction},${emp.totals.finalEarning}\n`;
       });
 
       const blob = new Blob([csv], { type: 'text/csv' });
@@ -685,157 +658,125 @@ export default function PayrollReports() {
                 <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
                   <p className="text-sm text-gray-600">Total Basic Earned</p>
                   <p className="text-2xl font-bold text-blue-600 mt-2">
-                    PKR {salaryTotals.totalBasicEarned?.toFixed(2) || '0.00'}
+                    PKR {salaryTotals.basePay?.toFixed(2) || '0.00'}
                   </p>
                 </div>
                 <div className="bg-green-50 p-4 rounded-lg border border-green-200">
                   <p className="text-sm text-gray-600">Total OT</p>
                   <p className="text-2xl font-bold text-green-600 mt-2">
-                    PKR {salaryTotals.totalOT?.toFixed(2) || '0.00'}
+                    PKR {salaryTotals.otAmount?.toFixed(2) || '0.00'}
                   </p>
                 </div>
                 <div className="bg-red-50 p-4 rounded-lg border border-red-200">
                   <p className="text-sm text-gray-600">Total Deductions</p>
                   <p className="text-2xl font-bold text-red-600 mt-2">
-                    PKR {salaryTotals.totalDeductions?.toFixed(2) || '0.00'}
+                    PKR {salaryTotals.deduction?.toFixed(2) || '0.00'}
                   </p>
                 </div>
                 <div className="bg-purple-50 p-4 rounded-lg border border-purple-200">
                   <p className="text-sm text-gray-600">Total Net Payable</p>
                   <p className="text-2xl font-bold text-purple-600 mt-2">
-                    PKR {salaryTotals.totalNetPayable?.toFixed(2) || '0.00'}
+                    PKR {salaryTotals.finalEarning?.toFixed(2) || '0.00'}
                   </p>
                 </div>
               </div>
 
-              {/* Summary Table */}
+              {/* Search by employee name or employee id */}
+              <div className="mb-4 grid grid-cols-1 md:grid-cols-3 gap-3"> 
+                <input
+                  type="text"
+                  value={salarySearch}
+                  onChange={(e) => setSalarySearch(e.target.value)}
+                  placeholder="Search by name or employee ID"
+                  className="w-full md:col-span-2 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                />
+                <button
+                  onClick={fetchSalarySummary}
+                  disabled={salaryLoading}
+                  className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition disabled:opacity-50"
+                >
+                  {salaryLoading ? 'Searching...' : 'Apply Search'}
+                </button>
+              </div>
+
+              {/* Summary Table with expandable daily attendance details */}
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead className="bg-gray-100">
                     <tr>
-                      <th className="px-4 py-2 text-left">Name</th>
-                      <th className="px-4 py-2 text-right">Basic Earned</th>
-                      <th className="px-4 py-2 text-right">OT Total</th>
+                      <th className="px-4 py-2 text-left">Employee</th>
+                      <th className="px-4 py-2 text-right">Total Salary</th>
                       <th className="px-4 py-2 text-right">Deductions</th>
-                      <th className="px-4 py-2 text-right">Net Payable</th>
+                      <th className="px-4 py-2 text-right">OT</th>
+                      <th className="px-4 py-2 text-right">Final Earnings</th>
                       <th className="px-4 py-2 text-left">Action</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y">
                     {salarySummary.map((emp) => (
-                      <tr key={emp.empId} className="hover:bg-gray-50">
-                        <td className="px-4 py-2 font-medium">{emp.name}</td>
-                        <td className="px-4 py-2 text-right">PKR {emp.basicEarned.toFixed(2)}</td>
-                        <td className="px-4 py-2 text-right text-green-600">
-                          PKR {emp.otTotal.toFixed(2)}
-                        </td>
-                        <td className="px-4 py-2 text-right text-red-600">
-                          PKR {emp.deductionTotal.toFixed(2)}
-                        </td>
-                        <td className="px-4 py-2 text-right font-semibold text-blue-600">
-                          PKR {emp.netPayable.toFixed(2)}
-                        </td>
-                        <td className="px-4 py-2">
-                          <button
-                            onClick={() => fetchEmployeeBreakdown(emp.empId)}
-                            className="text-blue-600 hover:text-blue-800 text-sm font-medium"
-                          >
-                            Details
-                          </button>
-                        </td>
-                      </tr>
+                      <React.Fragment key={emp.empId}>
+                        <tr className="hover:bg-gray-50">
+                          <td className="px-4 py-2 font-medium">{emp.name} <span className="text-xs text-gray-500">({emp.empNumber})</span></td>
+                          <td className="px-4 py-2 text-right">PKR {emp.totals.basePay.toFixed(2)}</td>
+                          <td className="px-4 py-2 text-right text-red-600">PKR {emp.totals.deduction.toFixed(2)}</td>
+                          <td className="px-4 py-2 text-right text-green-600">PKR {emp.totals.otAmount.toFixed(2)}</td>
+                          <td className="px-4 py-2 text-right font-semibold text-blue-600">PKR {emp.totals.finalEarning.toFixed(2)}</td>
+                          <td className="px-4 py-2">
+                            <button
+                              onClick={() => toggleEmployeeExpansion(emp.empId)}
+                              className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+                            >
+                              {expandedEmployees[emp.empId] ? 'Hide Details' : 'Details'}
+                            </button>
+                          </td>
+                        </tr>
+                        {expandedEmployees[emp.empId] && (
+                          <tr>
+                            <td colSpan={6} className="bg-blue-50 px-4 py-3">
+                              <div className="overflow-x-auto">
+                                <table className="w-full text-xs md:text-sm">
+                                  <thead>
+                                    <tr className="bg-white">
+                                      <th className="px-3 py-2 text-left border">Date</th>
+                                      <th className="px-3 py-2 text-left border">Status</th>
+                                      <th className="px-3 py-2 text-left border">Check In</th>
+                                      <th className="px-3 py-2 text-left border">Check Out</th>
+                                      <th className="px-3 py-2 text-right border">Hours</th>
+                                      <th className="px-3 py-2 text-right border">Base</th>
+                                      <th className="px-3 py-2 text-right border">Deduction</th>
+                                      <th className="px-3 py-2 text-right border">OT</th>
+                                      <th className="px-3 py-2 text-right border">Final</th>
+                                      <th className="px-3 py-2 text-left border">Deduction Details</th>
+                                      <th className="px-3 py-2 text-left border">OT Details</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {emp.dailyAttendance.map((day, idx) => (
+                                      <tr key={`${emp.empId}-${idx}`} className="bg-white">
+                                        <td className="px-3 py-2 border">{day.date}</td>
+                                        <td className="px-3 py-2 border">{day.status}</td>
+                                        <td className="px-3 py-2 border">{day.inTime || '--'}</td>
+                                        <td className="px-3 py-2 border">{day.outTime || '--'}</td>
+                                        <td className="px-3 py-2 border text-right">{day.hoursPerDay.toFixed(2)}</td>
+                                        <td className="px-3 py-2 border text-right">PKR {day.basePay.toFixed(2)}</td>
+                                        <td className="px-3 py-2 border text-right text-red-600">PKR {day.deduction.toFixed(2)}</td>
+                                        <td className="px-3 py-2 border text-right text-green-600">PKR {day.otAmount.toFixed(2)}</td>
+                                        <td className="px-3 py-2 border text-right font-semibold">PKR {day.finalEarning.toFixed(2)}</td>
+                                        <td className="px-3 py-2 border">{day.deductionDetails?.map((item) => `${item.reason}: PKR ${Number(item.amount || 0).toFixed(2)}`).join(', ') || '--'}</td>
+                                        <td className="px-3 py-2 border">{day.otDetails?.map((item) => item.type === 'manual' ? `${item.reason}: PKR ${Number(item.amount || 0).toFixed(2)}` : `${item.reason}: ${Number(item.hours || 0).toFixed(2)}h x ${item.rate}x`).join(', ') || '--'}</td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </React.Fragment>
                     ))}
                   </tbody>
                 </table>
               </div>
-
-              {/* Employee Breakdown */}
-              {selectedEmployee && employeeBreakdown && (
-                <div className="mt-8 p-6 bg-blue-50 border-2 border-blue-200 rounded-lg">
-                  <h3 className="text-lg font-bold text-gray-800 mb-4">
-                    Detailed Breakdown: {employeeBreakdown.employee.name}
-                  </h3>
-
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-                    <div className="bg-white p-3 rounded border">
-                      <p className="text-xs text-gray-600">ID</p>
-                      <p className="font-semibold">{employeeBreakdown.employee.employeeNumber}</p>
-                    </div>
-                    <div className="bg-white p-3 rounded border">
-                      <p className="text-xs text-gray-600">Rate</p>
-                      <p className="font-semibold">PKR {employeeBreakdown.employee.hourlyRate}/hr</p>
-                    </div>
-                    <div className="bg-white p-3 rounded border">
-                      <p className="text-xs text-gray-600">Shift</p>
-                      <p className="font-semibold">
-                        {employeeBreakdown.employee.shift.start} - {employeeBreakdown.employee.shift.end}
-                      </p>
-                    </div>
-                    <div className="bg-white p-3 rounded border">
-                      <p className="text-xs text-gray-600">Records</p>
-                      <p className="font-semibold">{employeeBreakdown.dailyBreakdown.length}</p>
-                    </div>
-                  </div>
-
-                  <div className="overflow-x-auto mb-6">
-                    <table className="w-full text-sm">
-                      <thead className="bg-white">
-                        <tr>
-                          <th className="px-4 py-2 text-left border">Date</th>
-                          <th className="px-4 py-2 text-left border">In / Out</th>
-                          <th className="px-4 py-2 text-left border">Status</th>
-                          <th className="px-4 py-2 text-right border">Day Earning</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y">
-                        {employeeBreakdown.dailyBreakdown.map((day, idx) => (
-                          <tr key={idx} className="bg-white">
-                            <td className="px-4 py-2 border">
-                              {formatDateToDisplay(day.date)}
-                            </td>
-                            <td className="px-4 py-2 border">
-                              {day.inOut?.in && day.inOut?.out
-                                ? `${day.inOut.in} - ${day.inOut.out}`
-                                : '--'}
-                            </td>
-                            <td className="px-4 py-2 border">{day.status}</td>
-                            <td className="px-4 py-2 text-right border font-semibold">
-                              PKR {day.dailyEarning.toFixed(2)}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <div className="bg-white p-3 rounded border">
-                      <p className="text-xs text-gray-600">Basic Earned</p>
-                      <p className="font-bold text-blue-600">
-                        PKR {employeeBreakdown.totals.basicEarned.toFixed(2)}
-                      </p>
-                    </div>
-                    <div className="bg-white p-3 rounded border">
-                      <p className="text-xs text-gray-600">OT Total</p>
-                      <p className="font-bold text-green-600">
-                        PKR {employeeBreakdown.totals.otTotal.toFixed(2)}
-                      </p>
-                    </div>
-                    <div className="bg-white p-3 rounded border">
-                      <p className="text-xs text-gray-600">Deductions</p>
-                      <p className="font-bold text-red-600">
-                        PKR {employeeBreakdown.totals.deductionTotal.toFixed(2)}
-                      </p>
-                    </div>
-                    <div className="bg-white p-3 rounded border">
-                      <p className="text-xs text-gray-600">Net Payable</p>
-                      <p className="font-bold text-purple-600">
-                        PKR {employeeBreakdown.totals.netPayable.toFixed(2)}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              )}
             </section>
           </div>
         </div>

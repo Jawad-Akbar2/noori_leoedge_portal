@@ -592,35 +592,40 @@ router.post("/save-row", adminAuth, async (req, res) => {
 
     const now = new Date();
 
-    const attendance = await AttendanceLog.findOneAndUpdate(
-      { empId: employee._id, date: dateObj },
-      {
-        $set: {
-          empNumber: employee.employeeNumber,
-          empName: `${employee.firstName} ${employee.lastName}`,
-          department: employee.department,
-          status: status || "Present",
-          inOut: { in: inTime || null, out: outTime || null },
-          shift: employee.shift,
-          hourlyRate: employee.hourlyRate,
-          financials: {
-            hoursPerDay,
-            basePay,
-            deduction: totalDeduction,
-            deductionDetails: normalizedDeductionDetails,
-            otMultiplier: otMultiplier || 1,
-            otHours: otHours || 0,
-            otAmount,
-            otDetails: normalizedOtDetails,
-            finalDayEarning,
-          },
-          manualOverride: true,
-          metadata: { lastUpdatedBy: req.userId, source: "manual", lastModifiedAt: now },
-          updatedAt: now,
-        },
-      },
-      { upsert: true, new: true, runValidators: true },
-    );
+    // Use findOne + save so mongoose tracks financial subdocument arrays reliably.
+    let attendance = await AttendanceLog.findOne({ empId: employee._id, date: dateObj });
+
+    if (!attendance) {
+      attendance = new AttendanceLog({
+        empId: employee._id,
+        date: dateObj,
+      });
+    }
+
+    attendance.empNumber = employee.employeeNumber;
+    attendance.empName = `${employee.firstName} ${employee.lastName}`;
+    attendance.department = employee.department;
+    attendance.status = status || "Present";
+    attendance.inOut = { in: inTime || null, out: outTime || null };
+    attendance.shift = employee.shift;
+    attendance.hourlyRate = employee.hourlyRate;
+    attendance.financials = {
+      hoursPerDay,
+      basePay,
+      deduction: totalDeduction,
+      deductionDetails: normalizedDeductionDetails,
+      otMultiplier: otMultiplier || 1,
+      otHours: otHours || 0,
+      otAmount,
+      otDetails: normalizedOtDetails,
+      // Final earning includes base pay, OT additions, and deduction reductions.
+      finalDayEarning,
+    };
+    attendance.manualOverride = true;
+    attendance.metadata = { ...(attendance.metadata || {}), lastUpdatedBy: req.userId, source: "manual", lastModifiedAt: now };
+    attendance.updatedAt = now;
+
+    await attendance.save();
 
     res.json({
       message: "Attendance saved successfully",
