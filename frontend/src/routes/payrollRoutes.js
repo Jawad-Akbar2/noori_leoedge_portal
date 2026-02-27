@@ -56,6 +56,23 @@ const payrollAPI = {
     }
   },
 
+
+  // Consolidated payroll report with employee totals + nested daily rows
+  getPayrollReport: async (fromDate, toDate, search = '') => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await axios.post(
+        `${API_BASE_URL}/payroll/report`,
+        { fromDate, toDate, search },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching payroll report:', error);
+      throw error;
+    }
+  },
+
   // Employee Detailed Breakdown
   getEmployeeBreakdown: async (empId, fromDate, toDate) => {
     try {
