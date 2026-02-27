@@ -19,10 +19,11 @@ function AttendanceFormModal({ mode = 'add', record = null, onClose, onSuccess }
     status:        isEdit ? record?.status || 'Present' : 'Present',
     inTime:        isEdit ? record?.inTime !== '--' ? record?.inTime : '' : '',
     outTime:       isEdit ? record?.outTime !== '--' ? record?.outTime : '' : '',
-    otHours:       isEdit ? record?.financials?.otHours || 0 : 0,
-    otMultiplier:  isEdit ? record?.financials?.otMultiplier || 1 : 1,
-    deduction:     isEdit ? record?.financials?.deduction || 0 : 0,
+    deductionDetails: isEdit ? (record?.financials?.deductionDetails || []) : [],
+    otDetails:        isEdit ? (record?.financials?.otDetails || []) : [],
   });
+  const [deductionDraft, setDeductionDraft] = useState({ amount: '', reason: '' });
+  const [otDraft, setOtDraft] = useState({ type: 'calc', amount: '', hours: '', rate: '1.5', reason: '' });
 
   const [employees, setEmployees] = useState([]);
   const [loadingEmployees, setLoadingEmployees] = useState(false);
@@ -56,6 +57,45 @@ function AttendanceFormModal({ mode = 'add', record = null, onClose, onSuccess }
     const [y, m, d] = val.split('-');
     const formatted = `${d}/${m}/${y}`;
     setForm(prev => ({ ...prev, date: formatted }));
+  };
+
+  const addDeduction = () => {
+    const amount = parseFloat(deductionDraft.amount);
+    if (!amount || amount < 0) return toast.error('Enter a valid deduction amount');
+    if (!deductionDraft.reason.trim()) return toast.error('Deduction reason is required');
+
+    setForm(prev => ({
+      ...prev,
+      deductionDetails: [...prev.deductionDetails, { amount, reason: deductionDraft.reason.trim() }]
+    }));
+    setDeductionDraft({ amount: '', reason: '' });
+  };
+
+  const addOT = () => {
+    if (!otDraft.reason.trim()) return toast.error('OT reason is required');
+
+    if (otDraft.type === 'manual') {
+      const amount = parseFloat(otDraft.amount);
+      if (!amount || amount < 0) return toast.error('Enter a valid OT amount');
+      setForm(prev => ({
+        ...prev,
+        otDetails: [...prev.otDetails, { type: 'manual', amount, reason: otDraft.reason.trim() }]
+      }));
+    } else {
+      const hours = parseFloat(otDraft.hours);
+      const rate = parseFloat(otDraft.rate) || 1;
+      if (!hours || hours <= 0) return toast.error('Enter valid OT hours');
+      setForm(prev => ({
+        ...prev,
+        otDetails: [...prev.otDetails, { type: 'calc', hours, rate, reason: otDraft.reason.trim() }]
+      }));
+    }
+
+    setOtDraft({ type: 'calc', amount: '', hours: '', rate: '1.5', reason: '' });
+  };
+
+  const removeDetail = (key, index) => {
+    setForm(prev => ({ ...prev, [key]: prev[key].filter((_, idx) => idx !== index) }));
   };
 
   const handleCalendarClick = () => {
@@ -92,9 +132,8 @@ function AttendanceFormModal({ mode = 'add', record = null, onClose, onSuccess }
         status:        form.status,
         inTime:        form.inTime || null,
         outTime:       form.outTime || null,
-        otHours:       parseFloat(form.otHours) || 0,
-        otMultiplier:  parseFloat(form.otMultiplier) || 1,
-        deduction:     parseFloat(form.deduction) || 0,
+        deductionDetails: form.deductionDetails,
+        otDetails: form.otDetails,
       };
 
       await axios.post('/api/attendance/save-row', payload, {
@@ -117,7 +156,7 @@ function AttendanceFormModal({ mode = 'add', record = null, onClose, onSuccess }
 
   // Determine which fields to show based on status
   const showTimes = ['Present', 'Late'].includes(form.status);
-  const showOT    = showTimes;
+  const showFinancials = true;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
@@ -242,44 +281,59 @@ function AttendanceFormModal({ mode = 'add', record = null, onClose, onSuccess }
           )}
 
           {/* OT & Deduction */}
-          {showOT && (
-            <div className="grid grid-cols-3 gap-3">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">OT Hours</label>
-                <input
-                  type="number"
-                  name="otHours"
-                  value={form.otHours}
-                  onChange={handleChange}
-                  min="0"
-                  step="0.5"
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500"
-                />
+          {showFinancials && (
+            <>
+              <div className="border rounded-lg p-3 bg-gray-50 space-y-2">
+                <p className="text-sm font-semibold text-gray-700">Deductions</p>
+                <div className="grid grid-cols-2 gap-2">
+                  <input type="number" min="0" placeholder="Amount" value={deductionDraft.amount} onChange={(e) => setDeductionDraft(prev => ({ ...prev, amount: e.target.value }))} className="border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+                  <input type="text" placeholder="Reason" value={deductionDraft.reason} onChange={(e) => setDeductionDraft(prev => ({ ...prev, reason: e.target.value }))} className="border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+                </div>
+                <button type="button" onClick={addDeduction} className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-red-700 bg-red-50 border border-red-200 rounded-lg">
+                  <Plus size={12} /> Add Deduction
+                </button>
+                <div className="space-y-1">
+                  {form.deductionDetails.map((entry, idx) => (
+                    <div key={`d-${idx}`} className="flex justify-between text-xs bg-white border rounded px-2 py-1">
+                      <span>PKR {entry.amount} - {entry.reason}</span>
+                      <button type="button" onClick={() => removeDetail('deductionDetails', idx)} className="text-red-600">Remove</button>
+                    </div>
+                  ))}
+                </div>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">OT Multiplier</label>
-                <input
-                  type="number"
-                  name="otMultiplier"
-                  value={form.otMultiplier}
-                  onChange={handleChange}
-                  min="1"
-                  step="0.5"
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500"
-                />
+
+              <div className="border rounded-lg p-3 bg-gray-50 space-y-2">
+                <p className="text-sm font-semibold text-gray-700">Overtime (OT)</p>
+                <div className="grid grid-cols-2 gap-2">
+                  <select value={otDraft.type} onChange={(e) => setOtDraft(prev => ({ ...prev, type: e.target.value }))} className="border border-gray-300 rounded-lg px-3 py-2 text-sm">
+                    <option value="calc">Calculated</option>
+                    <option value="manual">Manual Amount</option>
+                  </select>
+                  <input type="text" placeholder="Reason" value={otDraft.reason} onChange={(e) => setOtDraft(prev => ({ ...prev, reason: e.target.value }))} className="border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+                  {otDraft.type === 'manual' ? (
+                    <input type="number" min="0" placeholder="Amount" value={otDraft.amount} onChange={(e) => setOtDraft(prev => ({ ...prev, amount: e.target.value }))} className="border border-gray-300 rounded-lg px-3 py-2 text-sm col-span-2" />
+                  ) : (
+                    <>
+                      <input type="number" min="0" step="0.5" placeholder="Hours" value={otDraft.hours} onChange={(e) => setOtDraft(prev => ({ ...prev, hours: e.target.value }))} className="border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+                      <select value={otDraft.rate} onChange={(e) => setOtDraft(prev => ({ ...prev, rate: e.target.value }))} className="border border-gray-300 rounded-lg px-3 py-2 text-sm">
+                        <option value="1">1.0x</option><option value="1.5">1.5x</option><option value="2">2.0x</option>
+                      </select>
+                    </>
+                  )}
+                </div>
+                <button type="button" onClick={addOT} className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-blue-700 bg-blue-50 border border-blue-200 rounded-lg">
+                  <Plus size={12} /> Add OT
+                </button>
+                <div className="space-y-1">
+                  {form.otDetails.map((entry, idx) => (
+                    <div key={`ot-${idx}`} className="flex justify-between text-xs bg-white border rounded px-2 py-1">
+                      <span>{entry.type === 'manual' ? `PKR ${entry.amount}` : `${entry.hours}h x ${entry.rate}x`} - {entry.reason}</span>
+                      <button type="button" onClick={() => removeDetail('otDetails', idx)} className="text-red-600">Remove</button>
+                    </div>
+                  ))}
+                </div>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Deduction (PKR)</label>
-                <input
-                  type="number"
-                  name="deduction"
-                  value={form.deduction}
-                  onChange={handleChange}
-                  min="0"
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-            </div>
+            </>
           )}
         </div>
 
@@ -323,6 +377,7 @@ export default function ManualAttendance() {
   // Modal state
   const [showAddModal, setShowAddModal]   = useState(false);
   const [editRecord, setEditRecord]       = useState(null); // null = closed
+  const [detailsModal, setDetailsModal]   = useState(null);
 
   const userRole = localStorage.getItem('role');
   const isAdmin  = userRole === 'admin';
@@ -408,7 +463,7 @@ export default function ManualAttendance() {
     if (attendance.length === 0) { toast.error('No attendance data to export'); return; }
 
     const csv = [
-      ['Date','Employee ID','Name','Department','Status','In Time','Out Time','Hours Worked','Daily Earning','Last Modified'].join(',')
+      ['Date','Employee ID','Name','Department','Status','In Time','Out Time','Hours Worked','OT Amount','Total Deduction','Daily Earning','Last Modified'].join(',')
     ];
     attendance.forEach(record => {
       csv.push([
@@ -420,6 +475,8 @@ export default function ManualAttendance() {
         record.inTime        || '--',
         record.outTime       || '--',
         (record.financials?.hoursPerDay?.toFixed(2))    || '0.00',
+        (record.financials?.otAmount?.toFixed(2)) || '0.00',
+        (record.financials?.deduction?.toFixed(2)) || '0.00',
         (record.financials?.finalDayEarning?.toFixed(2)) || '0.00',
         record.lastModified  || '--'
       ].map(v => `"${v}"`).join(','));
@@ -442,6 +499,7 @@ export default function ManualAttendance() {
       default:        return 'bg-gray-100 text-gray-800';
     }
   };
+
 
   return (
     <div className="p-4 md:p-6">
@@ -601,6 +659,8 @@ export default function ManualAttendance() {
                     <th className="px-4 py-3 text-center font-semibold">In Time</th>
                     <th className="px-4 py-3 text-center font-semibold">Out Time</th>
                     <th className="px-4 py-3 text-right font-semibold">Hours</th>
+                    <th className="px-4 py-3 text-right font-semibold">OT</th>
+                    <th className="px-4 py-3 text-right font-semibold">Deduction</th>
                     <th className="px-4 py-3 text-right font-semibold">Earning</th>
                     <th className="px-4 py-3 text-left font-semibold">Last Modified</th>
                     {isAdmin && <th className="px-4 py-3 text-center font-semibold">Actions</th>}
@@ -621,6 +681,16 @@ export default function ManualAttendance() {
                       <td className="px-4 py-3 text-center">{record.inTime}</td>
                       <td className="px-4 py-3 text-center">{record.outTime}</td>
                       <td className="px-4 py-3 text-right">{(record.financials?.hoursPerDay || 0).toFixed(2)}</td>
+                      <td className="px-4 py-3 text-right">
+                        <button type="button" onClick={() => setDetailsModal({ type: "ot", record })} className="inline-flex items-center gap-1 text-blue-700 hover:text-blue-900">
+                          PKR {(record.financials?.otAmount || 0).toFixed(2)} <Eye size={12} />
+                        </button>
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <button type="button" onClick={() => setDetailsModal({ type: "deduction", record })} className="inline-flex items-center gap-1 text-red-700 hover:text-red-900">
+                          PKR {(record.financials?.deduction || 0).toFixed(2)} <Eye size={12} />
+                        </button>
+                      </td>
                       <td className="px-4 py-3 text-right font-semibold">
                         PKR {(record.financials?.finalDayEarning || 0).toFixed(2)}
                       </td>
@@ -673,6 +743,8 @@ export default function ManualAttendance() {
                     <p><span className="font-medium">Dept:</span> {record.department}</p>
                     <p><span className="font-medium">In/Out:</span> {record.inTime} - {record.outTime}</p>
                     <p><span className="font-medium">Hours:</span> {(record.financials?.hoursPerDay || 0).toFixed(2)}</p>
+                    <p><span className="font-medium">OT:</span> PKR {(record.financials?.otAmount || 0).toFixed(2)}</p>
+                    <p><span className="font-medium">Deduction:</span> PKR {(record.financials?.deduction || 0).toFixed(2)}</p>
                     <p><span className="font-medium">Earning:</span> PKR {(record.financials?.finalDayEarning || 0).toFixed(2)}</p>
                     <p className="text-xs text-gray-500">
                       <span className="font-medium">Modified:</span> {record.lastModified}
@@ -708,6 +780,32 @@ export default function ManualAttendance() {
           onClose={() => setEditRecord(null)}
           onSuccess={handleFormSuccess}
         />
+      )}
+
+      {detailsModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md">
+            <div className="flex items-center justify-between px-5 py-3 border-b">
+              <h3 className="font-semibold text-gray-800">{detailsModal.type === 'ot' ? 'OT Details' : 'Deduction Details'} - {detailsModal.record.empName}</h3>
+              <button onClick={() => setDetailsModal(null)} className="text-gray-400 hover:text-gray-600"><X size={18} /></button>
+            </div>
+            <div className="p-4 space-y-2 max-h-80 overflow-auto">
+              {(detailsModal.type === 'ot' ? detailsModal.record.financials?.otDetails : detailsModal.record.financials?.deductionDetails)?.length ? (
+                (detailsModal.type === 'ot' ? detailsModal.record.financials?.otDetails : detailsModal.record.financials?.deductionDetails).map((entry, idx) => (
+                  <div key={idx} className="border rounded-lg p-2 text-sm bg-gray-50">
+                    {detailsModal.type === 'ot' ? (
+                      <p>{entry.type === 'manual' ? `Amount: PKR ${entry.amount}` : `Hours: ${entry.hours} x ${entry.rate}x`} · {entry.reason}</p>
+                    ) : (
+                      <p>Amount: PKR {entry.amount} · {entry.reason}</p>
+                    )}
+                  </div>
+                ))
+              ) : (
+                <p className="text-sm text-gray-500">No detail entries found.</p>
+              )}
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

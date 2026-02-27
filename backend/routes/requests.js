@@ -261,9 +261,11 @@ router.patch('/leave/:requestId/approve', auth, async (req, res) => {
               hoursPerDay,
               basePay,
               deduction: 0,
+              deductionDetails: [],
               otMultiplier: 1,
               otHours: 0,
               otAmount: 0,
+              otDetails: [],
               finalDayEarning: basePay
             },
             metadata: {

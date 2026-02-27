@@ -292,9 +292,11 @@ router.post(
               hoursPerDay,
               basePay,
               deduction: 0,
+              deductionDetails: [],
               otMultiplier: 1,
               otHours: 0,
               otAmount: 0,
+              otDetails: [],
               finalDayEarning,
             },
             manualOverride: true,
@@ -399,6 +401,11 @@ router.get("/range", adminAuth, async (req, res) => {
 
     const formattedAttendance = attendance.map((record) => ({
       ...record,
+      financials: {
+        ...record.financials,
+        deductionDetails: record.financials?.deductionDetails || [],
+        otDetails: record.financials?.otDetails || [],
+      },
       dateFormatted: formatDate(record.date),
       inTime: record.inOut?.in || "--",
       outTime: record.inOut?.out || "--",
@@ -487,9 +494,11 @@ router.post("/worksheet", adminAuth, async (req, res) => {
               hoursPerDay: 0,
               basePay: 0,
               deduction: 0,
+              deductionDetails: [],
               otMultiplier: 1,
               otHours: 0,
               otAmount: 0,
+              otDetails: [],
               finalDayEarning: 0,
             },
             manualOverride: false,
@@ -522,7 +531,7 @@ router.post("/worksheet", adminAuth, async (req, res) => {
  */
 router.post("/save-row", adminAuth, async (req, res) => {
   try {
-    const { empId, date, status, inTime, outTime, otHours, otMultiplier, deduction } = req.body;
+    const { empId, date, status, inTime, outTime, otHours, otMultiplier, deduction, deductionDetails, otDetails } = req.body;
 
     const employee = await Employee.findById(empId);
     if (!employee) {
@@ -534,24 +543,52 @@ router.post("/save-row", adminAuth, async (req, res) => {
       return res.status(400).json({ message: "Invalid date format (dd/mm/yyyy required)" });
     }
 
+    const normalizedDeductionDetails = Array.isArray(deductionDetails)
+      ? deductionDetails
+          .map((entry) => ({ amount: Number(entry?.amount) || 0, reason: String(entry?.reason || "").trim() }))
+          .filter((entry) => entry.amount >= 0 && entry.reason)
+      : [];
+
+    const normalizedOtDetails = Array.isArray(otDetails)
+      ? otDetails
+          .map((entry) => ({
+            type: entry?.type === "manual" ? "manual" : "calc",
+            amount: Number(entry?.amount) || 0,
+            hours: Number(entry?.hours) || 0,
+            rate: [1, 1.5, 2].includes(Number(entry?.rate)) ? Number(entry?.rate) : 1,
+            reason: String(entry?.reason || "").trim(),
+          }))
+          .filter((entry) => entry.reason && (entry.type === "manual" ? entry.amount >= 0 : entry.hours > 0))
+      : [];
+
     let hoursPerDay = 0;
     let basePay = 0;
-    let otAmount = 0;
+    const fallbackOTAmount = (Number(otHours) || 0) * employee.hourlyRate * (Number(otMultiplier) || 1);
+    const detailOTAmount = normalizedOtDetails.reduce(
+      (sum, entry) => sum + (entry.type === "manual" ? entry.amount : entry.hours * entry.rate * employee.hourlyRate),
+      0,
+    );
+    const otAmount = normalizedOtDetails.length ? detailOTAmount : fallbackOTAmount;
+
+    const fallbackDeduction = Number(deduction) || 0;
+    const detailDeduction = normalizedDeductionDetails.reduce((sum, entry) => sum + entry.amount, 0);
+    const totalDeduction = normalizedDeductionDetails.length ? detailDeduction : fallbackDeduction;
+
     let finalDayEarning = 0;
 
     if (status === "Leave") {
       hoursPerDay = calcHours(employee.shift.start, employee.shift.end);
       basePay = hoursPerDay * employee.hourlyRate;
-      finalDayEarning = basePay;
+      finalDayEarning = basePay + otAmount - totalDeduction;
     } else if (status === "Absent" || (!inTime && !outTime)) {
-      finalDayEarning = 0;
+      finalDayEarning = Math.max(0, otAmount - totalDeduction);
     } else if (inTime && outTime) {
       hoursPerDay = calcHours(inTime, outTime);
       basePay = hoursPerDay * employee.hourlyRate;
-      otAmount = (otHours || 0) * employee.hourlyRate * (otMultiplier || 1);
-      finalDayEarning = basePay + otAmount - (deduction || 0);
-      finalDayEarning = Math.max(0, finalDayEarning);
+      finalDayEarning = basePay + otAmount - totalDeduction;
     }
+
+    finalDayEarning = Math.max(0, finalDayEarning);
 
     const now = new Date();
 
@@ -566,7 +603,17 @@ router.post("/save-row", adminAuth, async (req, res) => {
           inOut: { in: inTime || null, out: outTime || null },
           shift: employee.shift,
           hourlyRate: employee.hourlyRate,
-          financials: { hoursPerDay, basePay, deduction: deduction || 0, otMultiplier: otMultiplier || 1, otHours: otHours || 0, otAmount, finalDayEarning },
+          financials: {
+            hoursPerDay,
+            basePay,
+            deduction: totalDeduction,
+            deductionDetails: normalizedDeductionDetails,
+            otMultiplier: otMultiplier || 1,
+            otHours: otHours || 0,
+            otAmount,
+            otDetails: normalizedOtDetails,
+            finalDayEarning,
+          },
           manualOverride: true,
           metadata: { lastUpdatedBy: req.userId, source: "manual", lastModifiedAt: now },
           updatedAt: now,

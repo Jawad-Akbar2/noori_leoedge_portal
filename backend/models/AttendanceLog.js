@@ -1,5 +1,21 @@
 import mongoose from 'mongoose';
 
+
+const deductionDetailSchema = new mongoose.Schema({
+  amount: { type: Number, required: true, min: 0 },
+  reason: { type: String, required: true, trim: true },
+  createdAt: { type: Date, default: Date.now }
+}, { _id: false });
+
+const otDetailSchema = new mongoose.Schema({
+  type: { type: String, enum: ['manual', 'calc'], default: 'calc' },
+  amount: { type: Number, min: 0, default: 0 },
+  hours: { type: Number, min: 0, default: 0 },
+  rate: { type: Number, enum: [1, 1.5, 2], default: 1 },
+  reason: { type: String, required: true, trim: true },
+  createdAt: { type: Date, default: Date.now }
+}, { _id: false });
+
 const attendanceLogSchema = new mongoose.Schema({
   date: {
     type: Date,
@@ -84,6 +100,10 @@ const attendanceLogSchema = new mongoose.Schema({
       default: 0,
       min: 0
     },
+    deductionDetails: {
+      type: [deductionDetailSchema],
+      default: []
+    },
     otMultiplier: {
       type: Number,
       default: 1,
@@ -98,6 +118,10 @@ const attendanceLogSchema = new mongoose.Schema({
       type: Number,
       default: 0,
       min: 0
+    },
+    otDetails: {
+      type: [otDetailSchema],
+      default: []
     },
     finalDayEarning: {
       type: Number,
