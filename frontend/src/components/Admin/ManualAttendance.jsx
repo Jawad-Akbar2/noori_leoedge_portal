@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import axios from 'axios';
 import {
-  Plus, Download, Upload, AlertCircle, RefreshCw, X, Save, Pencil
+  Plus, Download, Upload, AlertCircle, RefreshCw, X, Save, Pencil, Calendar, Eye
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import CSVImportModal from './CSVImportModal.jsx';
@@ -10,16 +10,18 @@ import { getDateMinusDays, getTodayDate, parseDate } from '../../utils/dateForma
 // ─── Attendance Form Modal (Add & Edit) ──────────────────────────────────────
 function AttendanceFormModal({ mode = 'add', record = null, onClose, onSuccess }) {
   const isEdit = mode === 'edit';
+  const dateInputRef = useRef(null);
+  const hiddenDateRef = useRef(null);
 
   const [form, setForm] = useState({
-    empId:        isEdit ? record?.empId?._id || record?.empId || '' : '',
-    date:         isEdit ? record?.dateFormatted || '' : getTodayDate(),
-    status:       isEdit ? record?.status || 'Present' : 'Present',
-    inTime:       isEdit ? record?.inTime !== '--' ? record?.inTime : '' : '',
-    outTime:      isEdit ? record?.outTime !== '--' ? record?.outTime : '' : '',
-    otHours:      isEdit ? record?.financials?.otHours || 0 : 0,
-    otMultiplier: isEdit ? record?.financials?.otMultiplier || 1 : 1,
-    deduction:    isEdit ? record?.financials?.deduction || 0 : 0,
+    empId:         isEdit ? record?.empId?._id || record?.empId || '' : '',
+    date:          isEdit ? record?.dateFormatted || '' : getTodayDate(),
+    status:        isEdit ? record?.status || 'Present' : 'Present',
+    inTime:        isEdit ? record?.inTime !== '--' ? record?.inTime : '' : '',
+    outTime:       isEdit ? record?.outTime !== '--' ? record?.outTime : '' : '',
+    otHours:       isEdit ? record?.financials?.otHours || 0 : 0,
+    otMultiplier:  isEdit ? record?.financials?.otMultiplier || 1 : 1,
+    deduction:     isEdit ? record?.financials?.deduction || 0 : 0,
   });
 
   const [employees, setEmployees] = useState([]);
@@ -48,6 +50,24 @@ function AttendanceFormModal({ mode = 'add', record = null, onClose, onSuccess }
     setForm(prev => ({ ...prev, [name]: value }));
   };
 
+  const handleHiddenDateChange = (e) => {
+    const val = e.target.value; // yyyy-mm-dd
+    if (!val) return;
+    const [y, m, d] = val.split('-');
+    const formatted = `${d}/${m}/${y}`;
+    setForm(prev => ({ ...prev, date: formatted }));
+  };
+
+  const handleCalendarClick = () => {
+    if (hiddenDateRef.current) {
+      try {
+        hiddenDateRef.current.showPicker();
+      } catch (err) {
+        hiddenDateRef.current.focus();
+      }
+    }
+  };
+
   const handleSubmit = async () => {
     // Basic validation
     if (!isEdit && !form.empId) {
@@ -67,14 +87,14 @@ function AttendanceFormModal({ mode = 'add', record = null, onClose, onSuccess }
     try {
       const token = localStorage.getItem('token');
       const payload = {
-        empId:        isEdit ? (record?.empId?._id || record?.empId) : form.empId,
-        date:         form.date,
-        status:       form.status,
-        inTime:       form.inTime || null,
-        outTime:      form.outTime || null,
-        otHours:      parseFloat(form.otHours) || 0,
-        otMultiplier: parseFloat(form.otMultiplier) || 1,
-        deduction:    parseFloat(form.deduction) || 0,
+        empId:         isEdit ? (record?.empId?._id || record?.empId) : form.empId,
+        date:          form.date,
+        status:        form.status,
+        inTime:        form.inTime || null,
+        outTime:       form.outTime || null,
+        otHours:       parseFloat(form.otHours) || 0,
+        otMultiplier:  parseFloat(form.otMultiplier) || 1,
+        deduction:     parseFloat(form.deduction) || 0,
       };
 
       await axios.post('/api/attendance/save-row', payload, {
@@ -151,14 +171,30 @@ function AttendanceFormModal({ mode = 'add', record = null, onClose, onSuccess }
           {/* Date */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Date * (dd/mm/yyyy)</label>
-            <input
-              type="text"
-              name="date"
-              value={form.date}
-              onChange={handleChange}
-              placeholder="dd/mm/yyyy"
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            />
+            <div className="relative">
+              <input
+                ref={dateInputRef}
+                type="text"
+                name="date"
+                value={form.date}
+                onChange={handleChange}
+                placeholder="dd/mm/yyyy"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              />
+              <input 
+                type="date"
+                ref={hiddenDateRef}
+                className="absolute opacity-0 pointer-events-none"
+                onChange={handleHiddenDateChange}
+              />
+              <button 
+                type="button"
+                onClick={handleCalendarClick}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-blue-500"
+              >
+                <Calendar size={16} />
+              </button>
+            </div>
           </div>
 
           {/* Status */}
@@ -270,6 +306,7 @@ function AttendanceFormModal({ mode = 'add', record = null, onClose, onSuccess }
   );
 }
 
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 export default function ManualAttendance() {
   const [attendance, setAttendance]       = useState([]);
@@ -279,6 +316,9 @@ export default function ManualAttendance() {
   const [showImportModal, setShowImportModal] = useState(false);
   const [refreshing, setRefreshing]       = useState(false);
   const [isMobile, setIsMobile]           = useState(window.innerWidth < 768);
+
+  const hiddenFromDateRef = useRef(null);
+  const hiddenToDateRef = useRef(null);
 
   // Modal state
   const [showAddModal, setShowAddModal]   = useState(false);
@@ -308,7 +348,7 @@ export default function ManualAttendance() {
     } catch (error) {
       if (error.response?.status === 401)      toast.error('Unauthorized. Please login again.');
       else if (error.response?.status === 403) toast.error('You do not have permission to access this page.');
-      else                                      toast.error('Failed to load attendance data');
+      else                                     toast.error('Failed to load attendance data');
       setAttendance([]);
     } finally {
       setLoading(false);
@@ -317,23 +357,22 @@ export default function ManualAttendance() {
 
   useEffect(() => { fetchAttendance(); }, [fetchAttendance]);
 
+  const handleDateRangeChange = () => {
+    const from = parseDate(fromDate);
+    const to   = parseDate(toDate);
 
-const handleDateRangeChange = () => {
-  const from = parseDate(fromDate);
-  const to   = parseDate(toDate);
+    if (!from || !to) {
+      toast.error('Invalid date format. Use dd/mm/yyyy');
+      return;
+    }
 
-  if (!from || !to) {
-    toast.error('Invalid date format. Use dd/mm/yyyy');
-    return;
-  }
+    if (from > to) {
+      toast.error('From date cannot be after to date');
+      return;
+    }
 
-  if (from > to) {
-    toast.error('From date cannot be after to date');
-    return;
-  }
-
-  fetchAttendance();
-};
+    fetchAttendance();
+  };
 
   const handleImportSuccess = () => {
     setRefreshing(true);
@@ -346,6 +385,23 @@ const handleDateRangeChange = () => {
 
   const handleFormSuccess = () => {
     fetchAttendance();
+  };
+
+  const handleShowPicker = (ref) => {
+    if (ref.current) {
+      try {
+        ref.current.showPicker();
+      } catch (err) {
+        ref.current.focus();
+      }
+    }
+  };
+
+  const handleHiddenDateChange = (e, setter) => {
+    const val = e.target.value;
+    if (!val) return;
+    const [y, m, d] = val.split('-');
+    setter(`${d}/${m}/${y}`);
   };
 
   const handleExport = () => {
@@ -451,25 +507,55 @@ const handleDateRangeChange = () => {
             <label className="block text-xs md:text-sm font-medium text-gray-700 mb-1 md:mb-2">
               From Date (dd/mm/yyyy)
             </label>
-            <input
-              type="text"
-              value={fromDate}
-              onChange={e => setFromDate(e.target.value)}
-              placeholder="dd/mm/yyyy"
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
-            />
+            <div className="relative">
+              <input
+                type="text"
+                value={fromDate}
+                onChange={e => setFromDate(e.target.value)}
+                placeholder="dd/mm/yyyy"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
+              />
+              <input 
+                type="date"
+                ref={hiddenFromDateRef}
+                className="absolute opacity-0 pointer-events-none"
+                onChange={(e) => handleHiddenDateChange(e, setFromDate)}
+              />
+              <button 
+                type="button"
+                onClick={() => handleShowPicker(hiddenFromDateRef)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-blue-500"
+              >
+                <Calendar size={14} />
+              </button>
+            </div>
           </div>
           <div>
             <label className="block text-xs md:text-sm font-medium text-gray-700 mb-1 md:mb-2">
               To Date (dd/mm/yyyy)
             </label>
-            <input
-              type="text"
-              value={toDate}
-              onChange={e => setToDate(e.target.value)}
-              placeholder="dd/mm/yyyy"
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
-            />
+            <div className="relative">
+              <input
+                type="text"
+                value={toDate}
+                onChange={e => setToDate(e.target.value)}
+                placeholder="dd/mm/yyyy"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
+              />
+              <input 
+                type="date"
+                ref={hiddenToDateRef}
+                className="absolute opacity-0 pointer-events-none"
+                onChange={(e) => handleHiddenDateChange(e, setToDate)}
+              />
+              <button 
+                type="button"
+                onClick={() => handleShowPicker(hiddenToDateRef)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-blue-500"
+              >
+                <Calendar size={14} />
+              </button>
+            </div>
           </div>
           <div className="flex items-end">
             <button

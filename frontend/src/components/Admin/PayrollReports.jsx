@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import {
   BarChart, Bar, PieChart, Pie, Cell,
@@ -11,6 +11,21 @@ import toast from 'react-hot-toast';
 export default function PayrollReports() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+
+  // Refs for date pickers
+  const attFromRef = useRef(null);
+  const attToRef = useRef(null);
+  const perfFromRef = useRef(null);
+  const perfToRef = useRef(null);
+  const salFromRef = useRef(null);
+  const salToRef = useRef(null);
+
+  // Date Utilities
+  const formatDateToDisplay = (dateStr) => {
+    if (!dateStr) return '';
+    const [year, month, day] = dateStr.split('-');
+    return `${day}/${month}/${year}`;
+  };
 
   // Section 1: Attendance
   const [attendanceFromDate, setAttendanceFromDate] = useState(
@@ -305,23 +320,39 @@ export default function PayrollReports() {
 
               {/* Controls */}
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-                <div>
+                <div className="relative">
                   <label className="block text-sm font-medium text-gray-700 mb-2">From</label>
+                  <div 
+                    onClick={() => attFromRef.current.showPicker()}
+                    className="flex items-center justify-between w-full px-4 py-2 border border-gray-300 rounded-lg focus-within:ring-2 focus-within:ring-blue-500 cursor-pointer bg-white"
+                  >
+                    <span className="text-gray-900">{formatDateToDisplay(attendanceFromDate)}</span>
+                    <Calendar size={18} className="text-gray-400" />
+                  </div>
                   <input
+                    ref={attFromRef}
                     type="date"
                     value={attendanceFromDate}
                     onChange={(e) => setAttendanceFromDate(e.target.value)}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                    className="absolute opacity-0 pointer-events-none"
                   />
                 </div>
-                <div>
+                <div className="relative">
                   <label className="block text-sm font-medium text-gray-700 mb-2">To</label>
+                  <div 
+                    onClick={() => attToRef.current.showPicker()}
+                    className="flex items-center justify-between w-full px-4 py-2 border border-gray-300 rounded-lg focus-within:ring-2 focus-within:ring-blue-500 cursor-pointer bg-white"
+                  >
+                    <span className="text-gray-900">{formatDateToDisplay(attendanceToDate)}</span>
+                    <Calendar size={18} className="text-gray-400" />
+                  </div>
                   <input
+                    ref={attToRef}
                     type="date"
                     value={attendanceToDate}
                     onChange={(e) => setAttendanceToDate(e.target.value)}
                     min={attendanceFromDate}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                    className="absolute opacity-0 pointer-events-none"
                   />
                 </div>
                 <div>
@@ -434,7 +465,7 @@ export default function PayrollReports() {
                     <tbody className="divide-y">
                       {attendanceList.slice(0, 10).map((item, idx) => (
                         <tr key={idx} className="hover:bg-gray-50">
-                          <td className="px-4 py-2">{item.date}</td>
+                          <td className="px-4 py-2">{formatDateToDisplay(item.date)}</td>
                           <td className="px-4 py-2">{item.name}</td>
                           <td className="px-4 py-2">
                             <span className={`px-2 py-1 rounded text-xs font-semibold ${
@@ -458,9 +489,7 @@ export default function PayrollReports() {
                   </p>
                 )}
               </div>
-            </section>
-
-            {/* ========== SECTION 2: PERFORMANCE ========== */}
+            </section>{/* ========== SECTION 2: PERFORMANCE ========== */}
             <section className="bg-white rounded-lg shadow p-6">
               <h2 className="text-2xl font-bold text-gray-800 mb-6">
                 Section 2: Performance Overview
@@ -468,23 +497,39 @@ export default function PayrollReports() {
 
               {/* Controls */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                <div>
+                <div className="relative">
                   <label className="block text-sm font-medium text-gray-700 mb-2">From</label>
+                  <div 
+                    onClick={() => perfFromRef.current.showPicker()}
+                    className="flex items-center justify-between w-full px-4 py-2 border border-gray-300 rounded-lg focus-within:ring-2 focus-within:ring-blue-500 cursor-pointer bg-white"
+                  >
+                    <span className="text-gray-900">{formatDateToDisplay(performanceFromDate)}</span>
+                    <Calendar size={18} className="text-gray-400" />
+                  </div>
                   <input
+                    ref={perfFromRef}
                     type="date"
                     value={performanceFromDate}
                     onChange={(e) => setPerformanceFromDate(e.target.value)}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                    className="absolute opacity-0 pointer-events-none"
                   />
                 </div>
-                <div>
+                <div className="relative">
                   <label className="block text-sm font-medium text-gray-700 mb-2">To</label>
+                  <div 
+                    onClick={() => perfToRef.current.showPicker()}
+                    className="flex items-center justify-between w-full px-4 py-2 border border-gray-300 rounded-lg focus-within:ring-2 focus-within:ring-blue-500 cursor-pointer bg-white"
+                  >
+                    <span className="text-gray-900">{formatDateToDisplay(performanceToDate)}</span>
+                    <Calendar size={18} className="text-gray-400" />
+                  </div>
                   <input
+                    ref={perfToRef}
                     type="date"
                     value={performanceToDate}
                     onChange={(e) => setPerformanceToDate(e.target.value)}
                     min={performanceFromDate}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                    className="absolute opacity-0 pointer-events-none"
                   />
                 </div>
                 <div className="flex items-end">
@@ -567,23 +612,39 @@ export default function PayrollReports() {
 
               {/* Controls */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                <div>
+                <div className="relative">
                   <label className="block text-sm font-medium text-gray-700 mb-2">From</label>
+                  <div 
+                    onClick={() => salFromRef.current.showPicker()}
+                    className="flex items-center justify-between w-full px-4 py-2 border border-gray-300 rounded-lg focus-within:ring-2 focus-within:ring-blue-500 cursor-pointer bg-white"
+                  >
+                    <span className="text-gray-900">{formatDateToDisplay(salaryFromDate)}</span>
+                    <Calendar size={18} className="text-gray-400" />
+                  </div>
                   <input
+                    ref={salFromRef}
                     type="date"
                     value={salaryFromDate}
                     onChange={(e) => setSalaryFromDate(e.target.value)}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                    className="absolute opacity-0 pointer-events-none"
                   />
                 </div>
-                <div>
+                <div className="relative">
                   <label className="block text-sm font-medium text-gray-700 mb-2">To</label>
+                  <div 
+                    onClick={() => salToRef.current.showPicker()}
+                    className="flex items-center justify-between w-full px-4 py-2 border border-gray-300 rounded-lg focus-within:ring-2 focus-within:ring-blue-500 cursor-pointer bg-white"
+                  >
+                    <span className="text-gray-900">{formatDateToDisplay(salaryToDate)}</span>
+                    <Calendar size={18} className="text-gray-400" />
+                  </div>
                   <input
+                    ref={salToRef}
                     type="date"
                     value={salaryToDate}
                     onChange={(e) => setSalaryToDate(e.target.value)}
                     min={salaryFromDate}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                    className="absolute opacity-0 pointer-events-none"
                   />
                 </div>
                 <div className="flex items-end">
@@ -730,7 +791,7 @@ export default function PayrollReports() {
                         {employeeBreakdown.dailyBreakdown.map((day, idx) => (
                           <tr key={idx} className="bg-white">
                             <td className="px-4 py-2 border">
-                              {new Date(day.date).toLocaleDateString()}
+                              {formatDateToDisplay(day.date)}
                             </td>
                             <td className="px-4 py-2 border">
                               {day.inOut?.in && day.inOut?.out

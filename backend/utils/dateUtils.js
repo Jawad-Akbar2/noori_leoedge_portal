@@ -1,14 +1,15 @@
 /**
+ * E:\hr-employee-portal\backend\utils\dateUtils.js
  * Date Utility Functions
- * All dates are in dd/mm/yyyy format for API and UI
+ * Centralized logic for dd/mm/yyyy consistency across the project.
  */
 
 /**
- * Parse dd/mm/yyyy string to Date object (UTC midnight)
+ * Standard Parser: Converts dd/mm/yyyy string to a Date object at 00:00:00 local time.
+ * Use this for API inputs and processing CSV dates.
+ * Alias 'parseDate' provided for compatibility with csvParser.js
  */
-
-
-export function parseDate(dateStr) {
+export function parseDDMMYYYY(dateStr) {
   if (!dateStr) return null;
 
   const trimmed = String(dateStr).trim();
@@ -16,44 +17,56 @@ export function parseDate(dateStr) {
 
   if (parts.length !== 3) return null;
 
-  const day = parseInt(parts[0]);
-  const month = parseInt(parts[1]);
-  const year = parseInt(parts[2]);
+  const day = parseInt(parts[0], 10);
+  const month = parseInt(parts[1], 10) - 1; // 0-based index
+  const year = parseInt(parts[2], 10);
 
   if (isNaN(day) || isNaN(month) || isNaN(year)) return null;
-  if (day < 1 || day > 31 || month < 1 || month > 12) return null;
   if (year < 1900 || year > 2100) return null;
 
-  // Create date at UTC midnight
-  const date = new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0));
+  const date = new Date(year, month, day);
 
-  // Validate date is real (e.g., not Feb 30)
-  if (date.getUTCDate() !== day) return null;
+  // Validation: Ensure the date is real (e.g., stops 31/02/2024)
+  if (
+    date.getFullYear() !== year ||
+    date.getMonth() !== month ||
+    date.getDate() !== day
+  ) {
+    return null;
+  }
 
+  date.setHours(0, 0, 0, 0);
   return date;
 }
 
+// Alias for csvParser.js compatibility
+export const parseDate = parseDDMMYYYY;
+
 /**
- * Format Date object to dd/mm/yyyy string
+ * Standard Formatter: Converts Date object to dd/mm/yyyy string.
+ * Use this for displaying dates in grids, lists, and calendar inputs.
  */
 export function formatDate(date) {
   if (!date) return '';
-
   const d = new Date(date);
-  const day = String(d.getUTCDate()).padStart(2, '0');
-  const month = String(d.getUTCMonth() + 1).padStart(2, '0');
-  const year = d.getUTCFullYear();
+  if (isNaN(d.getTime())) return '';
+
+  const day = String(d.getDate()).padStart(2, '0');
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const year = d.getFullYear();
 
   return `${day}/${month}/${year}`;
 }
 
 /**
- * Format Date object to dd/mm/yyyy HH:mm string for display
+ * DateTime Formatter: Converts Date object to dd/mm/yyyy HH:mm string.
+ * Use this for "Last Modified" or "Created At" columns in your grids.
  */
 export function formatDateTimeForDisplay(date) {
   if (!date) return '';
-
   const d = new Date(date);
+  if (isNaN(d.getTime())) return '';
+
   const day = String(d.getDate()).padStart(2, '0');
   const month = String(d.getMonth() + 1).padStart(2, '0');
   const year = d.getFullYear();
@@ -64,37 +77,15 @@ export function formatDateTimeForDisplay(date) {
 }
 
 /**
- * Convert Date to ISO string for API transmission
- */
-export function formatDateISO(date) {
-  if (!date) return null;
-  return date.toISOString();
-}
-
-/**
- * Format timestamp for last modified display (dd/mm/yyyy HH:mm)
- */
-export function formatLastModified(dateString) {
-  if (!dateString) return '';
-  
-  try {
-    const date = new Date(dateString);
-    if (isNaN(date.getTime())) return '';
-    return formatDateTimeForDisplay(date);
-  } catch {
-    return '';
-  }
-}
-
-/**
- * Get today's date in dd/mm/yyyy format
+ * Get Today's Date as a string in dd/mm/yyyy format.
  */
 export function getTodayDate() {
   return formatDate(new Date());
 }
 
 /**
- * Get date minus days in dd/mm/yyyy format
+ * Get a past or future date relative to today in dd/mm/yyyy format.
+ * Useful for default "From" values in date range calendars.
  */
 export function getDateMinusDays(days) {
   const date = new Date();
@@ -102,37 +93,21 @@ export function getDateMinusDays(days) {
   return formatDate(date);
 }
 
-export function parseDDMMYYYY(dateStr) {
-  if (!dateStr) return null;
-
-  const parts = dateStr.split('/');
-  if (parts.length !== 3) return null;
-
-  const day = parseInt(parts[0], 10);
-  const month = parseInt(parts[1], 10) - 1; // 0-based
-  const year = parseInt(parts[2], 10);
-
-  const date = new Date(year, month, day);
-
-  if (
-    date.getFullYear() !== year ||
-    date.getMonth() !== month ||
-    date.getDate() !== day
-  ) {
-    return null;
-  }
-
-  date.setHours(0, 0, 0, 0);
-
-  return date;
+/**
+ * Format timestamp for last modified display
+ */
+export function formatLastModified(dateString) {
+  if (!dateString) return '--';
+  return formatDateTimeForDisplay(dateString);
 }
 
+// Export object for compatibility with existing imports:
 export default {
+  parseDDMMYYYY,
   parseDate,
   formatDate,
   formatDateTimeForDisplay,
-  formatDateISO,
-  formatLastModified,
   getTodayDate,
-  getDateMinusDays
+  getDateMinusDays,
+  formatLastModified
 };

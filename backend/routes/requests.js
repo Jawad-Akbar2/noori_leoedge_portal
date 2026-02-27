@@ -5,6 +5,7 @@ import CorrectionRequest from '../models/CorrectionRequest.js';
 import AttendanceLog from '../models/AttendanceLog.js';
 import Employee from '../models/Employee.js';
 import { calculateHours } from '../utils/timeCalculator.js';
+import { parseDDMMYYYY, formatDate } from '../utils/dateUtils.js';
 
 const router = express.Router();
 
@@ -40,6 +41,13 @@ router.post('/leave/submit', auth, async (req, res) => {
   try {
     const { fromDate, toDate, leaveType, reason } = req.body;
     
+    const parsedFrom = parseDDMMYYYY(fromDate);
+    const parsedTo = parseDDMMYYYY(toDate);
+
+    if (!parsedFrom || !parsedTo) {
+      return res.status(400).json({ message: 'Invalid date format. Use dd/mm/yyyy' });
+    }
+
     const { canApply, daysUntilEligible } = getLeaveBalance(req.user.joiningDate);
     if (!canApply) {
       return res.status(400).json({
@@ -51,8 +59,8 @@ router.post('/leave/submit', auth, async (req, res) => {
     const existingRequest = await LeaveRequest.findOne({
       empId: req.user._id,
       status: 'Pending',
-      fromDate: { $lte: new Date(toDate) },
-      toDate: { $gte: new Date(fromDate) },
+      fromDate: { $lte: parsedTo },
+      toDate: { $gte: parsedFrom },
       isDeleted: false
     });
     
@@ -67,8 +75,8 @@ router.post('/leave/submit', auth, async (req, res) => {
       empNumber: req.user.employeeNumber,
       empName: `${req.user.firstName} ${req.user.lastName}`,
       leaveType,
-      fromDate: new Date(fromDate),
-      toDate: new Date(toDate),
+      fromDate: parsedFrom,
+      toDate: parsedTo,
       reason,
       status: 'Pending'
     });
@@ -89,9 +97,14 @@ router.post('/correction/submit', auth, async (req, res) => {
   try {
     const { date, fromTime, toTime, reason } = req.body;
     
+    const parsedDate = parseDDMMYYYY(date);
+    if (!parsedDate) {
+      return res.status(400).json({ message: 'Invalid date format. Use dd/mm/yyyy' });
+    }
+
     const existingRequest = await CorrectionRequest.findOne({
       empId: req.user._id,
-      date: new Date(date),
+      date: parsedDate,
       status: 'Pending',
       isDeleted: false
     });
@@ -104,14 +117,14 @@ router.post('/correction/submit', auth, async (req, res) => {
     
     const attendance = await AttendanceLog.findOne({
       empId: req.user._id,
-      date: new Date(date)
+      date: parsedDate
     });
     
     const correctionRequest = new CorrectionRequest({
       empId: req.user._id,
       empNumber: req.user.employeeNumber,
       empName: `${req.user.firstName} ${req.user.lastName}`,
-      date: new Date(date),
+      date: parsedDate,
       correctionType: 'Both',
       originalInTime: attendance?.inOut?.in,
       correctedInTime: fromTime,
@@ -143,10 +156,14 @@ router.get('/my-requests', auth, async (req, res) => {
     };
     
     if (fromDate && toDate) {
-      query.createdAt = {
-        $gte: new Date(fromDate),
-        $lte: new Date(toDate)
-      };
+      const start = parseDDMMYYYY(fromDate);
+      const end = parseDDMMYYYY(toDate);
+      if (start && end) {
+        query.createdAt = {
+          $gte: start,
+          $lte: end
+        };
+      }
     }
     
     let leaveRequests = [];

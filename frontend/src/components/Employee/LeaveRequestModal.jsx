@@ -1,9 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import axios from 'axios';
 import { X, Calendar } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 export default function LeaveRequestModal({ onClose, onSubmit }) {
+  const fromDateRef = useRef(null);
+  const toDateRef = useRef(null);
+
   const [formData, setFormData] = useState({
     fromDate: '',
     toDate: '',
@@ -11,6 +14,12 @@ export default function LeaveRequestModal({ onClose, onSubmit }) {
     reason: ''
   });
   const [loading, setLoading] = useState(false);
+
+  const formatDateToDisplay = (dateStr) => {
+    if (!dateStr) return '';
+    const [year, month, day] = dateStr.split('-');
+    return `${day}/${month}/${year}`;
+  };
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -67,27 +76,51 @@ export default function LeaveRequestModal({ onClose, onSubmit }) {
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">From Date</label>
-            <input
-              type="date"
-              name="fromDate"
-              value={formData.fromDate}
-              onChange={handleChange}
-              required
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-            />
+            <div className="relative">
+              <div 
+                onClick={() => fromDateRef.current.showPicker()}
+                className="flex items-center justify-between w-full px-4 py-2 border border-gray-300 rounded-lg focus-within:ring-2 focus-within:ring-blue-500 cursor-pointer bg-white"
+              >
+                <span className={formData.fromDate ? "text-gray-900" : "text-gray-400"}>
+                  {formData.fromDate ? formatDateToDisplay(formData.fromDate) : 'dd/mm/yyyy'}
+                </span>
+                <Calendar size={18} className="text-gray-400" />
+              </div>
+              <input
+                ref={fromDateRef}
+                type="date"
+                name="fromDate"
+                value={formData.fromDate}
+                onChange={handleChange}
+                required
+                className="absolute opacity-0 pointer-events-none inset-0 w-full"
+              />
+            </div>
           </div>
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">To Date</label>
-            <input
-              type="date"
-              name="toDate"
-              value={formData.toDate}
-              onChange={handleChange}
-              required
-              min={formData.fromDate}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-            />
+            <div className="relative">
+              <div 
+                onClick={() => toDateRef.current.showPicker()}
+                className="flex items-center justify-between w-full px-4 py-2 border border-gray-300 rounded-lg focus-within:ring-2 focus-within:ring-blue-500 cursor-pointer bg-white"
+              >
+                <span className={formData.toDate ? "text-gray-900" : "text-gray-400"}>
+                  {formData.toDate ? formatDateToDisplay(formData.toDate) : 'dd/mm/yyyy'}
+                </span>
+                <Calendar size={18} className="text-gray-400" />
+              </div>
+              <input
+                ref={toDateRef}
+                type="date"
+                name="toDate"
+                value={formData.toDate}
+                onChange={handleChange}
+                required
+                min={formData.fromDate}
+                className="absolute opacity-0 pointer-events-none inset-0 w-full"
+              />
+            </div>
           </div>
 
           <div>

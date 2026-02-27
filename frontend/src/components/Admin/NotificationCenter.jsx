@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import axios from 'axios';
 import { Calendar, Trash2, Check, X } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -11,6 +11,18 @@ export default function NotificationCenter() {
   const [toDate, setToDate] = useState(new Date().toISOString().split('T')[0]);
   const [statusFilter, setStatusFilter] = useState('Pending');
   const [loading, setLoading] = useState(true);
+
+  const fromDateRef = useRef(null);
+  const toDateRef = useRef(null);
+
+  const formatDateToDisplay = (dateStr) => {
+    if (!dateStr) return '';
+    const date = new Date(dateStr);
+    const day = String(date.getDate()).padStart(2, '0');
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const year = date.getFullYear();
+    return `${day}/${month}/${year}`;
+  };
 
   // ✅ Wrap fetchRequests in useCallback
   const fetchRequests = useCallback(async () => {
@@ -117,21 +129,41 @@ export default function NotificationCenter() {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">From Date</label>
-            <input
-              type="date"
-              value={fromDate}
-              onChange={(e) => setFromDate(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-            />
+            <div className="relative">
+              <input
+                type="date"
+                ref={fromDateRef}
+                value={fromDate}
+                onChange={(e) => setFromDate(e.target.value)}
+                className="absolute opacity-0 pointer-events-none"
+              />
+              <div 
+                onClick={() => fromDateRef.current?.showPicker()}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 flex items-center justify-between cursor-pointer bg-white"
+              >
+                <span>{formatDateToDisplay(fromDate)}</span>
+                <Calendar size={18} className="text-gray-400" />
+              </div>
+            </div>
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">To Date</label>
-            <input
-              type="date"
-              value={toDate}
-              onChange={(e) => setToDate(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-            />
+            <div className="relative">
+              <input
+                type="date"
+                ref={toDateRef}
+                value={toDate}
+                onChange={(e) => setToDate(e.target.value)}
+                className="absolute opacity-0 pointer-events-none"
+              />
+              <div 
+                onClick={() => toDateRef.current?.showPicker()}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 flex items-center justify-between cursor-pointer bg-white"
+              >
+                <span>{formatDateToDisplay(toDate)}</span>
+                <Calendar size={18} className="text-gray-400" />
+              </div>
+            </div>
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Status</label>
@@ -203,7 +235,7 @@ export default function NotificationCenter() {
                 <tbody className="divide-y">
                   {leaveRequests.map((request) => (
                     <tr key={request._id} className="hover:bg-gray-50">
-                      <td className="px-4 py-3">{new Date(request.fromDate).toLocaleDateString()}</td>
+                      <td className="px-4 py-3">{formatDateToDisplay(request.fromDate)}</td>
                       <td className="px-4 py-3">
                         <span className="font-medium">{request.empName}</span>
                         <br />
@@ -260,7 +292,7 @@ export default function NotificationCenter() {
                 <tbody className="divide-y">
                   {correctionRequests.map((request) => (
                     <tr key={request._id} className="hover:bg-gray-50">
-                      <td className="px-4 py-3">{new Date(request.date).toLocaleDateString()}</td>
+                      <td className="px-4 py-3">{formatDateToDisplay(request.date)}</td>
                       <td className="px-4 py-3">
                         <span className="font-medium">{request.empName}</span>
                         <br />

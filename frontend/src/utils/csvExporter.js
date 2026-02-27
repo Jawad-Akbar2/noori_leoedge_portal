@@ -51,12 +51,15 @@ export function exportPayrollToCSV(summary) {
     'Net Payable': emp.netPayable.toFixed(2)
   }));
 
-  exportToCSV(data, `payroll-${new Date().toISOString().split('T')[0]}.csv`);
+  // Updated filename format to dd-mm-yyyy
+  const d = new Date();
+  const dateStr = `${String(d.getDate()).padStart(2, '0')}-${String(d.getMonth() + 1).padStart(2, '0')}-${d.getFullYear()}`;
+  exportToCSV(data, `payroll-${dateStr}.csv`);
 }
 
 export function exportAttendanceToCSV(attendance, filename = 'attendance.csv') {
   const data = attendance.map(record => ({
-    'Date': record.date,
+    'Date': record.date, // Assumes date is already in dd/mm/yyyy format from state
     'Employee ID': record.empId,
     'Name': record.name,
     'Status': record.status,

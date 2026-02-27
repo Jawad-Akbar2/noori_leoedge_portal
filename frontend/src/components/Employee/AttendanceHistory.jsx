@@ -1,10 +1,19 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import axios from 'axios';
-import { MoreVertical, AlertCircle } from 'lucide-react';
+import { MoreVertical, AlertCircle, Calendar } from 'lucide-react';
 import toast from 'react-hot-toast';
-import {formatToDDMMYYYY} from '../../utils/dateFormatter';
+import { formatToDDMMYYYY, formatDate } from '../../utils/dateFormatter';
 
 export default function AttendanceHistory() {
+  const fromDateRef = useRef(null);
+  const toDateRef = useRef(null);
+
+  const formatDateToDisplay = (dateStr) => {
+    if (!dateStr) return '';
+    const [year, month, day] = dateStr.split('-');
+    return `${day}/${month}/${year}`;
+  };
+
   const [fromDate, setFromDate] = useState(() => {
     const now = new Date();
     const year = now.getFullYear();
@@ -29,25 +38,17 @@ export default function AttendanceHistory() {
   const [loading, setLoading] = useState(false);
   const [openMenuId, setOpenMenuId] = useState(null);
 
-  useEffect(() => {
-    fetchAttendance();
-  }, []);
-
-  useEffect(() => {
-    applyFilters();
-  }, [filters, attendanceHistory]);
-
-  const fetchAttendance = async () => {
+  const fetchAttendance = useCallback(async () => {
     setLoading(true);
     try {
       const token = localStorage.getItem('token');
       const user = JSON.parse(localStorage.getItem('user'));
 
       const response = await axios.get('/api/attendance/range', {
-     params: {
-  fromDate: formatToDDMMYYYY(fromDate),
-  toDate: formatToDDMMYYYY(toDate)
-},
+        params: {
+          fromDate: formatToDDMMYYYY(fromDate),
+          toDate: formatToDDMMYYYY(toDate)
+        },
         headers: { Authorization: `Bearer ${token}` }
       });
 
@@ -78,9 +79,9 @@ export default function AttendanceHistory() {
       toast.error('Failed to fetch attendance');
       setLoading(false);
     }
-  };
+  }, [fromDate, toDate]);
 
-  const applyFilters = () => {
+  const applyFilters = useCallback(() => {
     let filtered = attendanceHistory.filter(record => {
       if (!filters.absent && record.status === 'Absent') return false;
       if (!filters.leave && record.status === 'Leave') return false;
@@ -89,7 +90,15 @@ export default function AttendanceHistory() {
       return true;
     });
     setFilteredHistory(filtered);
-  };
+  }, [attendanceHistory, filters]);
+
+  useEffect(() => {
+    fetchAttendance();
+  }, [fetchAttendance]);
+
+  useEffect(() => {
+    applyFilters();
+  }, [applyFilters]);
 
   const handleShowList = () => {
     fetchAttendance();
@@ -120,23 +129,39 @@ export default function AttendanceHistory() {
       {/* Filter Section */}
       <div className="bg-white rounded-lg shadow p-4 md:p-6 mb-6">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
-          <div>
+          <div className="relative">
             <label className="block text-sm font-medium text-gray-700 mb-2">From Date</label>
+            <div 
+              onClick={() => fromDateRef.current.showPicker()}
+              className="flex items-center justify-between w-full px-4 py-2 border border-gray-300 rounded-lg focus-within:ring-2 focus-within:ring-blue-500 cursor-pointer bg-white"
+            >
+              <span className="text-gray-900">{formatDateToDisplay(fromDate)}</span>
+              <Calendar size={18} className="text-gray-400" />
+            </div>
             <input
+              ref={fromDateRef}
               type="date"
               value={fromDate}
               onChange={(e) => setFromDate(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+              className="absolute opacity-0 pointer-events-none"
             />
           </div>
-          <div>
+          <div className="relative">
             <label className="block text-sm font-medium text-gray-700 mb-2">To Date</label>
+            <div 
+              onClick={() => toDateRef.current.showPicker()}
+              className="flex items-center justify-between w-full px-4 py-2 border border-gray-300 rounded-lg focus-within:ring-2 focus-within:ring-blue-500 cursor-pointer bg-white"
+            >
+              <span className="text-gray-900">{formatDateToDisplay(toDate)}</span>
+              <Calendar size={18} className="text-gray-400" />
+            </div>
             <input
+              ref={toDateRef}
               type="date"
               value={toDate}
               onChange={(e) => setToDate(e.target.value)}
               min={fromDate}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+              className="absolute opacity-0 pointer-events-none"
             />
           </div>
           <div>
@@ -194,7 +219,7 @@ export default function AttendanceHistory() {
                 <tbody className="divide-y">
                   {filteredHistory.map((record) => (
                     <tr key={record._id} className="hover:bg-gray-50">
-                      <td className="px-4 py-3">{new Date(record.date).toLocaleDateString()}</td>
+                      <td className="px-4 py-3">{formatDate(record.date)}</td>
                       <td className="px-4 py-3">
                         {record.inOut?.in && record.inOut?.out 
                           ? `${record.inOut.in} / ${record.inOut.out}`
@@ -256,7 +281,7 @@ export default function AttendanceHistory() {
                 <div key={record._id} className="bg-gray-50 rounded-lg p-4 border border-gray-200">
                   <div className="flex justify-between items-start mb-3">
                     <div>
-                      <p className="font-semibold text-gray-800">{new Date(record.date).toLocaleDateString()}</p>
+                      <p className="font-semibold text-gray-800">{formatDate(record.date)}</p>
                       <p className="text-sm text-gray-600">
                         {record.inOut?.in && record.inOut?.out 
                           ? `${record.inOut.in} - ${record.inOut.out}`

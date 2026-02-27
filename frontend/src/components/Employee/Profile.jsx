@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
-import { Eye, EyeOff, Save } from 'lucide-react';
+import { Eye, EyeOff, Save, Calendar } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 export default function Profile() {
+  const joiningDateRef = useRef(null);
   const [employee, setEmployee] = useState(null);
   const [editMode, setEditMode] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -17,6 +18,15 @@ export default function Profile() {
   useEffect(() => {
     fetchProfile();
   }, []);
+
+  const formatDateToDisplay = (dateStr) => {
+    if (!dateStr) return '';
+    const date = new Date(dateStr);
+    const day = String(date.getDate()).padStart(2, '0');
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const year = date.getFullYear();
+    return `${day}/${month}/${year}`;
+  };
 
   const fetchProfile = async () => {
     try {
@@ -133,12 +143,21 @@ export default function Profile() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Joining Date</label>
-                <input
-                  type="date"
-                  value={employee?.joiningDate ? new Date(employee.joiningDate).toISOString().split('T')[0] : ''}
-                  readOnly
-                  className="w-full px-4 py-2 bg-gray-100 border border-gray-300 rounded-lg text-gray-600 cursor-not-allowed"
-                />
+                <div className="relative">
+                  <div 
+                    className="flex items-center justify-between w-full px-4 py-2 bg-gray-100 border border-gray-300 rounded-lg text-gray-600 cursor-not-allowed"
+                  >
+                    <span>{employee?.joiningDate ? formatDateToDisplay(employee.joiningDate) : 'dd/mm/yyyy'}</span>
+                    <Calendar size={18} className="text-gray-400" />
+                  </div>
+                  <input
+                    ref={joiningDateRef}
+                    type="date"
+                    value={employee?.joiningDate ? new Date(employee.joiningDate).toISOString().split('T')[0] : ''}
+                    readOnly
+                    className="absolute opacity-0 pointer-events-none inset-0 w-full"
+                  />
+                </div>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Hourly Rate (PKR)</label>

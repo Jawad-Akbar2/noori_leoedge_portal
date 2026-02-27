@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
-import { X, Save, AlertCircle } from 'lucide-react';
+import { X, Save, AlertCircle, Calendar } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 export default function EditEmployeeModal({ employee, onClose }) {
@@ -8,6 +8,7 @@ export default function EditEmployeeModal({ employee, onClose }) {
   const [loading, setLoading] = useState(false);
   const [dataLoading, setDataLoading] = useState(true);
   const [error, setError] = useState(null);
+  const dateInputRef = useRef(null);
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
@@ -19,6 +20,12 @@ export default function EditEmployeeModal({ employee, onClose }) {
     hourlyRate: 0,
     bank: { bankName: '', accountName: '', accountNumber: '' }
   });
+
+  const formatDateToDisplay = (dateStr) => {
+    if (!dateStr) return '';
+    const [year, month, day] = dateStr.split('-');
+    return `${day}/${month}/${year}`;
+  };
 
   useEffect(() => {
     // CRITICAL: Load latest employee data from backend
@@ -316,12 +323,22 @@ export default function EditEmployeeModal({ employee, onClose }) {
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Joining Date (Read-only)
                 </label>
-                <input
-                  type="date"
-                  value={formData.joiningDate}
-                  readOnly
-                  className="w-full px-4 py-2 bg-gray-100 border border-gray-300 rounded-lg text-gray-600"
-                />
+                <div className="relative">
+                  <input
+                    type="date"
+                    ref={dateInputRef}
+                    value={formData.joiningDate}
+                    readOnly
+                    className="absolute opacity-0 pointer-events-none"
+                  />
+                  <div 
+                    onClick={() => dateInputRef.current?.showPicker()}
+                    className="w-full px-4 py-2 bg-gray-100 border border-gray-300 rounded-lg text-gray-600 flex items-center justify-between cursor-not-allowed"
+                  >
+                    <span>{formatDateToDisplay(formData.joiningDate) || 'Select Date'}</span>
+                    <Calendar size={18} className="text-gray-400" />
+                  </div>
+                </div>
               </div>
             </div>
           )}

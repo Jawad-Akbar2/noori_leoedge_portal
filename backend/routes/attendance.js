@@ -10,8 +10,8 @@ import {
   applyPairingRule,
   mergeTimes,
 } from "../utils/csvParser.js";
-import { formatDate, formatDateTimeForDisplay } from "../utils/dateUtils.js";
-import { parseDDMMYYYY } from "../utils/dateUtils.js";
+// Standardized imports
+import { formatDate, formatDateTimeForDisplay, parseDDMMYYYY } from "../utils/dateUtils.js";
 
 const router = express.Router();
 
@@ -65,9 +65,6 @@ function checkIsLate(inTime, shiftStartTime) {
 /**
  * POST /api/attendance/import-csv
  * Upload and process CSV file for attendance import
- * Admin only
- *
- * CSV Format: empid | firstname | lastname | date(dd/mm/yyyy) | time(HH:mm) | status(0=in, 1=out)
  */
 router.post(
   "/import-csv",
@@ -104,7 +101,6 @@ router.post(
         });
       }
 
-      // Convert buffer to string
       const csvContent = req.file.buffer.toString("utf-8");
 
       processingLog.push({
@@ -112,7 +108,6 @@ router.post(
         message: `📁 CSV file received: ${req.file.originalname} (${req.file.size} bytes)`,
       });
 
-      // Parse CSV
       const { parsed, errors } = parseCSV(csvContent);
 
       processingLog.push({
@@ -120,7 +115,6 @@ router.post(
         message: `📋 CSV parsing complete`,
       });
 
-      // Log parsing errors
       for (const error of errors) {
         processingLog.push({
           type: "ERROR",
@@ -157,7 +151,6 @@ router.post(
         message: `✓ Parsed ${parsed.length} valid row(s) from CSV`,
       });
 
-      // Group by employee and date
       const grouped = groupByEmployeeAndDate(parsed);
 
       processingLog.push({
@@ -165,7 +158,6 @@ router.post(
         message: `📦 Grouped into ${Object.keys(grouped).length} unique employee-date combination(s)`,
       });
 
-      // Process each grouped entry
       for (const [key, groupData] of Object.entries(grouped)) {
         const { empId, firstName, lastName, dateStr, date, rows } = groupData;
 
@@ -174,7 +166,6 @@ router.post(
           message: `\n👤 Processing: ${empId} (${firstName} ${lastName}) on ${dateStr}`,
         });
 
-        // Find employee by number
         const employee = await Employee.findOne({
           employeeNumber: empId,
           isDeleted: false,
@@ -194,7 +185,6 @@ router.post(
           message: `  ✓ Found employee: ${employee.firstName} ${employee.lastName}`,
         });
 
-        // Merge all times for this employee-date combination
         const merged = mergeTimes(rows);
         const { inTime, outTime } = merged;
 
@@ -216,14 +206,12 @@ router.post(
           });
         }
 
-        // Calculate attendance details
         let status = "Absent";
         let hoursPerDay = 0;
         let basePay = 0;
         let finalDayEarning = 0;
 
         if (inTime && outTime) {
-          // Both check-in and check-out
           const isPaired = applyPairingRule(inTime, outTime);
 
           if (!isPaired) {
@@ -239,9 +227,7 @@ router.post(
           if (checkIsLate(inTime, employee.shift.start)) {
             status = "Late";
             const [inH, inM] = inTime.split(":").map(Number);
-            const [shiftH, shiftM] = employee.shift.start
-              .split(":")
-              .map(Number);
+            const [shiftH, shiftM] = employee.shift.start.split(":").map(Number);
             const delayMin = inH * 60 + inM - (shiftH * 60 + shiftM);
             processingLog.push({
               type: "INFO",
@@ -261,19 +247,15 @@ router.post(
             message: `    💰 Hours: ${hoursPerDay.toFixed(2)}, Pay: PKR ${basePay.toFixed(2)}`,
           });
         } else if (inTime && !outTime) {
-          // Only check-in
           hoursPerDay = calcHours(employee.shift.start, employee.shift.end);
           basePay = hoursPerDay * employee.hourlyRate * 0.5;
-          status = checkIsLate(inTime, employee.shift.start)
-            ? "Late"
-            : "Present";
+          status = checkIsLate(inTime, employee.shift.start) ? "Late" : "Present";
           finalDayEarning = basePay;
           processingLog.push({
             type: "WARN",
             message: `    ⚠️ Only check-in recorded. Calculated 50% pay: PKR ${basePay.toFixed(2)}`,
           });
         } else if (!inTime && outTime) {
-          // Only check-out (unusual)
           hoursPerDay = calcHours(employee.shift.start, employee.shift.end);
           basePay = hoursPerDay * employee.hourlyRate * 0.5;
           status = "Present";
@@ -283,15 +265,13 @@ router.post(
             message: `    ⚠️ Only check-out recorded. Calculated 50% pay: PKR ${basePay.toFixed(2)}`,
           });
         } else {
-          // No times
           status = "Absent";
           processingLog.push({
             type: "WARN",
-            message: `    ⚠�� No check-in or check-out times found. Status: ABSENT`,
+            message: `    ⚠️ No check-in or check-out times found. Status: ABSENT`,
           });
         }
 
-        // UPSERT attendance record
         try {
           const existingRecord = await AttendanceLog.findOne({
             empId: employee._id,
@@ -305,10 +285,7 @@ router.post(
             empName: `${employee.firstName} ${employee.lastName}`,
             department: employee.department,
             status,
-            inOut: {
-              in: inTime,
-              out: outTime,
-            },
+            inOut: { in: inTime, out: outTime },
             shift: employee.shift,
             hourlyRate: employee.hourlyRate,
             financials: {
@@ -330,10 +307,7 @@ router.post(
           };
 
           if (existingRecord) {
-            await AttendanceLog.updateOne(
-              { _id: existingRecord._id },
-              { $set: updateData },
-            );
+            await AttendanceLog.updateOne({ _id: existingRecord._id }, { $set: updateData });
             recordsUpdated++;
             processingLog.push({
               type: "SUCCESS",
@@ -352,7 +326,6 @@ router.post(
               message: `  ✓ Created new attendance record (In: ${inTime}, Out: ${outTime}, Status: ${status})`,
             });
           }
-
           rowsSuccess += rows.length;
         } catch (dbError) {
           processingLog.push({
@@ -381,23 +354,12 @@ router.post(
         success: true,
       });
     } catch (error) {
-      processingLog.push({
-        type: "ERROR",
-        message: `Fatal error: ${error.message}`,
-      });
-
+      processingLog.push({ type: "ERROR", message: `Fatal error: ${error.message}` });
       res.status(500).json({
         message: "Error processing CSV file",
         error: error.message,
         processingLog,
-        summary: {
-          total: rowsProcessed,
-          success: rowsSuccess,
-          failed: 0,
-          skipped: rowsSkipped,
-          recordsCreated,
-          recordsUpdated,
-        },
+        summary: { total: rowsProcessed, success: rowsSuccess, failed: 0, skipped: rowsSkipped, recordsCreated, recordsUpdated },
         success: false,
       });
     }
@@ -406,53 +368,28 @@ router.post(
 
 /**
  * GET /api/attendance/range
- * Get attendance records for date range (Admin only)
- * Returns attendance with last modified timestamp
+ * Get attendance records for date range
  */
 router.get("/range", adminAuth, async (req, res) => {
   try {
     const { fromDate, toDate } = req.query;
 
     if (!fromDate || !toDate) {
-      return res.status(400).json({
-        message: "fromDate and toDate query parameters required",
-      });
+      return res.status(400).json({ message: "fromDate and toDate query parameters required" });
     }
 
-    // Parse dates from dd/mm/yyyy format
     const from = parseDDMMYYYY(fromDate);
     const to = parseDDMMYYYY(toDate);
 
     if (!from || !to) {
-      return res.status(400).json({
-        message: "Invalid date format. Use dd/mm/yyyy",
-      });
+      return res.status(400).json({ message: "Invalid date format. Use dd/mm/yyyy" });
     }
 
-    if (isNaN(from.getTime()) || isNaN(to.getTime())) {
-      return res.status(400).json({
-        message: "Invalid date format. Use dd/mm/yyyy",
-      });
-    }
-
+    // Standardized query using the parsed date objects directly
     const attendance = await AttendanceLog.find({
       date: {
-        $gte: new Date(
-          from.getFullYear(),
-          from.getMonth(),
-          from.getDate(),
-          0,
-          0,
-          0,
-        ),
-        $lte: new Date(
-          to.getFullYear(),
-          to.getMonth(),
-          to.getDate(),
-          23,
-          59,
-          59,
-        ),
+        $gte: from,
+        $lte: new Date(to.getFullYear(), to.getMonth(), to.getDate(), 23, 59, 59),
       },
       isDeleted: false,
     })
@@ -471,10 +408,7 @@ router.get("/range", adminAuth, async (req, res) => {
       lastModifiedRaw: record.metadata?.lastModifiedAt,
     }));
 
-    res.json({
-      attendance: formattedAttendance,
-      total: formattedAttendance.length,
-    });
+    res.json({ attendance: formattedAttendance, total: formattedAttendance.length });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -482,7 +416,7 @@ router.get("/range", adminAuth, async (req, res) => {
 
 /**
  * POST /api/attendance/worksheet
- * Generate worksheet with all employees for date range (Admin only)
+ * Generate worksheet with all employees for date range
  */
 router.post("/worksheet", adminAuth, async (req, res) => {
   try {
@@ -492,13 +426,11 @@ router.post("/worksheet", adminAuth, async (req, res) => {
       return res.status(400).json({ message: "fromDate and toDate required" });
     }
 
- const start = parseDDMMYYYY(fromDate);
-const end = parseDDMMYYYY(toDate);
+    const start = parseDDMMYYYY(fromDate);
+    const end = parseDDMMYYYY(toDate);
 
-    if (isNaN(start.getTime()) || isNaN(end.getTime())) {
-      return res.status(400).json({
-        message: "Invalid date format. Use dd/mm/yyyy",
-      });
+    if (!start || !end || isNaN(start.getTime()) || isNaN(end.getTime())) {
+      return res.status(400).json({ message: "Invalid date format. Use dd/mm/yyyy" });
     }
 
     const employees = await Employee.find({
@@ -571,11 +503,11 @@ const end = parseDDMMYYYY(toDate);
     }
 
     worksheet.sort((a, b) => {
-      const dateCompare = new Date(a.date) - new Date(b.date);
+      const dateA = parseDDMMYYYY(a.date);
+      const dateB = parseDDMMYYYY(b.date);
+      const dateCompare = dateA - dateB;
       if (dateCompare !== 0) return dateCompare;
-
-      const empCompare = a.empNumber.localeCompare(b.empNumber);
-      return empCompare;
+      return a.empNumber.localeCompare(b.empNumber);
     });
 
     res.json({ worksheet, total: worksheet.length });
@@ -586,40 +518,22 @@ const end = parseDDMMYYYY(toDate);
 
 /**
  * POST /api/attendance/save-row
- * Save single attendance row (Admin only)
+ * Save single attendance row
  */
 router.post("/save-row", adminAuth, async (req, res) => {
   try {
-    const {
-      empId,
-      date,
-      status,
-      inTime,
-      outTime,
-      otHours,
-      otMultiplier,
-      deduction,
-    } = req.body;
+    const { empId, date, status, inTime, outTime, otHours, otMultiplier, deduction } = req.body;
 
     const employee = await Employee.findById(empId);
     if (!employee) {
       return res.status(404).json({ message: "Employee not found" });
     }
 
-    // Parse date
     const dateObj = parseDDMMYYYY(date);
-    if (!dateObj) {
-      return res
-        .status(400)
-        .json({ message: "Invalid date format (dd/mm/yyyy required)" });
-    }
-    if (isNaN(dateObj.getTime())) {
-      return res.status(400).json({ message: "Invalid date" });
+    if (!dateObj || isNaN(dateObj.getTime())) {
+      return res.status(400).json({ message: "Invalid date format (dd/mm/yyyy required)" });
     }
 
-    dateObj.setHours(0, 0, 0, 0);
-
-    // Calculate financials
     let hoursPerDay = 0;
     let basePay = 0;
     let otAmount = 0;
@@ -649,27 +563,12 @@ router.post("/save-row", adminAuth, async (req, res) => {
           empName: `${employee.firstName} ${employee.lastName}`,
           department: employee.department,
           status: status || "Present",
-          inOut: {
-            in: inTime || null,
-            out: outTime || null,
-          },
+          inOut: { in: inTime || null, out: outTime || null },
           shift: employee.shift,
           hourlyRate: employee.hourlyRate,
-          financials: {
-            hoursPerDay,
-            basePay,
-            deduction: deduction || 0,
-            otMultiplier: otMultiplier || 1,
-            otHours: otHours || 0,
-            otAmount,
-            finalDayEarning,
-          },
+          financials: { hoursPerDay, basePay, deduction: deduction || 0, otMultiplier: otMultiplier || 1, otHours: otHours || 0, otAmount, finalDayEarning },
           manualOverride: true,
-          metadata: {
-            lastUpdatedBy: req.userId,
-            source: "manual",
-            lastModifiedAt: now,
-          },
+          metadata: { lastUpdatedBy: req.userId, source: "manual", lastModifiedAt: now },
           updatedAt: now,
         },
       },

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import { Plus, Search, MoreVertical, AlertCircle } from 'lucide-react';
 import AddEmployeeModal from './AddEmployeeModal';
@@ -20,32 +20,7 @@ export default function ManageEmployees() {
   const [openMenuId, setOpenMenuId] = useState(null);
   const [currentUserId, setCurrentUserId] = useState(null);
 
-  useEffect(() => {
-    // Get current user ID to prevent self-editing
-    const user = JSON.parse(localStorage.getItem('user') || '{}');
-    setCurrentUserId(user.id);
-    
-    fetchEmployees();
-  }, []);
-
-  const fetchEmployees = async () => {
-    setLoading(true);
-    try {
-      const token = localStorage.getItem('token');
-      const response = await axios.get('/api/employees', {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-
-      setEmployees(response.data.employees);
-      filterEmployees(response.data.employees);
-    } catch (error) {
-      toast.error('Failed to load employees');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const filterEmployees = (data) => {
+  const filterEmployees = useCallback((data) => {
     let filtered = data;
 
     if (searchTerm) {
@@ -66,11 +41,36 @@ export default function ManageEmployees() {
     }
 
     setFilteredEmployees(filtered);
-  };
+  }, [searchTerm, statusFilter, departmentFilter]);
+
+  const fetchEmployees = useCallback(async () => {
+    setLoading(true);
+    try {
+      const token = localStorage.getItem('token');
+      const response = await axios.get('/api/employees', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      setEmployees(response.data.employees);
+      filterEmployees(response.data.employees);
+    } catch (error) {
+      toast.error('Failed to load employees');
+    } finally {
+      setLoading(false);
+    }
+  }, [filterEmployees]);
+
+  useEffect(() => {
+    // Get current user ID to prevent self-editing
+    const user = JSON.parse(localStorage.getItem('user') || '{}');
+    setCurrentUserId(user.id);
+    
+    fetchEmployees();
+  }, [fetchEmployees]);
 
   useEffect(() => {
     filterEmployees(employees);
-  }, [searchTerm, statusFilter, departmentFilter]);
+  }, [searchTerm, statusFilter, departmentFilter, employees, filterEmployees]);
 
   const handleEdit = (employee) => {
     // PERMISSION CHECK: Cannot edit own info
@@ -261,7 +261,7 @@ export default function ManageEmployees() {
                           onClick={() => setOpenMenuId(openMenuId === employee._id ? null : employee._id)}
                           className="text-gray-400 hover:text-gray-600 inline-block"
                         >
-                          <MoreVertical size={18} />
+                          < MoreVertical size={18} />
                         </button>
 
                         {/* Kebab Menu */}

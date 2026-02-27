@@ -59,7 +59,7 @@ export function calculateDelayMinutes(inTime, shiftStartTime) {
   return inMinutes - shiftMinutes;
 }
 
-// Normalize date to midnight UTC
+// Normalize date to midnight
 export function normalizeDate(date) {
   const d = new Date(date);
   d.setHours(0, 0, 0, 0);
@@ -75,11 +75,11 @@ export function getCompanyMonthDates(date = new Date()) {
   let startDate, endDate;
 
   if (day >= 18) {
-    startDate = new Date(year, month, 18);
-    endDate = new Date(year, month + 1, 17);
+    startDate = new Date(year, month, 18, 0, 0, 0, 0);
+    endDate = new Date(year, month + 1, 17, 23, 59, 59, 999);
   } else {
-    startDate = new Date(year, month - 1, 18);
-    endDate = new Date(year, month, 17);
+    startDate = new Date(year, month - 1, 18, 0, 0, 0, 0);
+    endDate = new Date(year, month, 17, 23, 59, 59, 999);
   }
 
   return { startDate, endDate };

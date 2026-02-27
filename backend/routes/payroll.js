@@ -2,7 +2,7 @@ import express from "express";
 import AttendanceLog from "../models/AttendanceLog.js";
 import Employee from "../models/Employee.js";
 import { adminAuth } from "../middleware/auth.js";
-import { parseDDMMYYYY } from "../utils/dateUtils.js";
+import { parseDDMMYYYY, formatDate } from "../utils/dateUtils.js";
 import { isLate, calculateHours } from "../utils/timeCalculator.js";
 
 const router = express.Router();
@@ -118,7 +118,7 @@ router.post("/attendance-overview", adminAuth, async (req, res) => {
 
         if (!filterType || status.toLowerCase() === filterType.toLowerCase()) {
           detailedList.push({
-            date: currentDate.toISOString().split("T")[0],
+            date: formatDate(currentDate), // Updated to use dd/mm/yyyy
             empId: emp.employeeNumber,
             name: `${emp.firstName} ${emp.lastName}`,
             type: status,
@@ -302,12 +302,12 @@ router.get("/employee-breakdown/:empId", adminAuth, async (req, res) => {
     const { fromDate, toDate } = req.query;
 
     const range = parseDateRange(fromDate, toDate);
-if (!range) {
-  return res.status(400).json({
-    message: "Invalid date format. Use dd/mm/yyyy",
-  });
-}
-const { start, end } = range;
+    if (!range) {
+      return res.status(400).json({
+        message: "Invalid date format. Use dd/mm/yyyy",
+      });
+    }
+    const { start, end } = range;
 
     start.setHours(0, 0, 0, 0);
     end.setHours(23, 59, 59, 999);
@@ -322,7 +322,7 @@ const { start, end } = range;
     }).sort({ date: 1 });
 
     const dailyBreakdown = records.map((r) => ({
-      date: r.date.toISOString().split("T")[0],
+      date: formatDate(r.date), // Updated to use dd/mm/yyyy
       inOut: r.inOut,
       status: r.status,
       hoursPerDay: r.financials.hoursPerDay,
@@ -381,9 +381,9 @@ router.get("/live-payroll", adminAuth, async (req, res) => {
 
     res.json({
       totalPayroll: parseFloat(totalPayroll.toFixed(2)),
-      periodStart: startDate,
-      periodEnd: endDate,
-      asOf: new Date(),
+      periodStart: formatDate(startDate), // Updated to use dd/mm/yyyy
+      periodEnd: formatDate(endDate),     // Updated to use dd/mm/yyyy
+      asOf: formatDate(new Date()),       // Updated to use dd/mm/yyyy
     });
   } catch (error) {
     console.error("Error in live-payroll:", error);
@@ -395,13 +395,13 @@ router.get("/live-payroll", adminAuth, async (req, res) => {
 router.post("/export", adminAuth, async (req, res) => {
   try {
     const { fromDate, toDate, format } = req.body;
-const range = parseDateRange(fromDate, toDate);
-if (!range) {
-  return res.status(400).json({
-    message: "Invalid date format. Use dd/mm/yyyy",
-  });
-}
-const { start, end } = range;
+    const range = parseDateRange(fromDate, toDate);
+    if (!range) {
+      return res.status(400).json({
+        message: "Invalid date format. Use dd/mm/yyyy",
+      });
+    }
+    const { start, end } = range;
 
     start.setHours(0, 0, 0, 0);
     end.setHours(23, 59, 59, 999);

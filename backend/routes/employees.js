@@ -170,6 +170,15 @@ router.put("/:id", adminAuth, async (req, res) => {
       return res.status(404).json({ message: "Employee not found" });
     }
 
+    // Handle joiningDate update specifically with dd/mm/yyyy parsing
+    if (req.body.joiningDate) {
+      const parsed = parseDDMMYYYY(req.body.joiningDate);
+      if (!parsed) {
+        return res.status(400).json({ message: "Invalid joining date format. Use dd/mm/yyyy" });
+      }
+      employee.joiningDate = parsed;
+    }
+
     const allowedFields = [
       "firstName",
       "lastName",

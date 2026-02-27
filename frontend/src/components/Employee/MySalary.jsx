@@ -1,9 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import { Calendar, Download } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 export default function MySalary() {
+  const fromDateRef = useRef(null);
+  const toDateRef = useRef(null);
+
   const [fromDate, setFromDate] = useState(() => {
     const now = new Date();
     const year = now.getFullYear();
@@ -19,6 +22,21 @@ export default function MySalary() {
   const [toDate, setToDate] = useState(new Date().toISOString().split('T')[0]);
   const [salaryData, setSalaryData] = useState(null);
   const [loading, setLoading] = useState(false);
+
+  const formatDateToDisplay = (dateStr) => {
+    if (!dateStr) return '';
+    const [year, month, day] = dateStr.split('-');
+    return `${day}/${month}/${year}`;
+  };
+
+  const formatDateToDDMMYYYY = (date) => {
+    if (!date) return '';
+    const d = new Date(date);
+    const day = String(d.getDate()).padStart(2, '0');
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const year = d.getFullYear();
+    return `${day}/${month}/${year}`;
+  };
 
   useEffect(() => {
     fetchSalaryData();
@@ -74,21 +92,41 @@ export default function MySalary() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">From Date</label>
-            <input
-              type="date"
-              value={fromDate}
-              onChange={(e) => setFromDate(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-            />
+            <div className="relative">
+              <div 
+                onClick={() => fromDateRef.current.showPicker()}
+                className="flex items-center justify-between w-full px-4 py-2 border border-gray-300 rounded-lg focus-within:ring-2 focus-within:ring-blue-500 cursor-pointer bg-white"
+              >
+                <span className="text-gray-900">{formatDateToDisplay(fromDate)}</span>
+                <Calendar size={18} className="text-gray-400" />
+              </div>
+              <input
+                ref={fromDateRef}
+                type="date"
+                value={fromDate}
+                onChange={(e) => setFromDate(e.target.value)}
+                className="absolute opacity-0 pointer-events-none inset-0 w-full"
+              />
+            </div>
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">To Date</label>
-            <input
-              type="date"
-              value={toDate}
-              onChange={(e) => setToDate(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-            />
+            <div className="relative">
+              <div 
+                onClick={() => toDateRef.current.showPicker()}
+                className="flex items-center justify-between w-full px-4 py-2 border border-gray-300 rounded-lg focus-within:ring-2 focus-within:ring-blue-500 cursor-pointer bg-white"
+              >
+                <span className="text-gray-900">{formatDateToDisplay(toDate)}</span>
+                <Calendar size={18} className="text-gray-400" />
+              </div>
+              <input
+                ref={toDateRef}
+                type="date"
+                value={toDate}
+                onChange={(e) => setToDate(e.target.value)}
+                className="absolute opacity-0 pointer-events-none inset-0 w-full"
+              />
+            </div>
           </div>
           <div className="flex items-end">
             <button
@@ -156,7 +194,7 @@ export default function MySalary() {
                   {salaryData.dailyBreakdown.map((day, idx) => (
                     <tr key={idx} className="hover:bg-gray-50">
                       <td className="px-4 py-3">
-                        {new Date(day.date).toLocaleDateString()}
+                        {formatDateToDDMMYYYY(day.date)}
                       </td>
                       <td className="px-4 py-3">
                         {day.inOut?.in && day.inOut?.out

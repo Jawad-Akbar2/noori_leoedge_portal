@@ -27,7 +27,7 @@ const validateEmployeeCreation = [
   body('employeeNumber').trim().notEmpty().withMessage('Employee number required'),
   body('firstName').trim().notEmpty().withMessage('First name required'),
   body('lastName').trim().notEmpty().withMessage('Last name required'),
-  body('joiningDate').isISO8601().withMessage('Valid date required'),
+  body('joiningDate').matches(/^(0?[1-9]|[12][0-9]|3[01])\/(0?[1-9]|1[012])\/\d{4}$/).withMessage('Valid date required (DD/MM/YYYY)'),
   body('department').isIn(['IT', 'Customer Support', 'Manager', 'Marketing', 'HR', 'Finance']).withMessage('Valid department required'),
   body('shift.start').matches(/^([0-1][0-9]|2[0-3]):[0-5][0-9]$/).withMessage('Valid shift start time required'),
   body('shift.end').matches(/^([0-1][0-9]|2[0-3]):[0-5][0-9]$/).withMessage('Valid shift end time required'),
@@ -45,8 +45,8 @@ const validateAttendanceUpdate = [
 
 // Validate leave request
 const validateLeaveRequest = [
-  body('fromDate').isISO8601().withMessage('Valid from date required'),
-  body('toDate').isISO8601().withMessage('Valid to date required'),
+  body('fromDate').matches(/^(0?[1-9]|[12][0-9]|3[01])\/(0?[1-9]|1[012])\/\d{4}$/).withMessage('Valid from date required (DD/MM/YYYY)'),
+  body('toDate').matches(/^(0?[1-9]|[12][0-9]|3[01])\/(0?[1-9]|1[012])\/\d{4}$/).withMessage('Valid to date required (DD/MM/YYYY)'),
   body('leaveType').isIn(['Holiday Leave', 'Sick Leave', 'Casual Leave']).withMessage('Valid leave type required'),
   body('reason').trim().notEmpty().withMessage('Reason required')
 ];

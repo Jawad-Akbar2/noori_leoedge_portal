@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import axios from 'axios';
-import { X, Clock } from 'lucide-react';
+import { X, Clock, Calendar } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 export default function CorrectionRequestModal({ onClose, onSubmit }) {
+  const dateInputRef = useRef(null);
   const [formData, setFormData] = useState({
     date: '',
     fromTime: '',
@@ -11,6 +12,12 @@ export default function CorrectionRequestModal({ onClose, onSubmit }) {
     reason: ''
   });
   const [loading, setLoading] = useState(false);
+
+  const formatDateToDisplay = (dateStr) => {
+    if (!dateStr) return '';
+    const [year, month, day] = dateStr.split('-');
+    return `${day}/${month}/${year}`;
+  };
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -77,15 +84,27 @@ export default function CorrectionRequestModal({ onClose, onSubmit }) {
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Date</label>
-            <input
-              type="date"
-              name="date"
-              value={formData.date}
-              onChange={handleChange}
-              required
-              max={new Date().toISOString().split('T')[0]}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-            />
+            <div className="relative">
+              <div 
+                onClick={() => dateInputRef.current.showPicker()}
+                className="flex items-center justify-between w-full px-4 py-2 border border-gray-300 rounded-lg focus-within:ring-2 focus-within:ring-blue-500 cursor-pointer bg-white"
+              >
+                <span className={formData.date ? "text-gray-900" : "text-gray-400"}>
+                  {formData.date ? formatDateToDisplay(formData.date) : 'dd/mm/yyyy'}
+                </span>
+                <Calendar size={18} className="text-gray-400" />
+              </div>
+              <input
+                ref={dateInputRef}
+                type="date"
+                name="date"
+                value={formData.date}
+                onChange={handleChange}
+                required
+                max={new Date().toISOString().split('T')[0]}
+                className="absolute opacity-0 pointer-events-none inset-0 w-full"
+              />
+            </div>
           </div>
 
           <div className="grid grid-cols-2 gap-4">

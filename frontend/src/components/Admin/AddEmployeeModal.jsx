@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import axios from 'axios';
-import { X, Save, AlertCircle } from 'lucide-react';
+import { X, Save, AlertCircle, Calendar } from 'lucide-react';
 import toast from 'react-hot-toast';
 import EmployeeLinkDialog from './EmployeeLinkDialog';
+import { formatToDDMMYYYY } from '../../utils/dateFormatter';
 
 export default function AddEmployeeModal({ onClose, onSave }) {
   const [activeTab, setActiveTab] = useState('basic');
@@ -10,6 +11,7 @@ export default function AddEmployeeModal({ onClose, onSave }) {
   const [showLinkDialog, setShowLinkDialog] = useState(false);
   const [generatedLink, setGeneratedLink] = useState(null);
   const [newEmployee, setNewEmployee] = useState(null);
+  const dateInputRef = useRef(null);
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
@@ -120,7 +122,7 @@ export default function AddEmployeeModal({ onClose, onSave }) {
           email: formData.email,
           employeeNumber: formData.employeeNumber,
           department: formData.department,
-          joiningDate: formData.joiningDate,
+          joiningDate: formatToDDMMYYYY(formData.joiningDate), // Convert to dd/mm/yyyy for backend
           shift: formData.shift,
           hourlyRate: parseFloat(formData.hourlyRate),
           bank: formData.bank
@@ -190,6 +192,7 @@ export default function AddEmployeeModal({ onClose, onSave }) {
           <div className="border-b">
             <div className="flex">
               <button
+                type="button"
                 onClick={() => setActiveTab('basic')}
                 className={`flex-1 px-4 py-3 font-medium border-b-2 transition ${
                   activeTab === 'basic'
@@ -200,6 +203,7 @@ export default function AddEmployeeModal({ onClose, onSave }) {
                 Basic Info
               </button>
               <button
+                type="button"
                 onClick={() => setActiveTab('shift')}
                 className={`flex-1 px-4 py-3 font-medium border-b-2 transition ${
                   activeTab === 'shift'
@@ -210,6 +214,7 @@ export default function AddEmployeeModal({ onClose, onSave }) {
                 Shift & Salary
               </button>
               <button
+                type="button"
                 onClick={() => setActiveTab('bank')}
                 className={`flex-1 px-4 py-3 font-medium border-b-2 transition ${
                   activeTab === 'bank'
@@ -332,16 +337,28 @@ export default function AddEmployeeModal({ onClose, onSave }) {
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Joining Date <span className="text-red-500">*</span>
                   </label>
-                  <input
-                    type="date"
-                    name="joiningDate"
-                    value={formData.joiningDate}
-                    onChange={handleInputChange}
-                    disabled={loading}
-                    className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 ${
-                      errors.joiningDate ? 'border-red-500' : 'border-gray-300'
-                    }`}
-                  />
+                  <div 
+                    className="relative group cursor-pointer"
+                    onClick={() => !loading && dateInputRef.current?.showPicker()}
+                  >
+                    <input
+                      type="date"
+                      ref={dateInputRef}
+                      name="joiningDate"
+                      value={formData.joiningDate}
+                      onChange={handleInputChange}
+                      disabled={loading}
+                      className="opacity-0 absolute inset-0 w-full h-full cursor-pointer z-10 disabled:cursor-not-allowed"
+                    />
+                    <div className={`flex items-center gap-2 px-4 py-2 border rounded-lg bg-white group-hover:border-blue-400 transition-colors ${
+                        errors.joiningDate ? 'border-red-500' : 'border-gray-300'
+                      } ${loading ? 'bg-gray-100' : ''}`}>
+                      <Calendar size={18} className="text-gray-400" />
+                      <span className="text-gray-700">
+                        {formData.joiningDate ? formatToDDMMYYYY(formData.joiningDate) : 'Select Date'}
+                      </span>
+                    </div>
+                  </div>
                   {errors.joiningDate && (
                     <p className="text-xs text-red-600 mt-1">{errors.joiningDate}</p>
                   )}

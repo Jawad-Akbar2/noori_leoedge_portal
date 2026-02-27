@@ -39,6 +39,8 @@ export function formatDate(date) {
   if (!date) return '';
 
   const d = new Date(date);
+  if (isNaN(d.getTime())) return '';
+  
   const day = String(d.getDate()).padStart(2, '0');
   const month = String(d.getMonth() + 1).padStart(2, '0');
   const year = d.getFullYear();
@@ -53,6 +55,8 @@ export function formatDateTime(date) {
   if (!date) return '';
 
   const d = new Date(date);
+  if (isNaN(d.getTime())) return '';
+
   const day = String(d.getDate()).padStart(2, '0');
   const month = String(d.getMonth() + 1).padStart(2, '0');
   const year = d.getFullYear();
@@ -83,14 +87,29 @@ export function getDateMinusDays(days) {
  */
 export function toISO(date) {
   if (!date) return null;
-  return new Date(date).toISOString();
+  const d = new Date(date);
+  return isNaN(d.getTime()) ? null : d.toISOString();
 }
 
+/**
+ * Convert YYYY-MM-DD or ISO string to dd/mm/yyyy
+ * Used for displaying backend data in the UI
+ */
 export function formatToDDMMYYYY(dateStr) {
   if (!dateStr) return "";
+  const d = new Date(dateStr);
+  return formatDate(d);
+}
 
-  const [year, month, day] = dateStr.split("-");
-  return `${day}/${month}/${year}`;
+/**
+ * Convert dd/mm/yyyy string to yyyy-mm-dd
+ * Used specifically to set the value of <input type="date"> calendar pickers
+ */
+export function formatToYYYYMMDD(dateStr) {
+  if (!dateStr) return "";
+  const parts = dateStr.split('/');
+  if (parts.length !== 3) return dateStr; // Return original if not in dd/mm/yyyy
+  return `${parts[2]}-${parts[1]}-${parts[0]}`;
 }
 
 const dateUtils = {
@@ -99,7 +118,9 @@ const dateUtils = {
   formatDateTime,
   getTodayDate,
   getDateMinusDays,
-  toISO
+  toISO,
+  formatToDDMMYYYY,
+  formatToYYYYMMDD
 };
 
 export default dateUtils;
