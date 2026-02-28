@@ -14,7 +14,6 @@ const formatDateToDisplay = (dateStr) => {
   return `${day}/${month}/${year}`;
 };
 
-// FIX #1: Date → dd/mm/yyyy for backend (backend expects this format)
 const toBackendDate = (isoStr) => {
   if (!isoStr) return '';
   const [year, month, day] = isoStr.split('-');
@@ -22,58 +21,71 @@ const toBackendDate = (isoStr) => {
 };
 
 export default function PayrollReports() {
-  // ── Refs for custom date pickers ─────────────────────────────────────────
-  const attFromRef  = useRef(null);
-  const attToRef    = useRef(null);
-  const perfFromRef = useRef(null);
-  const perfToRef   = useRef(null);
-  const salFromRef  = useRef(null);
-  const salToRef    = useRef(null);
+  const attFromRef = useRef(null);
+  const attToRef = useRef(null);
+  const salFromRef = useRef(null);
+  const salToRef = useRef(null);
 
-  // ── Section 1: Attendance ─────────────────────────────────────────────────
-  const [attendanceFromDate, setAttendanceFromDate] = useState(new Date().toISOString().split('T')[0]);
-  const [attendanceToDate,   setAttendanceToDate]   = useState(new Date().toISOString().split('T')[0]);
-  const [attendanceChart,    setAttendanceChart]    = useState([]);
-  const [attendanceList,     setAttendanceList]     = useState([]);
-  const [attendanceLoading,  setAttendanceLoading]  = useState(false);
-  const [attendanceFilter,   setAttendanceFilter]   = useState('all');
+  // ── Shared dates
+  const [fromDate, setFromDate] = useState(new Date().toISOString().split('T')[0]);
+  const [toDate, setToDate] = useState(new Date().toISOString().split('T')[0]);
 
-  // ── Section 2: Performance ────────────────────────────────────────────────
-  const [performanceFromDate, setPerformanceFromDate] = useState(new Date().toISOString().split('T')[0]);
-  const [performanceToDate,   setPerformanceToDate]   = useState(new Date().toISOString().split('T')[0]);
-  const [performanceData,     setPerformanceData]     = useState([]);
-  const [performanceLoading,  setPerformanceLoading]  = useState(false);
+  // ── Attendance & Performance
+  const [attendanceChart, setAttendanceChart] = useState([]);
+  const [attendanceList, setAttendanceList] = useState([]);
+  const [attendanceLoading, setAttendanceLoading] = useState(false);
 
-  // ── Section 3: Salary ─────────────────────────────────────────────────────
-  const [salaryFromDate,      setSalaryFromDate]      = useState(new Date().toISOString().split('T')[0]);
-  const [salaryToDate,        setSalaryToDate]        = useState(new Date().toISOString().split('T')[0]);
-  // FIX #2: correct field names matching backend grandTotals shape
-  const [salarySummary,       setSalarySummary]       = useState([]);
-  const [salaryTotals,        setSalaryTotals]        = useState({
+  const [performanceData, setPerformanceData] = useState([]);
+  const [performanceLoading, setPerformanceLoading] = useState(false);
+
+  const [clickedChartType, setClickedChartType] = useState(null);
+  const [sectionFilter, setSectionFilter] = useState('Attendance'); // New dropdown filter
+
+  const [expandedEmployees, setExpandedEmployees] = useState({});
+
+  // ── Salary
+  const [salaryFromDate, setSalaryFromDate] = useState(new Date().toISOString().split('T')[0]);
+  const [salaryToDate, setSalaryToDate] = useState(new Date().toISOString().split('T')[0]);
+  const [salarySummary, setSalarySummary] = useState([]);
+  const [salaryTotals, setSalaryTotals] = useState({
     totalBaseSalary: 0, totalOT: 0, totalDeductions: 0, totalNetPayable: 0
   });
-  const [salaryLoading,       setSalaryLoading]       = useState(false);
-  const [salarySearch,        setSalarySearch]        = useState('');
-  const [expandedEmployees,   setExpandedEmployees]   = useState({});
+  const [salaryLoading, setSalaryLoading] = useState(false);
+  const [salarySearch, setSalarySearch] = useState('');
 
   const getToken = () => localStorage.getItem('token');
 
-  // ── SECTION 1: Attendance ─────────────────────────────────────────────────
+  // ── Section 2 Employee
+  const [selectedEmployee, setSelectedEmployee] = useState('');
+  const [employeeDropdownOpen, setEmployeeDropdownOpen] = useState(false);
+
+  const employees = [
+    { name: 'Raja Wal', empId: 1 },
+    { name: 'Osama Babar', empId: 15 },
+    { name: 'Abdul Ahad', empId: 13 },
+    { name: 'Maaz Usman', empId: 6 },
+    { name: 'Hammad Nadeem', empId: 11 },
+    { name: 'Momin Munir', empId: 16 },
+    { name: 'Fauz Babar', empId: 4 },
+    { name: 'Hamza Shakeel', empId: 9 },
+    { name: 'Muhammad Ammar Khalid', empId: 7 },
+    { name: 'Sami Rehman', empId: 14 },
+    { name: 'Muti Rehman', empId: 5 },
+    { name: 'Rafay Iqbal', empId: 12 },
+  ];
+
+  // ── Fetch functions
   const fetchAttendanceOverview = async () => {
     setAttendanceLoading(true);
     try {
-      // FIX #1: convert ISO → dd/mm/yyyy for backend
       const response = await axios.post(
         '/api/payroll/attendance-overview',
-        {
-          fromDate:   toBackendDate(attendanceFromDate),
-          toDate:     toBackendDate(attendanceToDate),
-          filterType: attendanceFilter === 'all' ? undefined : attendanceFilter
-        },
+        { fromDate: toBackendDate(fromDate), toDate: toBackendDate(toDate) },
         { headers: { Authorization: `Bearer ${getToken()}` } }
       );
-      setAttendanceChart(response.data.chartData   || []);
+      setAttendanceChart(response.data.chartData || []);
       setAttendanceList(response.data.detailedList || []);
+      setClickedChartType(null);
     } catch {
       toast.error('Failed to load attendance data');
     } finally {
@@ -81,17 +93,12 @@ export default function PayrollReports() {
     }
   };
 
-  // ── SECTION 2: Performance ────────────────────────────────────────────────
   const fetchPerformanceOverview = async () => {
     setPerformanceLoading(true);
     try {
-      // FIX #1: convert ISO → dd/mm/yyyy for backend
       const response = await axios.post(
         '/api/payroll/performance-overview',
-        {
-          fromDate: toBackendDate(performanceFromDate),
-          toDate:   toBackendDate(performanceToDate)
-        },
+        { fromDate: toBackendDate(fromDate), toDate: toBackendDate(toDate) },
         { headers: { Authorization: `Bearer ${getToken()}` } }
       );
       setPerformanceData(response.data.performance || []);
@@ -102,25 +109,50 @@ export default function PayrollReports() {
     }
   };
 
-  // ── SECTION 3: Salary ─────────────────────────────────────────────────────
-  // FIX #3: was importing from '../../routes/payrollRoutes' — that's a backend
-  // file and cannot be imported in a React frontend. Use axios directly.
+  const loadSectionData = () => {
+    if (sectionFilter === 'Attendance') fetchAttendanceOverview();
+    if (sectionFilter === 'Performance') fetchPerformanceOverview();
+  };
+
+  const toggleEmployeeExpansion = (empId) =>
+    setExpandedEmployees(prev => ({ ...prev, [empId]: !prev[empId] }));
+
+  // ── Preset helpers
+  const toISO = (d) => d.toISOString().split('T')[0];
+  const today = () => toISO(new Date());
+
+  const applyPreset = (preset) => {
+    if (preset === 'today') { setFromDate(today()); setToDate(today()); setSalaryFromDate(today()); setSalaryToDate(today()); }
+    if (preset === 'week') {
+      const d = new Date();
+      d.setDate(d.getDate() - d.getDay());
+      setFromDate(toISO(d)); setToDate(today());
+      setSalaryFromDate(toISO(d)); setSalaryToDate(today());
+    }
+    if (preset === 'month') {
+      const now = new Date();
+      setFromDate(toISO(new Date(now.getFullYear(), now.getMonth(), 1)));
+      setToDate(toISO(new Date(now.getFullYear(), now.getMonth() + 1, 0)));
+      setSalaryFromDate(toISO(new Date(now.getFullYear(), now.getMonth(), 1)));
+      setSalaryToDate(toISO(new Date(now.getFullYear(), now.getMonth() + 1, 0)));
+    }
+  };
+
+  // ── Salary functions
   const fetchSalarySummary = async () => {
     setSalaryLoading(true);
     try {
-      // FIX #1: convert ISO → dd/mm/yyyy for backend
       const response = await axios.post(
         '/api/payroll/report',
         {
           fromDate: toBackendDate(salaryFromDate),
-          toDate:   toBackendDate(salaryToDate),
-          search:   salarySearch
+          toDate: toBackendDate(salaryToDate),
+          search: salarySearch
         },
         { headers: { Authorization: `Bearer ${getToken()}` } }
       );
-      setSalarySummary(response.data.report       || []);
-      // FIX #2: backend returns grandTotals with these exact keys
-      setSalaryTotals(response.data.grandTotals   || {
+      setSalarySummary(response.data.report || []);
+      setSalaryTotals(response.data.grandTotals || {
         totalBaseSalary: 0, totalOT: 0, totalDeductions: 0, totalNetPayable: 0
       });
     } catch {
@@ -130,62 +162,16 @@ export default function PayrollReports() {
     }
   };
 
-  const toggleEmployeeExpansion = (empId) =>
-    setExpandedEmployees(prev => ({ ...prev, [empId]: !prev[empId] }));
-
-  // ── Preset helpers ────────────────────────────────────────────────────────
-  const getMonthRange = () => {
-    const today = new Date();
-    const day   = today.getDate();
-    const year  = today.getFullYear();
-    const month = today.getMonth();
-    const start = day >= 18 ? new Date(year, month, 18)     : new Date(year, month - 1, 18);
-    const end   = day >= 18 ? new Date(year, month + 1, 17) : new Date(year, month, 17);
-    return { start, end };
-  };
-
-  const getLastMonthRange = () => {
-    const today = new Date();
-    return {
-      start: new Date(today.getFullYear(), today.getMonth() - 1, 18),
-      end:   new Date(today.getFullYear(), today.getMonth(), 17)
-    };
-  };
-
-  const toISO = (d) => d.toISOString().split('T')[0];
-  const today = () => toISO(new Date());
-
-  const applyPreset = (preset, setFrom, setTo) => {
-    if (preset === 'today')     { setFrom(today()); setTo(today()); }
-    if (preset === 'month')     { const { start, end } = getMonthRange();     setFrom(toISO(start)); setTo(toISO(end)); }
-    if (preset === 'lastMonth') { const { start, end } = getLastMonthRange(); setFrom(toISO(start)); setTo(toISO(end)); }
-    if (preset === 'week')      {
-      const d = new Date();
-      d.setDate(d.getDate() - d.getDay());
-      setFrom(toISO(d)); setTo(today());
-    }
-  };
-
-  // ── Export ────────────────────────────────────────────────────────────────
-  // FIX #4: was using wrong field names (emp.totals.basePay etc.) — backend
-  // report rows use flat fields: baseSalary, totalDeduction, totalOt, netPayable
   const handleExport = async () => {
     try {
       const response = await axios.post(
         '/api/payroll/export',
-        {
-          fromDate: toBackendDate(salaryFromDate),
-          toDate:   toBackendDate(salaryToDate),
-          format:   'csv'
-        },
-        {
-          headers:      { Authorization: `Bearer ${getToken()}` },
-          responseType: 'blob'
-        }
+        { fromDate: toBackendDate(salaryFromDate), toDate: toBackendDate(salaryToDate), format: 'csv' },
+        { headers: { Authorization: `Bearer ${getToken()}` }, responseType: 'blob' }
       );
       const url = window.URL.createObjectURL(new Blob([response.data]));
-      const a   = document.createElement('a');
-      a.href     = url;
+      const a = document.createElement('a');
+      a.href = url;
       a.download = `payroll-${salaryFromDate}-${salaryToDate}.csv`;
       a.click();
       window.URL.revokeObjectURL(url);
@@ -195,9 +181,13 @@ export default function PayrollReports() {
     }
   };
 
+  // ── Section 2: Filtered Attendance List
+  const filteredAttendanceList = attendanceList.filter(item =>
+    !selectedEmployee || item.name.toLowerCase().includes(selectedEmployee.toLowerCase())
+  );
+
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
-      {/* Header */}
       <header className="bg-white shadow sticky top-0 z-30">
         <div className="flex items-center justify-between p-4 md:p-6">
           <h1 className="text-2xl font-bold text-gray-800">Payroll Reports</h1>
@@ -212,231 +202,420 @@ export default function PayrollReports() {
       </header>
 
       <div className="flex-1 overflow-auto p-4 md:p-6 space-y-8">
-
-        {/* ══════════════════════════════════════════════════════════════════
-            SECTION 1: ATTENDANCE
-        ══════════════════════════════════════════════════════════════════ */}
+        {/* ───────────── Section 1: Attendance & Performance ───────────── */}
         <section className="bg-white rounded-lg shadow p-6">
-          <h2 className="text-2xl font-bold text-gray-800 mb-6">Section 1: Attendance & Discipline</h2>
+          <h2 className="text-2xl font-bold text-gray-800 mb-6">Section 1: Attendance & Performance</h2>
 
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-4">
             {/* From */}
             <div className="relative">
               <label className="block text-sm font-medium text-gray-700 mb-2">From</label>
               <div onClick={() => attFromRef.current?.showPicker()}
-                className="flex items-center justify-between w-full px-4 py-2 border border-gray-300 rounded-lg cursor-pointer bg-white">
-                <span>{formatDateToDisplay(attendanceFromDate)}</span>
+                   className="flex items-center justify-between w-full px-4 py-2 border border-gray-300 rounded-lg cursor-pointer bg-white">
+                <span>{formatDateToDisplay(fromDate)}</span>
                 <Calendar size={18} className="text-gray-400" />
               </div>
-              <input ref={attFromRef} type="date" value={attendanceFromDate}
-                onChange={e => setAttendanceFromDate(e.target.value)}
-                className="absolute opacity-0 pointer-events-none" />
+              <input ref={attFromRef} type="date" value={fromDate}
+                     onChange={e => setFromDate(e.target.value)}
+                     className="absolute opacity-0 pointer-events-none" />
             </div>
+
             {/* To */}
             <div className="relative">
               <label className="block text-sm font-medium text-gray-700 mb-2">To</label>
               <div onClick={() => attToRef.current?.showPicker()}
-                className="flex items-center justify-between w-full px-4 py-2 border border-gray-300 rounded-lg cursor-pointer bg-white">
-                <span>{formatDateToDisplay(attendanceToDate)}</span>
+                   className="flex items-center justify-between w-full px-4 py-2 border border-gray-300 rounded-lg cursor-pointer bg-white">
+                <span>{formatDateToDisplay(toDate)}</span>
                 <Calendar size={18} className="text-gray-400" />
               </div>
-              <input ref={attToRef} type="date" value={attendanceToDate} min={attendanceFromDate}
-                onChange={e => setAttendanceToDate(e.target.value)}
-                className="absolute opacity-0 pointer-events-none" />
+              <input ref={attToRef} type="date" value={toDate} min={fromDate}
+                     onChange={e => setToDate(e.target.value)}
+                     className="absolute opacity-0 pointer-events-none" />
             </div>
-            {/* Filter */}
-            <div>
+
+            {/* Filter dropdown */}
+            <div className="relative">
               <label className="block text-sm font-medium text-gray-700 mb-2">Filter</label>
-              <select value={attendanceFilter} onChange={e => setAttendanceFilter(e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
-                <option value="all">All</option>
-                <option value="on-time">On-time</option>
-                <option value="late">Late</option>
-                <option value="leave">Leave</option>
-                <option value="absent">Absent</option>
+              <select
+                value={sectionFilter}
+                onChange={e => setSectionFilter(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white"
+              >
+                <option value="Attendance">Attendance</option>
+                <option value="Performance">Performance</option>
               </select>
             </div>
+
+            {/* Spacer */}
+            <div></div>
+
+            {/* Load button */}
             <div className="flex items-end">
-              <button onClick={fetchAttendanceOverview} disabled={attendanceLoading}
-                className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition disabled:opacity-50">
-                {attendanceLoading ? 'Loading...' : 'Load'}
+              <button onClick={loadSectionData} disabled={attendanceLoading || performanceLoading}
+                      className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition disabled:opacity-50">
+                {attendanceLoading || performanceLoading ? 'Loading...' : 'Load'}
               </button>
             </div>
           </div>
 
+          {/* Preset buttons */}
           <div className="flex flex-wrap gap-2 mb-6">
             {['today','week','month'].map(p => (
-              <button key={p} onClick={() => applyPreset(p, setAttendanceFromDate, setAttendanceToDate)}
-                className="px-3 py-1 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 text-sm capitalize">
+              <button key={p} onClick={() => applyPreset(p)}
+                      className="px-3 py-1 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 text-sm capitalize">
                 {p === 'today' ? 'Today' : p === 'week' ? 'This Week' : 'This Month'}
               </button>
             ))}
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div>
-              {attendanceChart.length > 0 ? (
-                <ResponsiveContainer width="100%" height={300}>
-                  <PieChart>
-                    <Pie data={attendanceChart} cx="50%" cy="50%" outerRadius={80}
-                      labelLine={false} label={({ name, percentage }) => `${name}: ${percentage}%`}
-                      dataKey="value">
-                      {attendanceChart.map((_, i) => (
-                        <Cell key={i} fill={COLORS[i % COLORS.length]} />
-                      ))}
-                    </Pie>
-                    <Tooltip />
-                  </PieChart>
-                </ResponsiveContainer>
-              ) : (
-                <div className="flex items-center justify-center h-64 text-gray-400">No data — click Load</div>
-              )}
-            </div>
-            <div className="space-y-2">
-              {attendanceChart.map((item, i) => (
-                <div key={i} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-                  <div className="w-4 h-4 rounded-full" style={{ backgroundColor: COLORS[i % COLORS.length] }} />
-                  <span className="font-medium text-gray-800">{item.name}</span>
-                  <span className="ml-auto text-gray-600">{item.value}</span>
-                  <span className="text-gray-500">({item.percentage}%)</span>
+          {/* Conditional rendering */}
+          {sectionFilter === 'Attendance' ? (
+            <>
+              {/* Attendance Chart + Table */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div>
+                  {attendanceChart.length > 0 ? (
+                    <ResponsiveContainer width="100%" height={300}>
+                      <PieChart>
+                        <Pie
+                          data={attendanceChart}
+                          cx="50%"
+                          cy="50%"
+                          outerRadius={80}
+                          labelLine={false}
+                          label={({ name, percentage }) => `${name}: ${percentage}%`}
+                          dataKey="value"
+                          onClick={(entry) => setClickedChartType(entry.name)}
+                        >
+                          {attendanceChart.map((_, i) => (
+                            <Cell key={i} fill={COLORS[i % COLORS.length]} />
+                          ))}
+                        </Pie>
+                        <Tooltip />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div className="flex items-center justify-center h-64 text-gray-400">No data — click Load</div>
+                  )}
                 </div>
-              ))}
-            </div>
-          </div>
 
-          {attendanceList.length > 0 && (
-            <div className="mt-6 border-t pt-6">
-              <h3 className="text-lg font-semibold text-gray-800 mb-4">Filtered List</h3>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead className="bg-gray-100">
-                    <tr>
-                      <th className="px-4 py-2 text-left">Date</th>
-                      <th className="px-4 py-2 text-left">Employee</th>
-                      <th className="px-4 py-2 text-left">Type</th>
-                      <th className="px-4 py-2 text-left">Reason</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y">
-                    {attendanceList.slice(0, 10).map((item, i) => (
-                      <tr key={i} className="hover:bg-gray-50">
-                        {/* FIX #5: item.date is already formatted by backend */}
-                        <td className="px-4 py-2">{item.date}</td>
-                        <td className="px-4 py-2">{item.name}</td>
-                        <td className="px-4 py-2">
-                          <span className={`px-2 py-1 rounded text-xs font-semibold ${
-                            item.type === 'On-time' ? 'bg-green-100 text-green-800' :
-                            item.type === 'Late'    ? 'bg-yellow-100 text-yellow-800' :
-                            item.type === 'Leave'   ? 'bg-blue-100 text-blue-800' :
-                                                      'bg-red-100 text-red-800'
-                          }`}>{item.type}</span>
-                        </td>
-                        <td className="px-4 py-2 text-gray-600">{item.reason}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                <div className="space-y-2">
+                  {attendanceChart.map((item, i) => (
+                    <div key={i} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+                      <div className="w-4 h-4 rounded-full" style={{ backgroundColor: COLORS[i % COLORS.length] }} />
+                      <span className="font-medium text-gray-800">{item.name}</span>
+                      <span className="ml-auto text-gray-600">{item.value}</span>
+                      <span className="text-gray-500">({item.percentage}%)</span>
+                    </div>
+                  ))}
+                </div>
               </div>
-              {attendanceList.length > 10 && (
-                <p className="text-sm text-gray-500 mt-2">Showing 10 of {attendanceList.length} records</p>
+
+              {clickedChartType && attendanceList.length > 0 && (
+                <div className="mt-6 border-t pt-6 max-h-96 overflow-y-auto">
+                  <h3 className="text-lg font-semibold text-gray-800 mb-4">{clickedChartType} Employees</h3>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead className="bg-gray-100">
+                        <tr>
+                          <th className="px-4 py-2 text-left">Employee</th>
+                          <th className="px-4 py-2 text-left">Type</th>
+                          <th className="px-4 py-2 text-left">Total {clickedChartType}</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y">
+                        {(() => {
+                          const filtered = attendanceList.filter(item =>
+                            item.type.toLowerCase() === clickedChartType.toLowerCase()
+                          );
+                          const grouped = filtered.reduce((acc, item) => {
+                            if (!acc[item.name]) acc[item.name] = 0;
+                            acc[item.name] += 1;
+                            return acc;
+                          }, {});
+                          return Object.entries(grouped).map(([name, count], i) => (
+                            <tr key={i} className="hover:bg-gray-50">
+                              <td className="px-4 py-2">{name}</td>
+                              <td className="px-4 py-2">{clickedChartType}</td>
+                              <td className="px-4 py-2 font-medium">{count}</td>
+                            </tr>
+                          ));
+                        })()}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
               )}
-            </div>
+            </>
+          ) : (
+            <>
+              {/* Performance Table */}
+              {performanceData.length > 0 ? (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead className="bg-gray-100">
+                      <tr>
+                        <th className="px-4 py-2 text-left">Employee</th>
+                        <th className="px-4 py-2 text-center">Score</th>
+                        <th className="px-4 py-2 text-center">Present</th>
+                        <th className="px-4 py-2 text-center">Absent</th>
+                        <th className="px-4 py-2 text-center">Late</th>
+                        <th className="px-4 py-2 text-center">Leave</th>
+                        <th className="px-4 py-2 text-left">Rating</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y">
+                      {performanceData.map(emp => (
+                        <tr key={emp.empId} className="hover:bg-gray-50">
+                          <td className="px-4 py-2 font-medium">
+                            {emp.name} <span className="text-xs text-gray-500">({emp.empId})</span>
+                          </td>
+                          <td className="px-4 py-2 text-center font-bold text-blue-600">{emp.performanceScore}</td>
+                          <td className="px-4 py-2 text-center text-green-600">{emp.presentDays}</td>
+                          <td className="px-4 py-2 text-center text-red-600">{emp.absentDays}</td>
+                          <td className="px-4 py-2 text-center text-yellow-600">{emp.lateDays}</td>
+                          <td className="px-4 py-2 text-center text-blue-600">{emp.leaveDays}</td>
+                          <td className="px-4 py-2">
+                            <span className={`px-2 py-1 rounded text-xs font-semibold ${
+                              emp.rating === 'Excellent' ? 'bg-green-100 text-green-800' :
+                              emp.rating === 'Good'      ? 'bg-blue-100 text-blue-800' :
+                              emp.rating === 'Average'   ? 'bg-yellow-100 text-yellow-800' :
+                                                           'bg-red-100 text-red-800'
+                            }`}>{emp.rating}</span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="text-center py-8 text-gray-400">No data — select a date range and click Load</div>
+              )}
+            </>
           )}
         </section>
-
         {/* ══════════════════════════════════════════════════════════════════
-            SECTION 2: PERFORMANCE
+            Section 2: Individual Attendance & Performance
         ══════════════════════════════════════════════════════════════════ */}
-        <section className="bg-white rounded-lg shadow p-6">
-          <h2 className="text-2xl font-bold text-gray-800 mb-6">Section 2: Performance Overview</h2>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-            <div className="relative">
-              <label className="block text-sm font-medium text-gray-700 mb-2">From</label>
-              <div onClick={() => perfFromRef.current?.showPicker()}
-                className="flex items-center justify-between w-full px-4 py-2 border border-gray-300 rounded-lg cursor-pointer bg-white">
-                <span>{formatDateToDisplay(performanceFromDate)}</span>
-                <Calendar size={18} className="text-gray-400" />
-              </div>
-              <input ref={perfFromRef} type="date" value={performanceFromDate}
-                onChange={e => setPerformanceFromDate(e.target.value)}
-                className="absolute opacity-0 pointer-events-none" />
-            </div>
-            <div className="relative">
-              <label className="block text-sm font-medium text-gray-700 mb-2">To</label>
-              <div onClick={() => perfToRef.current?.showPicker()}
-                className="flex items-center justify-between w-full px-4 py-2 border border-gray-300 rounded-lg cursor-pointer bg-white">
-                <span>{formatDateToDisplay(performanceToDate)}</span>
-                <Calendar size={18} className="text-gray-400" />
-              </div>
-              <input ref={perfToRef} type="date" value={performanceToDate} min={performanceFromDate}
-                onChange={e => setPerformanceToDate(e.target.value)}
-                className="absolute opacity-0 pointer-events-none" />
-            </div>
-            <div className="flex items-end">
-              <button onClick={fetchPerformanceOverview} disabled={performanceLoading}
-                className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition disabled:opacity-50">
-                {performanceLoading ? 'Loading...' : 'Load'}
-              </button>
-            </div>
-          </div>
+<section className="bg-white rounded-lg shadow p-6">
+  <h2 className="text-2xl font-bold text-gray-800 mb-6">Section 2: Individual Attendance & Performance</h2>
 
-          <div className="flex flex-wrap gap-2 mb-6">
-            {['today','week','month'].map(p => (
-              <button key={p} onClick={() => applyPreset(p, setPerformanceFromDate, setPerformanceToDate)}
-                className="px-3 py-1 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 text-sm capitalize">
-                {p === 'today' ? 'Today' : p === 'week' ? 'This Week' : 'This Month'}
-              </button>
-            ))}
-          </div>
+  {/* Date Range + Employee + Filter + Load */}
+  <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-4">
+    {/* From Date */}
+    <div className="relative">
+      <label className="block text-sm font-medium text-gray-700 mb-2">From</label>
+      <div onClick={() => attFromRef.current?.showPicker()}
+           className="flex items-center justify-between w-full px-4 py-2 border border-gray-300 rounded-lg cursor-pointer bg-white">
+        <span>{formatDateToDisplay(fromDate)}</span>
+        <Calendar size={18} className="text-gray-400" />
+      </div>
+      <input ref={attFromRef} type="date" value={fromDate} min={null}
+             onChange={e => setFromDate(e.target.value)}
+             className="absolute opacity-0 pointer-events-none" />
+    </div>
 
-          {performanceData.length > 0 ? (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="bg-gray-100">
-                  <tr>
-                    <th className="px-4 py-2 text-left">Employee</th>
-                    <th className="px-4 py-2 text-center">Score</th>
-                    <th className="px-4 py-2 text-center">Present</th>
-                    <th className="px-4 py-2 text-center">Absent</th>
-                    <th className="px-4 py-2 text-center">Late</th>
-                    <th className="px-4 py-2 text-center">Leave</th>
-                    <th className="px-4 py-2 text-left">Rating</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y">
-                  {/* FIX #6: use correct field names from backend response */}
-                  {performanceData.map(emp => (
-                    <tr key={emp.empId} className="hover:bg-gray-50">
-                      <td className="px-4 py-2 font-medium">
-                        {emp.name}
-                        <span className="text-xs text-gray-500 ml-1">({emp.empId})</span>
-                      </td>
-                      <td className="px-4 py-2 text-center font-bold text-blue-600">{emp.performanceScore}</td>
-                      {/* FIX #6: backend returns presentDays/absentDays/lateDays/leaveDays */}
-                      <td className="px-4 py-2 text-center text-green-600">{emp.presentDays}</td>
-                      <td className="px-4 py-2 text-center text-red-600">{emp.absentDays}</td>
-                      <td className="px-4 py-2 text-center text-yellow-600">{emp.lateDays}</td>
-                      <td className="px-4 py-2 text-center text-blue-600">{emp.leaveDays}</td>
-                      <td className="px-4 py-2">
-                        {/* FIX #6: backend returns 'rating' not 'status' */}
-                        <span className={`px-2 py-1 rounded text-xs font-semibold ${
-                          emp.rating === 'Excellent' ? 'bg-green-100 text-green-800' :
-                          emp.rating === 'Good'      ? 'bg-blue-100 text-blue-800' :
-                          emp.rating === 'Average'   ? 'bg-yellow-100 text-yellow-800' :
-                                                       'bg-red-100 text-red-800'
-                        }`}>{emp.rating}</span>
-                      </td>
+    {/* To Date */}
+    <div className="relative">
+      <label className="block text-sm font-medium text-gray-700 mb-2">To</label>
+      <div onClick={() => attToRef.current?.showPicker()}
+           className="flex items-center justify-between w-full px-4 py-2 border border-gray-300 rounded-lg cursor-pointer bg-white">
+        <span>{formatDateToDisplay(toDate)}</span>
+        <Calendar size={18} className="text-gray-400" />
+      </div>
+      <input ref={attToRef} type="date" value={toDate} min={fromDate}
+             onChange={e => setToDate(e.target.value)}
+             className="absolute opacity-0 pointer-events-none" />
+    </div>
+
+    {/* Section Filter */}
+    <div className="relative">
+      <label className="block text-sm font-medium text-gray-700 mb-2">View</label>
+      <select value={sectionFilter} onChange={e => setSectionFilter(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white">
+        <option value="Attendance">Attendance</option>
+        <option value="Performance">Performance</option>
+      </select>
+    </div>
+
+    {/* Employee Dropdown / Text Input */}
+    <div className="relative">
+  <label className="block text-sm font-medium text-gray-700 mb-2">Employee</label>
+  <input
+    type="text"
+    placeholder="Type or select employee"
+    value={selectedEmployee}
+    onChange={e => {
+      setSelectedEmployee(e.target.value);
+      setEmployeeDropdownOpen(true);
+    }}
+    onFocus={() => setEmployeeDropdownOpen(true)}
+    className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white"
+  />
+
+  {employeeDropdownOpen && (
+    <ul className="absolute z-50 w-full max-h-48 overflow-y-auto bg-white border border-gray-300 rounded-lg mt-1 shadow-lg">
+      {employees
+        .filter(emp => emp.name.toLowerCase().includes(selectedEmployee.toLowerCase()))
+        .map(emp => (
+          <li
+            key={emp.empId}
+            onClick={() => {
+              setSelectedEmployee(emp.name);
+              setEmployeeDropdownOpen(false);
+            }}
+            className="px-3 py-2 cursor-pointer hover:bg-gray-100"
+          >
+            {emp.name} ({emp.empId})
+          </li>
+        ))
+      }
+
+      {employees.filter(emp => emp.name.toLowerCase().includes(selectedEmployee.toLowerCase())).length === 0 && (
+        <li className="px-3 py-2 text-gray-400">No employee found</li>
+      )}
+    </ul>
+  )}
+</div>
+
+    {/* Load Button */}
+    <div className="flex items-end">
+      <button onClick={loadSectionData} disabled={attendanceLoading || performanceLoading}
+              className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition disabled:opacity-50">
+        {attendanceLoading || performanceLoading ? 'Loading...' : 'Load'}
+      </button>
+    </div>
+  </div>
+
+  {/* Preset Buttons */}
+  <div className="flex flex-wrap gap-2 mb-6">
+    {['today','week','month'].map(p => (
+      <button key={p} onClick={() => applyPreset(p)}
+              className="px-3 py-1 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 text-sm capitalize">
+        {p === 'today' ? 'Today' : p === 'week' ? 'This Week' : 'This Month'}
+      </button>
+    ))}
+  </div>
+
+  {/* Conditional Rendering */}
+  {sectionFilter === 'Attendance' ? (
+    <>
+      {/* Attendance Pie Chart */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div>
+          {attendanceChart.length > 0 ? (
+            <ResponsiveContainer width="100%" height={300}>
+              <PieChart>
+                <Pie
+                  data={attendanceChart}
+                  cx="50%"
+                  cy="50%"
+                  outerRadius={80}
+                  labelLine={false}
+                  label={({ name, percentage }) => `${name}: ${percentage}%`}
+                  dataKey="value"
+                  onClick={(entry) => setClickedChartType(entry.name)}
+                >
+                  {attendanceChart.map((_, i) => (
+                    <Cell key={i} fill={COLORS[i % COLORS.length]} />
+                  ))}
+                </Pie>
+                <Tooltip />
+              </PieChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="flex items-center justify-center h-64 text-gray-400">No data — click Load</div>
+          )}
+        </div>
+
+        {/* Attendance Summary List */}
+        <div className="space-y-2">
+          {attendanceChart.map((item, i) => (
+            <div key={i} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+              <div className="w-4 h-4 rounded-full" style={{ backgroundColor: COLORS[i % COLORS.length] }} />
+              <span className="font-medium text-gray-800">{item.name}</span>
+              <span className="ml-auto text-gray-600">{item.value}</span>
+              <span className="text-gray-500">({item.percentage}%)</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Drill-down Table */}
+      {clickedChartType && filteredAttendanceList.length > 0 && (
+  <div className="mt-6 border-t pt-6 max-h-96 overflow-y-auto">
+          <h3 className="text-lg font-semibold text-gray-800 mb-4">{clickedChartType} Employees</h3>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-gray-100">
+                <tr>
+                  <th className="px-4 py-2 text-left">Date</th>
+                  <th className="px-4 py-2 text-left">Attendance Type</th>
+                  <th className="px-4 py-2 text-left">Reason</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y">
+                {attendanceList
+                  .filter(item => item.type.toLowerCase() === clickedChartType.toLowerCase())
+                  .map((item, i) => (
+                    <tr key={i} className="hover:bg-gray-50">
+                      <td className="px-4 py-2">{item.date}</td>
+                      <td className="px-4 py-2">{item.type}</td>
+                      <td className="px-4 py-2">{item.reason || '-'}</td>
                     </tr>
                   ))}
-                </tbody>
-              </table>
-            </div>
-          ) : (
-            <div className="text-center py-8 text-gray-400">No data — select a date range and click Load</div>
-          )}
-        </section>
-
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </>
+  ) : (
+    <>
+      {/* Performance Table */}
+      {performanceData.length > 0 ? (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-gray-100">
+              <tr>
+                <th className="px-4 py-2 text-left">Employee</th>
+                <th className="px-4 py-2 text-center">Score</th>
+                <th className="px-4 py-2 text-center">Present</th>
+                <th className="px-4 py-2 text-center">Absent</th>
+                <th className="px-4 py-2 text-center">Late</th>
+                <th className="px-4 py-2 text-center">Leave</th>
+                <th className="px-4 py-2 text-left">Rating</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y">
+              {performanceData.map(emp => (
+                <tr key={emp.empId} className="hover:bg-gray-50">
+                  <td className="px-4 py-2 font-medium">{emp.name} <span className="text-xs text-gray-500">({emp.empId})</span></td>
+                  <td className="px-4 py-2 text-center font-bold text-blue-600">{emp.performanceScore}</td>
+                  <td className="px-4 py-2 text-center text-green-600">{emp.presentDays}</td>
+                  <td className="px-4 py-2 text-center text-red-600">{emp.absentDays}</td>
+                  <td className="px-4 py-2 text-center text-yellow-600">{emp.lateDays}</td>
+                  <td className="px-4 py-2 text-center text-blue-600">{emp.leaveDays}</td>
+                  <td className="px-4 py-2">
+                    <span className={`px-2 py-1 rounded text-xs font-semibold ${
+                      emp.rating === 'Excellent' ? 'bg-green-100 text-green-800' :
+                      emp.rating === 'Good'      ? 'bg-blue-100 text-blue-800' :
+                      emp.rating === 'Average'   ? 'bg-yellow-100 text-yellow-800' :
+                                                   'bg-red-100 text-red-800'
+                    }`}>{emp.rating}</span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <div className="text-center py-8 text-gray-400">No data — select a date range and click Load</div>
+      )}
+    </>
+  )}
+</section>
         {/* ══════════════════════════════════════════════════════════════════
             SECTION 3: SALARY
         ══════════════════════════════════════════════════════════════════ */}

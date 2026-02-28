@@ -22,9 +22,13 @@ export default function AdminDashboard() {
         headers: { Authorization: `Bearer ${token}` }
       });
 
-      const employees = response.data.employees || []; // Added fallback to empty array
-      const totalEmployees = employees.length;
-      const activeEmployees = employees.filter(e => e.status === 'Active').length;
+      const employees = response.data.employees || [];
+
+      // ✅ Only employees (exclude admins, managers, etc.)
+      const onlyEmployees = employees.filter(e => e.role === 'employee');
+
+      const totalEmployees = onlyEmployees.length;
+      const activeEmployees = onlyEmployees.filter(e => e.status === 'Active').length;
 
       setStats({
         totalEmployees,
@@ -84,9 +88,9 @@ export default function AdminDashboard() {
               />
 
               <DashboardStats
-                title="Live Payroll"
+                title="Live Payroll report"
                 value="PKR 12,450.00"
-                icon={<DollarSign size={32} />}
+                
                 color="bg-purple-500"
                 onClick={() => navigate('/admin/payroll')}
               />

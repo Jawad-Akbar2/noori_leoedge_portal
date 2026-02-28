@@ -15,7 +15,7 @@ const menuItems = [
   { icon: LayoutDashboard, label: 'Dashboard',     path: '/admin/dashboard' },
   { icon: Users,           label: 'Employees',     path: '/admin/employees' },
   { icon: Clock,           label: 'Attendance',    path: '/admin/attendance' },
-  { icon: BarChart3,       label: 'Payroll',       path: '/admin/payroll' },
+  { icon: BarChart3,       label: 'Report',       path: '/admin/payroll' },
   { icon: Bell,            label: 'Notifications', path: '/admin/notifications' }
 ];
 
