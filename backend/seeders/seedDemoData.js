@@ -103,11 +103,11 @@ const buildRecord = (emp, date) => {
     : [];
 
   // Random OT (~25 % chance for Present employees)
-  const hasOt       = isWorked && status === 'Present' && Math.random() < 0.25;
-  const otHours     = hasOt ? Math.round((Math.random() * 2 + 0.5) * 2) / 2 : 0; // 0.5–2.5 h
+  const hasOt        = isWorked && status === 'Present' && Math.random() < 0.25;
+  const otHours      = hasOt ? Math.round((Math.random() * 2 + 0.5) * 2) / 2 : 0; // 0.5–2.5 h
   const otMultiplier = hasOt ? [1, 1.5, 2][Math.floor(Math.random() * 3)] : 1;
-  const otAmount    = otHours * emp.hourlyRate * otMultiplier;
-  const otDetails   = hasOt
+  const otAmount     = otHours * emp.hourlyRate * otMultiplier;
+  const otDetails    = hasOt
     ? [{ type: 'calc', amount: otAmount, hours: otHours, rate: otMultiplier, reason: 'After-hours work', createdAt: new Date() }]
     : [];
 
@@ -127,8 +127,8 @@ const buildRecord = (emp, date) => {
       outNextDay
     },
     shift: {
-      start:       emp.shift.start,
-      end:         emp.shift.end,
+      start:        emp.shift.start,
+      end:          emp.shift.end,
       isNightShift: toMin(emp.shift.end) < toMin(emp.shift.start)
     },
     hourlyRate: emp.hourlyRate,
@@ -291,6 +291,13 @@ async function seedDemoData() {
     const employees = await Employee.find({ status: 'Active', isArchived: false, isDeleted: false });
     console.log(`✓ Found ${employees.length} active employees`);
 
+    // ── Filter to payroll-eligible employees only ──────────────────────────
+    // Skip admin / superadmin — they have no shift or salary data.
+    const payrollEmployees = employees.filter(
+      emp => emp.role === 'employee' && emp.shift?.start && emp.shift?.end && emp.salaryType
+    );
+    console.log(`  → ${payrollEmployees.length} payroll employees (${employees.length - payrollEmployees.length} system accounts skipped)`);
+
     // ── Date range: last 60 days ───────────────────────────────────────────
     const today = new Date();
     today.setHours(23, 59, 59, 999);
@@ -303,7 +310,7 @@ async function seedDemoData() {
 
     for (let d = new Date(rangeStart); d <= today; d.setDate(d.getDate() + 1)) {
       if (d.getDay() === 0 || d.getDay() === 6) continue;  // skip weekends
-      for (const emp of employees) {
+      for (const emp of payrollEmployees) {
         attendanceRecords.push(buildRecord(emp, d));
       }
     }
@@ -335,7 +342,7 @@ async function seedDemoData() {
 
       const workingDays = countWorkingDays(clampedStart, clampedEnd);
 
-      for (const emp of employees) {
+      for (const emp of payrollEmployees) {
         // Fetch this employee's attendance for the clamped period
         const records = attendanceRecords.filter(
           r => String(r.empId) === String(emp._id) &&

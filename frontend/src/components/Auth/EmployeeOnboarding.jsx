@@ -97,7 +97,7 @@ export default function EmployeeOnboarding() {
         ctxLogin(data.user, data.token);
         toast.success('Welcome! Your account is ready.');
         navigate(
-          data.user.role === 'admin' ? '/admin/dashboard' : '/employee/dashboard',
+          data.user.role === 'admin' || data.user.role === 'superadmin' ? '/admin/dashboard' : '/employee/dashboard',
           { replace: true }
         );
       } else {

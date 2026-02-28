@@ -7,9 +7,12 @@ import toast from 'react-hot-toast';
 import CSVImportModal from './CSVImportModal.jsx';
 import { getDateMinusDays, getTodayDate, parseDate } from '../../utils/dateFormatter.js';
 
+const PRIVILEGED_ROLES = ['admin', 'superadmin'];
+
 // ─── Attendance Form Modal (Add & Edit) ──────────────────────────────────────
-function AttendanceFormModal({ mode = 'add', record = null, onClose, onSuccess }) {
-  const isEdit = mode === 'edit';
+function AttendanceFormModal({ mode = 'add', record = null, onClose, onSuccess, currentUserRole }) {
+  const isEdit       = mode === 'edit';
+  const isSuperAdmin = currentUserRole === 'superadmin';
   const hiddenDateRef = useRef(null);
 
   const [form, setForm] = useState({
@@ -18,7 +21,6 @@ function AttendanceFormModal({ mode = 'add', record = null, onClose, onSuccess }
     status:           isEdit ? (record?.status || 'Present') : 'Present',
     inTime:           isEdit ? (record?.inTime  !== '--' ? record?.inTime  : '') : '',
     outTime:          isEdit ? (record?.outTime !== '--' ? record?.outTime : '') : '',
-    // FIX #1: outNextDay was completely missing from form state and payload
     outNextDay:       isEdit ? (record?.outNextDay || false) : false,
     deductionDetails: isEdit ? (record?.financials?.deductionDetails || []) : [],
     otDetails:        isEdit ? (record?.financials?.otDetails        || []) : [],
@@ -30,21 +32,26 @@ function AttendanceFormModal({ mode = 'add', record = null, onClose, onSuccess }
   const [loadingEmployees, setLoadingEmployees] = useState(false);
   const [saving, setSaving]                 = useState(false);
 
-  // Fetch employees for Add mode dropdown
   useEffect(() => {
     if (!isEdit) {
       setLoadingEmployees(true);
       const token = localStorage.getItem('token');
       axios.get('/api/employees?status=Active', { headers: { Authorization: `Bearer ${token}` } })
-        .then(res => setEmployees(res.data?.employees || res.data || []))
+        .then(res => {
+          let list = res.data?.employees || res.data || [];
+          // Admins cannot add attendance for admin/superadmin accounts
+          if (currentUserRole === 'admin') {
+            list = list.filter(emp => !PRIVILEGED_ROLES.includes(emp.role));
+          }
+          setEmployees(list);
+        })
         .catch(() => toast.error('Failed to load employees'))
         .finally(() => setLoadingEmployees(false));
     }
-  }, [isEdit]);
+  }, [isEdit, currentUserRole]);
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
-    // FIX #1: handle checkbox type for outNextDay
     setForm(prev => ({ ...prev, [name]: type === 'checkbox' ? checked : value }));
   };
 
@@ -98,7 +105,6 @@ function AttendanceFormModal({ mode = 'add', record = null, onClose, onSuccess }
         status:           form.status,
         inTime:           form.inTime  || null,
         outTime:          form.outTime || null,
-        // FIX #1: send outNextDay — backend save-row uses this for night-shift hour calculation
         outNextDay:       form.outNextDay || false,
         deductionDetails: form.deductionDetails,
         otDetails:        form.otDetails,
@@ -198,7 +204,6 @@ function AttendanceFormModal({ mode = 'add', record = null, onClose, onSuccess }
                     className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500" />
                 </div>
               </div>
-              {/* FIX #1: outNextDay checkbox — was entirely missing from the form */}
               <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer select-none">
                 <input type="checkbox" name="outNextDay" checked={form.outNextDay} onChange={handleChange}
                   className="w-4 h-4 rounded border-gray-300" />
@@ -300,7 +305,6 @@ export default function ManualAttendance() {
   const [toDate,          setToDate]          = useState(getTodayDate());
   const [showImportModal, setShowImportModal] = useState(false);
   const [refreshing,      setRefreshing]      = useState(false);
-  // FIX #2: avoid window access during SSR/initial render
   const [isMobile,        setIsMobile]        = useState(false);
 
   const hiddenFromDateRef = useRef(null);
@@ -310,11 +314,11 @@ export default function ManualAttendance() {
   const [editRecord,   setEditRecord]   = useState(null);
   const [detailsModal, setDetailsModal] = useState(null);
 
-  const userRole = localStorage.getItem('role');
-  const isAdmin  = userRole === 'admin';
+  const userRole     = localStorage.getItem('role');
+  const isSuperAdmin = userRole === 'superadmin';
+  const isAdmin      = userRole === 'admin' || isSuperAdmin;
 
   useEffect(() => {
-    // FIX #2: safely read window after mount
     setIsMobile(window.innerWidth < 768);
     const handleResize = () => setIsMobile(window.innerWidth < 768);
     window.addEventListener('resize', handleResize);
@@ -331,7 +335,19 @@ export default function ManualAttendance() {
         `/api/attendance/range?fromDate=${fromDate}&toDate=${toDate}`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
-      setAttendance(response.data?.attendance || []);
+
+      let records = response.data?.attendance || [];
+
+      // Admins cannot view attendance of admin/superadmin accounts
+      // (The employee's role may be embedded in the attendance record, or we filter by empRole)
+      if (userRole === 'admin') {
+        records = records.filter(r =>
+          !PRIVILEGED_ROLES.includes(r.empRole) &&
+          !PRIVILEGED_ROLES.includes(r.role)
+        );
+      }
+
+      setAttendance(records);
     } catch (error) {
       if      (error.response?.status === 401) toast.error('Unauthorized. Please login again.');
       else if (error.response?.status === 403) toast.error('You do not have permission to access this page.');
@@ -340,7 +356,7 @@ export default function ManualAttendance() {
     } finally {
       setLoading(false);
     }
-  }, [fromDate, toDate]);
+  }, [fromDate, toDate, userRole]);
 
   useEffect(() => { fetchAttendance(); }, [fetchAttendance]);
 
@@ -368,6 +384,23 @@ export default function ManualAttendance() {
     setter(`${d}/${m}/${y}`);
   };
 
+  // Guard: admin cannot edit attendance of a privileged account
+  const canEditRecord = (record) => {
+    if (isSuperAdmin) return true;
+    if (userRole === 'admin') {
+      return !PRIVILEGED_ROLES.includes(record.empRole) && !PRIVILEGED_ROLES.includes(record.role);
+    }
+    return false;
+  };
+
+  const handleEditClick = (record) => {
+    if (!canEditRecord(record)) {
+      toast.error('You do not have permission to edit attendance for admin or superadmin accounts');
+      return;
+    }
+    setEditRecord(record);
+  };
+
   const handleExport = () => {
     if (!attendance.length) { toast.error('No attendance data to export'); return; }
 
@@ -384,7 +417,6 @@ export default function ManualAttendance() {
         record.status                                     || '--',
         record.inTime                                     || '--',
         record.outTime                                    || '--',
-        // FIX #3: hoursPerDay → hoursWorked (matches AttendanceLog financials schema)
         (record.financials?.hoursWorked?.toFixed(2))     || '0.00',
         (record.financials?.otAmount?.toFixed(2))        || '0.00',
         (record.financials?.deduction?.toFixed(2))       || '0.00',
@@ -518,92 +550,108 @@ export default function ManualAttendance() {
                   </tr>
                 </thead>
                 <tbody className="divide-y">
-                  {attendance.map((record, idx) => (
-                    <tr key={record._id || idx} className="hover:bg-gray-50">
-                      <td className="px-4 py-3">{record.dateFormatted}</td>
-                      <td className="px-4 py-3 font-medium">{record.empNumber}</td>
-                      <td className="px-4 py-3">{record.empName}</td>
-                      <td className="px-4 py-3">{record.department}</td>
-                      <td className="px-4 py-3">
-                        <span className={`px-3 py-1 rounded-full text-xs font-semibold ${getStatusColor(record.status)}`}>
-                          {record.status}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-center">{record.inTime}</td>
-                      <td className="px-4 py-3 text-center">
-                        {record.outTime}
-                        {/* FIX #1: surface outNextDay indicator */}
-                        {record.outNextDay && <span className="ml-1 text-xs text-orange-500 font-medium">(+1)</span>}
-                      </td>
-                      {/* FIX #3: hoursPerDay → hoursWorked */}
-                      <td className="px-4 py-3 text-right">{(record.financials?.hoursWorked || 0).toFixed(2)}</td>
-                      <td className="px-4 py-3 text-right">
-                        <button type="button" onClick={() => setDetailsModal({ type: 'ot', record })}
-                          className="inline-flex items-center gap-1 text-blue-700 hover:text-blue-900">
-                          PKR {(record.financials?.otAmount || 0).toFixed(2)} <Eye size={12} />
-                        </button>
-                      </td>
-                      <td className="px-4 py-3 text-right">
-                        <button type="button" onClick={() => setDetailsModal({ type: 'deduction', record })}
-                          className="inline-flex items-center gap-1 text-red-700 hover:text-red-900">
-                          PKR {(record.financials?.deduction || 0).toFixed(2)} <Eye size={12} />
-                        </button>
-                      </td>
-                      <td className="px-4 py-3 text-right font-semibold">
-                        PKR {(record.financials?.finalDayEarning || 0).toFixed(2)}
-                      </td>
-                      <td className="px-4 py-3 text-xs text-gray-600">{record.lastModified}</td>
-                      {isAdmin && (
+                  {attendance.map((record, idx) => {
+                    const editable = canEditRecord(record);
+                    return (
+                      <tr key={record._id || idx} className="hover:bg-gray-50">
+                        <td className="px-4 py-3">{record.dateFormatted}</td>
+                        <td className="px-4 py-3 font-medium">{record.empNumber}</td>
+                        <td className="px-4 py-3">{record.empName}</td>
+                        <td className="px-4 py-3">{record.department}</td>
+                        <td className="px-4 py-3">
+                          <span className={`px-3 py-1 rounded-full text-xs font-semibold ${getStatusColor(record.status)}`}>
+                            {record.status}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-center">{record.inTime}</td>
                         <td className="px-4 py-3 text-center">
-                          <button onClick={() => setEditRecord(record)}
-                            className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-lg hover:bg-indigo-100 transition">
-                            <Pencil size={13} /> Edit
+                          {record.outTime}
+                          {record.outNextDay && <span className="ml-1 text-xs text-orange-500 font-medium">(+1)</span>}
+                        </td>
+                        <td className="px-4 py-3 text-right">{(record.financials?.hoursWorked || 0).toFixed(2)}</td>
+                        <td className="px-4 py-3 text-right">
+                          <button type="button" onClick={() => setDetailsModal({ type: 'ot', record })}
+                            className="inline-flex items-center gap-1 text-blue-700 hover:text-blue-900">
+                            PKR {(record.financials?.otAmount || 0).toFixed(2)} <Eye size={12} />
                           </button>
                         </td>
-                      )}
-                    </tr>
-                  ))}
+                        <td className="px-4 py-3 text-right">
+                          <button type="button" onClick={() => setDetailsModal({ type: 'deduction', record })}
+                            className="inline-flex items-center gap-1 text-red-700 hover:text-red-900">
+                            PKR {(record.financials?.deduction || 0).toFixed(2)} <Eye size={12} />
+                          </button>
+                        </td>
+                        <td className="px-4 py-3 text-right font-semibold">
+                          PKR {(record.financials?.finalDayEarning || 0).toFixed(2)}
+                        </td>
+                        <td className="px-4 py-3 text-xs text-gray-600">{record.lastModified}</td>
+                        {isAdmin && (
+                          <td className="px-4 py-3 text-center">
+                            <button
+                              onClick={() => handleEditClick(record)}
+                              disabled={!editable}
+                              title={!editable ? 'No permission to edit privileged account attendance' : undefined}
+                              className={`inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-lg transition ${
+                                editable
+                                  ? 'text-indigo-700 bg-indigo-50 border border-indigo-200 hover:bg-indigo-100'
+                                  : 'text-gray-400 bg-gray-50 border border-gray-200 opacity-50 cursor-not-allowed'
+                              }`}>
+                              <Pencil size={13} /> Edit
+                            </button>
+                          </td>
+                        )}
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
 
             {/* Mobile */}
             <div className="md:hidden space-y-3 p-4">
-              {attendance.map((record, idx) => (
-                <div key={record._id || idx} className="border rounded-lg p-4 bg-gray-50">
-                  <div className="flex justify-between items-start mb-2">
-                    <div>
-                      <p className="font-semibold text-gray-900">{record.empName}</p>
-                      <p className="text-xs text-gray-600">ID: {record.empNumber}</p>
+              {attendance.map((record, idx) => {
+                const editable = canEditRecord(record);
+                return (
+                  <div key={record._id || idx} className="border rounded-lg p-4 bg-gray-50">
+                    <div className="flex justify-between items-start mb-2">
+                      <div>
+                        <p className="font-semibold text-gray-900">{record.empName}</p>
+                        <p className="text-xs text-gray-600">ID: {record.empNumber}</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className={`px-2 py-1 rounded text-xs font-semibold ${getStatusColor(record.status)}`}>
+                          {record.status}
+                        </span>
+                        {isAdmin && (
+                          <button
+                            onClick={() => handleEditClick(record)}
+                            disabled={!editable}
+                            className={`p-1.5 rounded-lg border transition ${
+                              editable
+                                ? 'text-indigo-600 bg-indigo-50 border-indigo-200 hover:bg-indigo-100'
+                                : 'text-gray-300 bg-gray-50 border-gray-200 opacity-50 cursor-not-allowed'
+                            }`}>
+                            <Pencil size={13} />
+                          </button>
+                        )}
+                      </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <span className={`px-2 py-1 rounded text-xs font-semibold ${getStatusColor(record.status)}`}>
-                        {record.status}
-                      </span>
-                      {isAdmin && (
-                        <button onClick={() => setEditRecord(record)}
-                          className="p-1.5 text-indigo-600 bg-indigo-50 border border-indigo-200 rounded-lg hover:bg-indigo-100 transition">
-                          <Pencil size={13} />
-                        </button>
-                      )}
+                    <div className="space-y-1 text-sm">
+                      <p><span className="font-medium">Date:</span> {record.dateFormatted}</p>
+                      <p><span className="font-medium">Dept:</span> {record.department}</p>
+                      <p>
+                        <span className="font-medium">In/Out:</span> {record.inTime} - {record.outTime}
+                        {record.outNextDay && <span className="ml-1 text-xs text-orange-500">(+1 day)</span>}
+                      </p>
+                      <p><span className="font-medium">Hours:</span> {(record.financials?.hoursWorked || 0).toFixed(2)}</p>
+                      <p><span className="font-medium">OT:</span> PKR {(record.financials?.otAmount || 0).toFixed(2)}</p>
+                      <p><span className="font-medium">Deduction:</span> PKR {(record.financials?.deduction || 0).toFixed(2)}</p>
+                      <p><span className="font-medium">Earning:</span> PKR {(record.financials?.finalDayEarning || 0).toFixed(2)}</p>
+                      <p className="text-xs text-gray-500"><span className="font-medium">Modified:</span> {record.lastModified}</p>
                     </div>
                   </div>
-                  <div className="space-y-1 text-sm">
-                    <p><span className="font-medium">Date:</span> {record.dateFormatted}</p>
-                    <p><span className="font-medium">Dept:</span> {record.department}</p>
-                    <p>
-                      <span className="font-medium">In/Out:</span> {record.inTime} - {record.outTime}
-                      {record.outNextDay && <span className="ml-1 text-xs text-orange-500">(+1 day)</span>}
-                    </p>
-                    {/* FIX #3: hoursPerDay → hoursWorked */}
-                    <p><span className="font-medium">Hours:</span> {(record.financials?.hoursWorked || 0).toFixed(2)}</p>
-                    <p><span className="font-medium">OT:</span> PKR {(record.financials?.otAmount || 0).toFixed(2)}</p>
-                    <p><span className="font-medium">Deduction:</span> PKR {(record.financials?.deduction || 0).toFixed(2)}</p>
-                    <p><span className="font-medium">Earning:</span> PKR {(record.financials?.finalDayEarning || 0).toFixed(2)}</p>
-                    <p className="text-xs text-gray-500"><span className="font-medium">Modified:</span> {record.lastModified}</p>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </>
         )}
@@ -614,14 +662,21 @@ export default function ManualAttendance() {
         <CSVImportModal onClose={() => setShowImportModal(false)} onSuccess={handleImportSuccess} />
       )}
       {showAddModal && (
-        <AttendanceFormModal mode="add"
+        <AttendanceFormModal
+          mode="add"
+          currentUserRole={userRole}
           onClose={() => setShowAddModal(false)}
-          onSuccess={fetchAttendance} />
+          onSuccess={fetchAttendance}
+        />
       )}
       {editRecord && (
-        <AttendanceFormModal mode="edit" record={editRecord}
+        <AttendanceFormModal
+          mode="edit"
+          record={editRecord}
+          currentUserRole={userRole}
           onClose={() => setEditRecord(null)}
-          onSuccess={fetchAttendance} />
+          onSuccess={fetchAttendance}
+        />
       )}
 
       {/* OT / Deduction detail popup */}

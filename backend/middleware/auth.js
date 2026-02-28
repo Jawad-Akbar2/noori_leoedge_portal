@@ -1,7 +1,7 @@
 // middleware/auth.js
 
-import jwt from 'jsonwebtoken';
-import Employee from '../models/Employee.js';
+import jwt from "jsonwebtoken";
+import Employee from "../models/Employee.js";
 
 // ─── shared token → user resolution ──────────────────────────────────────────
 
@@ -10,10 +10,10 @@ import Employee from '../models/Employee.js';
  * Returns the employee on success, or sends the error response and returns null.
  */
 async function resolveUser(req, res) {
-  const token = req.headers.authorization?.split(' ')[1];
+  const token = req.headers.authorization?.split(" ")[1];
 
   if (!token) {
-    res.status(401).json({ success: false, message: 'No token provided' });
+    res.status(401).json({ success: false, message: "No token provided" });
     return null;
   }
 
@@ -21,29 +21,37 @@ async function resolveUser(req, res) {
   try {
     decoded = jwt.verify(token, process.env.JWT_SECRET);
   } catch (err) {
-    const message = err.name === 'TokenExpiredError' ? 'Token expired' : 'Invalid token';
+    const message =
+      err.name === "TokenExpiredError" ? "Token expired" : "Invalid token";
     res.status(401).json({ success: false, message });
     return null;
   }
 
-  const user = await Employee.findById(decoded.id).select('-password -tempPassword');
+  const user = await Employee.findById(decoded.id).select(
+    "-password -tempPassword",
+  );
 
   if (!user || user.isDeleted) {
-    res.status(401).json({ success: false, message: 'User not found' });
+    res.status(401).json({ success: false, message: "User not found" });
     return null;
   }
 
   // Frozen accounts cannot access anything
-  if (user.status === 'Frozen') {
-    res.status(403).json({ success: false, message: 'Account is frozen. Contact admin.' });
+  if (user.status === "Frozen") {
+    res
+      .status(403)
+      .json({
+        success: false,
+        message: "Account is frozen. Contact admin/super admin.",
+      });
     return null;
   }
 
   // Role is the source of truth from the DB, not the token payload.
   // Token role is kept for quick reads but DB always wins.
-  req.user   = user;
+  req.user = user;
   req.userId = String(user._id);
-  req.role   = user.role;   // 'admin' | 'employee'
+  req.role = user.role; // 'admin' | 'employee'
 
   return user;
 }
@@ -59,7 +67,9 @@ async function auth(req, res, next) {
     if (!user) return;
     next();
   } catch (err) {
-    res.status(500).json({ success: false, message: 'Auth error', error: err.message });
+    res
+      .status(500)
+      .json({ success: false, message: "Auth error", error: err.message });
   }
 }
 
@@ -71,13 +81,17 @@ async function adminAuth(req, res, next) {
     const user = await resolveUser(req, res);
     if (!user) return;
 
-    if (user.role !== 'admin') {
-      return res.status(403).json({ success: false, message: 'Admin access required' });
+    if (!["admin", "superadmin"].includes(user.role)) {
+      return res
+        .status(403)
+        .json({ success: false, message: "Admin access required" });
     }
 
     next();
   } catch (err) {
-    res.status(500).json({ success: false, message: 'Auth error', error: err.message });
+    res
+      .status(500)
+      .json({ success: false, message: "Auth error", error: err.message });
   }
 }
 
@@ -90,17 +104,23 @@ async function employeeAuth(req, res, next) {
     const user = await resolveUser(req, res);
     if (!user) return;
 
-    if (user.role !== 'employee') {
-      return res.status(403).json({ success: false, message: 'Employee access required' });
+    if (user.role !== "employee") {
+      return res
+        .status(403)
+        .json({ success: false, message: "Employee access required" });
     }
 
-    if (user.status !== 'Active') {
-      return res.status(403).json({ success: false, message: 'Account is not active' });
+    if (user.status !== "Active") {
+      return res
+        .status(403)
+        .json({ success: false, message: "Account is not active" });
     }
 
     next();
   } catch (err) {
-    res.status(500).json({ success: false, message: 'Auth error', error: err.message });
+    res
+      .status(500)
+      .json({ success: false, message: "Auth error", error: err.message });
   }
 }
 

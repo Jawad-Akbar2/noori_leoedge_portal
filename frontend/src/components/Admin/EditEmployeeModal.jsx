@@ -1,10 +1,15 @@
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
-import { X, Save, AlertCircle, Calendar } from 'lucide-react';
+import { X, Save, AlertCircle, Calendar, Shield } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { formatToDDMMYYYY } from '../../utils/dateFormatter';
 
-export default function EditEmployeeModal({ employee, onClose, onSave }) {
+// currentUserRole passed from ManageEmployees
+export default function EditEmployeeModal({ employee, onClose, onSave, currentUserRole }) {
+  const isSuperAdmin = currentUserRole === 'superadmin';
+  // The role of the employee being edited (not the logged-in user)
+  const targetRole   = employee?.role || 'employee';
+
   const [activeTab, setActiveTab] = useState('basic');
   const [loading, setLoading] = useState(false);
   const [dataLoading, setDataLoading] = useState(true);
@@ -12,52 +17,51 @@ export default function EditEmployeeModal({ employee, onClose, onSave }) {
   const dateInputRef = useRef(null);
 
   const [formData, setFormData] = useState({
-    firstName:     '',
-    lastName:      '',
-    email:         '',
+    firstName:      '',
+    lastName:       '',
+    email:          '',
     employeeNumber: '',
-    department:    'IT',
-    joiningDate:   '',
-    shift:         { start: '09:00', end: '18:00' },
-    // FIX #1: added salaryType + monthlySalary to match model & PUT route
-    salaryType:    'hourly',
-    hourlyRate:    0,
-    monthlySalary: '',
-    bank:          { bankName: '', accountName: '', accountNumber: '' }
+    department:     'IT',
+    role:           'employee',
+    joiningDate:    '',
+    shift:          { start: '09:00', end: '18:00' },
+    salaryType:     'hourly',
+    hourlyRate:     0,
+    monthlySalary:  '',
+    bank:           { bankName: '', accountName: '', accountNumber: '' }
   });
 
   const [errors, setErrors] = useState({});
 
-  // ── Load fresh data from backend on mount ──────────────────────────────────
   useEffect(() => {
     const loadEmployeeData = async () => {
       setDataLoading(true);
       setError(null);
       try {
         const token = localStorage.getItem('token');
-        // FIX #2: backend returns { success, employee } — was reading response.data directly
         const response = await axios.get(`/api/employees/${employee._id}`, {
           headers: { Authorization: `Bearer ${token}` }
         });
 
-        const emp = response.data.employee; // correct shape from GET /api/employees/:id
+        const emp = response.data.employee;
 
         setFormData({
-          firstName:     emp.firstName     || '',
-          lastName:      emp.lastName      || '',
-          email:         emp.email         || '',
+          firstName:      emp.firstName      || '',
+          lastName:       emp.lastName       || '',
+          email:          emp.email          || '',
           employeeNumber: emp.employeeNumber || '',
-          department:    emp.department    || 'IT',
-          joiningDate:   emp.joiningDate
+          department:     emp.department     || 'IT',
+          role:           emp.role           || 'employee',
+          joiningDate:    emp.joiningDate
             ? new Date(emp.joiningDate).toISOString().split('T')[0]
             : '',
-          shift:         emp.shift         || { start: '09:00', end: '18:00' },
-          salaryType:    emp.salaryType    || 'hourly',
-          hourlyRate:    emp.hourlyRate    || 0,
-          monthlySalary: emp.monthlySalary || '',
-          bank:          emp.bank          || { bankName: '', accountName: '', accountNumber: '' }
+          shift:          emp.shift          || { start: '09:00', end: '18:00' },
+          salaryType:     emp.salaryType     || 'hourly',
+          hourlyRate:     emp.hourlyRate     || 0,
+          monthlySalary:  emp.monthlySalary  || '',
+          bank:           emp.bank           || { bankName: '', accountName: '', accountNumber: '' }
         });
-      } catch (err) {
+      } catch {
         setError('Failed to load employee data. Employee may no longer exist.');
       } finally {
         setDataLoading(false);
@@ -91,12 +95,11 @@ export default function EditEmployeeModal({ employee, onClose, onSave }) {
     return ((endMin - startMin) / 60 * 22 * parseFloat(formData.hourlyRate)).toFixed(2);
   };
 
-  // FIX #3: proper field-level validation (was toast-only with early returns)
   const validateForm = () => {
     const newErrors = {};
 
-    if (!formData.firstName.trim())  newErrors.firstName = 'First name is required';
-    if (!formData.lastName.trim())   newErrors.lastName  = 'Last name is required';
+    if (!formData.firstName.trim()) newErrors.firstName = 'First name is required';
+    if (!formData.lastName.trim())  newErrors.lastName  = 'Last name is required';
     if (!isValidTime(formData.shift.start)) newErrors.shiftStart = 'Invalid shift start (HH:mm)';
     if (!isValidTime(formData.shift.end))   newErrors.shiftEnd   = 'Invalid shift end (HH:mm)';
 
@@ -104,13 +107,11 @@ export default function EditEmployeeModal({ employee, onClose, onSave }) {
       if (!formData.hourlyRate || parseFloat(formData.hourlyRate) <= 0)
         newErrors.hourlyRate = 'Hourly rate must be greater than 0';
     }
-    // FIX #1: validate monthlySalary for monthly employees
     if (formData.salaryType === 'monthly') {
       if (!formData.monthlySalary || parseFloat(formData.monthlySalary) <= 0)
         newErrors.monthlySalary = 'Monthly salary is required and must be greater than 0';
     }
 
-    // FIX #4: auto-switch to tab containing first error
     if (Object.keys(newErrors).length > 0) {
       if (newErrors.firstName || newErrors.lastName) {
         setActiveTab('basic');
@@ -135,7 +136,6 @@ export default function EditEmployeeModal({ employee, onClose, onSave }) {
     try {
       const token = localStorage.getItem('token');
 
-      // FIX #1: send salaryType + monthlySalary — backend PUT route supports these
       const payload = {
         firstName:     formData.firstName,
         lastName:      formData.lastName,
@@ -143,12 +143,11 @@ export default function EditEmployeeModal({ employee, onClose, onSave }) {
         shift:         formData.shift,
         salaryType:    formData.salaryType,
         hourlyRate:    parseFloat(formData.hourlyRate) || 0,
-        monthlySalary: formData.salaryType === 'monthly'
-                         ? parseFloat(formData.monthlySalary)
-                         : null,
+        monthlySalary: formData.salaryType === 'monthly' ? parseFloat(formData.monthlySalary) : null,
         bank:          formData.bank,
-        // FIX #5: send joiningDate so backend can update it if changed
-        joiningDate:   formatToDDMMYYYY(formData.joiningDate)
+        joiningDate:   formatToDDMMYYYY(formData.joiningDate),
+        // Only superadmin can change the role field
+        ...(isSuperAdmin && { role: formData.role })
       };
 
       await axios.put(`/api/employees/${employee._id}`, payload, {
@@ -156,7 +155,6 @@ export default function EditEmployeeModal({ employee, onClose, onSave }) {
       });
 
       toast.success('Employee updated successfully');
-      // FIX #6: call onSave so parent list refreshes
       if (onSave) onSave();
       onClose();
     } catch (err) {
@@ -166,7 +164,9 @@ export default function EditEmployeeModal({ employee, onClose, onSave }) {
     }
   };
 
-  // ── Error state ────────────────────────────────────────────────────────────
+  // Whether this employee being edited is a privileged account
+  const editingPrivilegedAccount = ['admin', 'superadmin'].includes(targetRole);
+
   if (error) {
     return (
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
@@ -185,7 +185,6 @@ export default function EditEmployeeModal({ employee, onClose, onSave }) {
     );
   }
 
-  // ── Loading state ──────────────────────────────────────────────────────────
   if (dataLoading) {
     return (
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
@@ -202,16 +201,33 @@ export default function EditEmployeeModal({ employee, onClose, onSave }) {
       <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
 
         {/* Header */}
-        <div className="sticky top-0 bg-white border-b p-6 flex items-center justify-between">
+        <div className={`sticky top-0 border-b p-6 flex items-center justify-between ${editingPrivilegedAccount ? 'bg-purple-50' : 'bg-white'}`}>
           <div>
             <h2 className="text-2xl font-bold text-gray-800">Edit Employee</h2>
-            <p className="text-sm text-gray-600 mt-1">{formData.firstName} {formData.lastName}</p>
+            <p className="text-sm text-gray-600 mt-1">
+              {formData.firstName} {formData.lastName}
+              {editingPrivilegedAccount && (
+                <span className="ml-2 inline-flex items-center gap-1 text-xs text-purple-700 font-semibold">
+                  <Shield size={11} /> {targetRole}
+                </span>
+              )}
+            </p>
           </div>
           <button onClick={onClose} disabled={loading}
             className="text-gray-400 hover:text-gray-600 disabled:opacity-50">
             <X size={24} />
           </button>
         </div>
+
+        {/* Privileged account notice */}
+        {editingPrivilegedAccount && (
+          <div className="mx-6 mt-4 bg-purple-50 border border-purple-200 rounded-lg p-3 flex items-start gap-2">
+            <Shield size={16} className="text-purple-600 mt-0.5 flex-shrink-0" />
+            <p className="text-sm text-purple-800">
+              You are editing a <strong>{targetRole}</strong> account. Role changes here take effect immediately and will change their system access level.
+            </p>
+          </div>
+        )}
 
         {/* Tabs */}
         <div className="border-b">
@@ -243,23 +259,18 @@ export default function EditEmployeeModal({ employee, onClose, onSave }) {
                   <label className="block text-sm font-medium text-gray-700 mb-2">First Name *</label>
                   <input type="text" name="firstName" value={formData.firstName}
                     onChange={handleInputChange} disabled={loading}
-                    className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 ${
-                      errors.firstName ? 'border-red-500' : 'border-gray-300'
-                    }`} />
+                    className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 ${errors.firstName ? 'border-red-500' : 'border-gray-300'}`} />
                   {errors.firstName && <p className="text-xs text-red-600 mt-1">{errors.firstName}</p>}
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Last Name *</label>
                   <input type="text" name="lastName" value={formData.lastName}
                     onChange={handleInputChange} disabled={loading}
-                    className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 ${
-                      errors.lastName ? 'border-red-500' : 'border-gray-300'
-                    }`} />
+                    className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 ${errors.lastName ? 'border-red-500' : 'border-gray-300'}`} />
                   {errors.lastName && <p className="text-xs text-red-600 mt-1">{errors.lastName}</p>}
                 </div>
               </div>
 
-              {/* Read-only fields */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Email (Read-only)</label>
                 <input type="email" value={formData.email} readOnly
@@ -274,7 +285,6 @@ export default function EditEmployeeModal({ employee, onClose, onSave }) {
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Department</label>
-                {/* FIX: Manager option included — matches model enum */}
                 <select name="department" value={formData.department}
                   onChange={handleInputChange} disabled={loading}
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100">
@@ -286,6 +296,39 @@ export default function EditEmployeeModal({ employee, onClose, onSave }) {
                   <option value="Finance">Finance</option>
                 </select>
               </div>
+
+              {/* ── Role field — superadmin only ───────────────────────── */}
+              {isSuperAdmin ? (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Role <span className="text-red-500">*</span>
+                  </label>
+                  <select name="role" value={formData.role}
+                    onChange={handleInputChange} disabled={loading}
+                    className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 ${
+                      ['admin','superadmin'].includes(formData.role)
+                        ? 'border-purple-400 bg-purple-50 text-purple-900 font-medium'
+                        : 'border-gray-300'
+                    }`}>
+                    <option value="employee">Employee</option>
+                    <option value="admin">Admin</option>
+                    <option value="superadmin">Superadmin</option>
+                  </select>
+                  {['admin','superadmin'].includes(formData.role) && (
+                    <p className="text-xs text-purple-700 mt-1 flex items-center gap-1">
+                      <Shield size={11} />
+                      This account has {formData.role}-level system access.
+                    </p>
+                  )}
+                </div>
+              ) : (
+                /* Admin sees role as read-only */
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Role (Read-only)</label>
+                  <input type="text" value={formData.role || 'employee'} readOnly
+                    className="w-full px-4 py-2 bg-gray-100 border border-gray-300 rounded-lg text-gray-600 cursor-not-allowed capitalize" />
+                </div>
+              )}
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Joining Date (Read-only)</label>
@@ -305,9 +348,7 @@ export default function EditEmployeeModal({ employee, onClose, onSave }) {
                   <label className="block text-sm font-medium text-gray-700 mb-2">Shift Start (HH:mm) *</label>
                   <input type="text" name="shift.start" value={formData.shift.start}
                     onChange={handleInputChange} disabled={loading} placeholder="09:00"
-                    className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 ${
-                      errors.shiftStart ? 'border-red-500' : 'border-gray-300'
-                    }`} />
+                    className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 ${errors.shiftStart ? 'border-red-500' : 'border-gray-300'}`} />
                   {errors.shiftStart && <p className="text-xs text-red-600 mt-1">{errors.shiftStart}</p>}
                   <p className="text-xs text-gray-500 mt-1">24-hour format</p>
                 </div>
@@ -315,15 +356,12 @@ export default function EditEmployeeModal({ employee, onClose, onSave }) {
                   <label className="block text-sm font-medium text-gray-700 mb-2">Shift End (HH:mm) *</label>
                   <input type="text" name="shift.end" value={formData.shift.end}
                     onChange={handleInputChange} disabled={loading} placeholder="18:00"
-                    className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 ${
-                      errors.shiftEnd ? 'border-red-500' : 'border-gray-300'
-                    }`} />
+                    className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 ${errors.shiftEnd ? 'border-red-500' : 'border-gray-300'}`} />
                   {errors.shiftEnd && <p className="text-xs text-red-600 mt-1">{errors.shiftEnd}</p>}
                   <p className="text-xs text-gray-500 mt-1">24-hour format</p>
                 </div>
               </div>
 
-              {/* FIX #1: Salary type selector */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Salary Type *</label>
                 <select name="salaryType" value={formData.salaryType}
@@ -334,37 +372,27 @@ export default function EditEmployeeModal({ employee, onClose, onSave }) {
                 </select>
               </div>
 
-              {/* Hourly Rate — only for hourly employees */}
               {formData.salaryType === 'hourly' && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Hourly Rate (PKR) *</label>
                   <input type="number" name="hourlyRate" value={formData.hourlyRate}
                     onChange={handleInputChange} disabled={loading} step="10" min="0"
-                    className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 ${
-                      errors.hourlyRate ? 'border-red-500' : 'border-gray-300'
-                    }`} />
+                    className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 ${errors.hourlyRate ? 'border-red-500' : 'border-gray-300'}`} />
                   {errors.hourlyRate && <p className="text-xs text-red-600 mt-1">{errors.hourlyRate}</p>}
                 </div>
               )}
 
-              {/* FIX #1: Monthly salary — only for monthly employees */}
               {formData.salaryType === 'monthly' && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Monthly Salary (PKR) *</label>
                   <input type="number" name="monthlySalary" value={formData.monthlySalary}
-                    onChange={handleInputChange} disabled={loading} step="100" min="0"
-                    placeholder="e.g. 50000"
-                    className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 ${
-                      errors.monthlySalary ? 'border-red-500' : 'border-gray-300'
-                    }`} />
+                    onChange={handleInputChange} disabled={loading} step="100" min="0" placeholder="e.g. 50000"
+                    className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 ${errors.monthlySalary ? 'border-red-500' : 'border-gray-300'}`} />
                   {errors.monthlySalary && <p className="text-xs text-red-600 mt-1">{errors.monthlySalary}</p>}
-                  <p className="text-xs text-gray-500 mt-1">
-                    Effective hourly rate is derived automatically for payroll calculations.
-                  </p>
+                  <p className="text-xs text-gray-500 mt-1">Effective hourly rate is derived automatically for payroll calculations.</p>
                 </div>
               )}
 
-              {/* Salary preview */}
               <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
                 {formData.salaryType === 'hourly' ? (
                   <>
@@ -383,9 +411,7 @@ export default function EditEmployeeModal({ employee, onClose, onSave }) {
                     <p className="text-3xl font-bold text-blue-600">
                       PKR {formData.monthlySalary ? parseFloat(formData.monthlySalary).toFixed(2) : '0.00'}
                     </p>
-                    <p className="text-xs text-gray-500 mt-2">
-                      Pro-rated by actual working days attended each pay period.
-                    </p>
+                    <p className="text-xs text-gray-500 mt-2">Pro-rated by actual working days attended each pay period.</p>
                   </>
                 )}
               </div>

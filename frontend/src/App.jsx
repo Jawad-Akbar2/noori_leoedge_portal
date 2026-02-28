@@ -113,7 +113,7 @@ function RootRedirect() {
   if (loading) return null;   // AuthProvider is still validating token
 
   if (user && role) {
-    return <Navigate to={role === 'admin' ? '/admin/dashboard' : '/employee/dashboard'} replace />;
+    return <Navigate to={role === 'admin' || role === 'superadmin' ? '/admin/dashboard' : '/employee/dashboard'} replace />;
   }
 
   return <Navigate to="/login" replace />;
@@ -135,7 +135,7 @@ export default function App() {
             <Route
               path="/admin/*"
               element={
-                <ProtectedRoute requiredRole="admin">
+                <ProtectedRoute requiredRole={["admin", "superadmin"]} >
                   <AdminLayoutWrapper />
                 </ProtectedRoute>
               }

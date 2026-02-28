@@ -1,10 +1,11 @@
 // seeders/seedAdmin.js
 //
 // Creates:
-//   1. Admin user
-//   2. Day-shift employee  (hourly)
-//   3. Night-shift employee (monthly) — needed to test CSV night-shift import (req #4)
-//   4. A few more employees across departments for performance/payroll charts
+//   1. Superadmin users      (no salary / shift — system owners, not payroll employees)
+//   2. Admin user            (no salary / shift)
+//   3. Day-shift employees   (hourly)
+//   4. Night-shift employee  (monthly) — needed to test CSV night-shift import (req #4)
+//   5. A few more employees across departments for performance/payroll charts
 
 import mongoose from 'mongoose';
 import Employee from '../models/Employee.js';
@@ -13,7 +14,34 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 const EMPLOYEES = [
-  // ── Admin ──────────────────────────────────────────────────────────────────
+  // ── Super Admins ─────────────────────────────────────────────────────────────
+  // System accounts — no shift, no salary.
+  // The pre-validate hook in Employee.js will enforce null for these fields.
+  {
+    email:          'waleed@leoedgeconsulting.com',
+    employeeNumber: 'superadmin001',
+    firstName:      'waleed',
+    lastName:       'raja',
+    department:     'Manager',
+    role:           'superadmin',
+    joiningDate:    new Date(),
+    status:         'Active',
+    password:       'Admin@123456'
+  },
+  {
+    email:          'jawadakbar770@gmail.com',
+    employeeNumber: 'superadmin002',
+    firstName:      'jawad',
+    lastName:       'akbar',
+    department:     'Manager',
+    role:           'superadmin',
+    joiningDate:    new Date(),
+    status:         'Active',
+    password:       'Admin@123456'
+  },
+
+  // ── Admin ─────────────────────────────────────────────────────────────────────
+  // System account — no shift, no salary.
   {
     email:          'admin@example.com',
     employeeNumber: 'ADMIN001',
@@ -22,15 +50,11 @@ const EMPLOYEES = [
     department:     'Manager',
     role:           'admin',
     joiningDate:    new Date(),
-    shift:          { start: '09:00', end: '18:00' },
-    salaryType:     'monthly',
-    hourlyRate:     500,
-    monthlySalary:  150000,
     status:         'Active',
     password:       'Admin@123456'
   },
 
-  // ── Day-shift employees (hourly) ───────────────────────────────────────────
+  // ── Day-shift employees (hourly) ────────────────────────────────────────────
   {
     email:          'john.doe@example.com',
     employeeNumber: 'EMP001',
@@ -107,7 +131,7 @@ const EMPLOYEES = [
     password:       'Employee@123456'
   },
 
-  // ── Night-shift employee (monthly) ────────────────────────────────────────
+  // ── Night-shift employee (monthly) ──────────────────────────────────────────
   // Used specifically to test CSV import with the 14-hour window rule (req #4).
   // shift.end < shift.start  →  isNightShift = true (set in AttendanceLog pre-save)
   {
@@ -143,13 +167,19 @@ async function seedAdmin() {
       const emp = new Employee(data);
       await emp.save();
 
-      console.log(`✓ Created [${emp.role.padEnd(8)}] ${emp.firstName} ${emp.lastName}`);
+      const isSystem = emp.isSystemAccount();
+      console.log(`✓ Created [${emp.role.padEnd(10)}] ${emp.firstName} ${emp.lastName}`);
       console.log(`    email    : ${emp.email}`);
       console.log(`    empNo    : ${emp.employeeNumber}`);
-      console.log(`    shift    : ${emp.shift.start} – ${emp.shift.end}`);
-      console.log(`    salary   : ${emp.salaryType === 'monthly'
-        ? `monthly = ${emp.monthlySalary}`
-        : `hourly  = ${emp.hourlyRate}/hr`}`);
+      if (isSystem) {
+        console.log(`    shift    : N/A (system account)`);
+        console.log(`    salary   : N/A (system account)`);
+      } else {
+        console.log(`    shift    : ${emp.shift.start} – ${emp.shift.end}`);
+        console.log(`    salary   : ${emp.salaryType === 'monthly'
+          ? `monthly = PKR ${emp.monthlySalary}`
+          : `hourly  = PKR ${emp.hourlyRate}/hr`}`);
+      }
     }
 
     console.log('\n✓ seedAdmin complete');
