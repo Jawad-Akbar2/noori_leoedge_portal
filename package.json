@@ -1,26 +1,14 @@
 {
   "name": "hr-employee-portal",
   "version": "1.1.0",
-  "description": "Full Stack MERN HR Employee Portal with Role-Based Authentication",
-  "main": "server.js",
   "scripts": {
     "dev": "concurrently \"npm run server\" \"npm run client\"",
     "server": "cd backend && nodemon server.js",
     "client": "cd frontend && npm start",
     "build": "cd frontend && npm run build",
-    "start": "cd backend && node server.js"
+    "start": "cd backend && node server.js",
+    "vercel-build": "cd frontend && npm install && npm run build"
   },
-  "keywords": [
-    "HR",
-    "Employee Management",
-    "Payroll",
-    "Attendance",
-    "React",
-    "Node.js",
-    "MongoDB"
-  ],
-  "author": "Jawad Akbar",
-  "license": "ISC",
   "devDependencies": {
     "concurrently": "^7.6.0",
     "nodemon": "^3.1.14"
