@@ -54,8 +54,6 @@ import performanceRoutes from './routes/performance.js';
 import requestRoutes from './routes/requests.js';
 import notificationRoutes from './routes/notifications.js';
 
-import errorHandler from './middleware/errorHandler.js';
-
 // ─── Import Middleware ────────────────────────────────────────────────────────
 import errorHandler from '../api/middleware/errorHandler.js';
 
