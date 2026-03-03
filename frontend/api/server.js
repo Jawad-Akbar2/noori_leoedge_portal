@@ -55,7 +55,7 @@ import requestRoutes from './routes/requests.js';
 import notificationRoutes from './routes/notifications.js';
 
 // ─── Import Middleware ────────────────────────────────────────────────────────
-import errorHandler from '../api/middleware/errorHandler.js';
+import errorHandler from './middleware/errorHandler.js';
 
 // ─── Register Routes ──────────────────────────────────────────────────────────
 app.use('/api/auth', authRoutes);
