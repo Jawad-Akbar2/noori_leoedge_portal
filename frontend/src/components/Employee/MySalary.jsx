@@ -60,9 +60,6 @@ export default function MySalary() {
   const [dailyBreakdown, setDailyBreakdown] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    fetchSalaryData();
-  }, [fetchSalaryData]);
 
   // FIX 1: correct route  → GET /api/payroll/my/summary  (employeeAuth, no :id)
   // FIX 2: correct params → startDate / endDate
@@ -87,6 +84,11 @@ export default function MySalary() {
       setLoading(false);
     }
   }, [fromDate, toDate]);
+
+  
+  useEffect(() => {
+    fetchSalaryData();
+  }, [fetchSalaryData]);
 
   const handleDownloadPDF = () => {
     toast("PDF download coming soon", { icon: "📄" });
