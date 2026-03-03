@@ -6,8 +6,7 @@ import {
   DollarSign,
   FileText,
   User,
-  LogOut,
-  ChevronLeft
+  LogOut
 } from 'lucide-react';
 import { logout } from '../../services/auth';
 import toast from 'react-hot-toast';
