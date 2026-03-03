@@ -127,6 +127,11 @@ export default function PayrollReports() {
   const [selectedEmployeeId,  setSelectedEmployeeId]  = useState('');
   const [employeeDropdownOpen,setEmployeeDropdownOpen]= useState(false);
 
+  useEffect(() => {
+    console.log( selectedEmployeeId)
+  })
+
+
   const fetchS2Attendance = async () => {
     setS2Loading(true);
     try {
