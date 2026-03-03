@@ -6,8 +6,7 @@
     "server": "cd backend && nodemon server.js",
     "client": "cd frontend && npm start",
     "build": "cd frontend && npm run build",
-    "start": "cd backend && node server.js",
-    "vercel-build": "cd frontend && npm install && npm run build"
+    "start": "cd backend && node server.js"
   },
   "devDependencies": {
     "concurrently": "^7.6.0",
