@@ -355,7 +355,7 @@ export default function AddEmployeeModal({ onClose, onSave, currentUserRole }) {
                       Hourly Rate (PKR) <span className="text-red-500">*</span>
                     </label>
                     <input type="number" name="hourlyRate" value={formData.hourlyRate}
-                      onChange={handleInputChange} disabled={loading} step="10" min="0"
+                      onChange={handleInputChange} disabled={loading} step="1" min="0"
                       className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 ${errors.hourlyRate ? 'border-red-500' : 'border-gray-300'}`} />
                     {errors.hourlyRate && <p className="text-xs text-red-600 mt-1">{errors.hourlyRate}</p>}
                   </div>
@@ -367,7 +367,7 @@ export default function AddEmployeeModal({ onClose, onSave, currentUserRole }) {
                       Monthly Salary (PKR) <span className="text-red-500">*</span>
                     </label>
                     <input type="number" name="monthlySalary" value={formData.monthlySalary}
-                      onChange={handleInputChange} disabled={loading} step="100" min="0" placeholder="e.g. 50000"
+                      onChange={handleInputChange} disabled={loading} step="1" min="0" placeholder="e.g. 50000"
                       className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 ${errors.monthlySalary ? 'border-red-500' : 'border-gray-300'}`} />
                     {errors.monthlySalary && <p className="text-xs text-red-600 mt-1">{errors.monthlySalary}</p>}
                     <p className="text-xs text-gray-500 mt-1">An effective hourly rate will be derived automatically.</p>
