@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import axios from 'axios';
-import { X, Clock, Calendar } from 'lucide-react';
+import { X, Calendar } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 const TIME_RE = /^([0-1][0-9]|2[0-3]):[0-5][0-9]$/;
@@ -56,8 +56,7 @@ export default function CorrectionRequestModal({ onClose, onSubmit }) {
 
     setLoading(true);
     try {
-      const token = localStorage.getItem('token');
-
+    
       // Send only the fields the API expects; omit empty strings so the backend
       // correctly derives correctionType as 'In', 'Out', or 'Both'
       const payload = {
