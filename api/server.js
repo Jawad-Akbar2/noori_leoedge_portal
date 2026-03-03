@@ -96,7 +96,5 @@ if (process.env.NODE_ENV !== 'production') {
   });
 }
 
-
-export default function handler(req, res) {
-  return app(req, res);
-}
+// ─── Export for Vercel serverless ─────────────────────────────────────────────
+export default app;
