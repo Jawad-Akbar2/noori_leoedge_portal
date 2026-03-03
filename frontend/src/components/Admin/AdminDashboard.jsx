@@ -30,11 +30,50 @@ export default function AdminDashboard() {
       const totalEmployees = onlyEmployees.length;
       const activeEmployees = onlyEmployees.filter(e => e.status === 'Active').length;
 
+      // ✅ GET CURRENT PAY PERIOD (18 → 17)
+      const now = new Date();
+      const day = now.getDate();
+      const year = now.getFullYear();
+      const month = now.getMonth();
+
+      let periodStart, periodEnd;
+
+      if (day >= 18) {
+        periodStart = new Date(year, month, 18);
+        periodEnd   = new Date(year, month + 1, 17);
+      } else {
+        periodStart = new Date(year, month - 1, 18);
+        periodEnd   = new Date(year, month, 17);
+      }
+
+      const formatDate = (date) => {
+        const dd = String(date.getDate()).padStart(2, '0');
+        const mm = String(date.getMonth() + 1).padStart(2, '0');
+        const yyyy = date.getFullYear();
+        return `${dd}/${mm}/${yyyy}`;
+      };
+
+      // ✅ CALL EXISTING PAYROLL REPORT API
+      const payrollRes = await axios.post(
+        '/api/payroll/report',
+        {
+          fromDate: formatDate(periodStart),
+          toDate: formatDate(periodEnd)
+        },
+        {
+          headers: { Authorization: `Bearer ${token}` }
+        }
+      );
+
+      const livePayrollAmount =
+        payrollRes.data?.grandTotals?.totalNetPayable || 0;
+
       setStats({
         totalEmployees,
         presentToday: activeEmployees,
-        livePayroll: 0
+        livePayroll: livePayrollAmount
       });
+
       setLoading(false);
     } catch (error) {
       console.error('Error fetching stats:', error);
@@ -89,8 +128,10 @@ export default function AdminDashboard() {
 
               <DashboardStats
                 title="Live Payroll report"
-                value="PKR 12,450.00"
-                
+                value={`PKR ${stats.livePayroll.toLocaleString(undefined, {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2
+                })}`}
                 color="bg-purple-500"
                 onClick={() => navigate('/admin/payroll')}
               />
