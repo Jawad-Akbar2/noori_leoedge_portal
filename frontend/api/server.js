@@ -46,16 +46,16 @@ mongoose.connection.on('disconnected', () => console.warn('⚠ MongoDB disconnec
 mongoose.connection.on('reconnected', () => console.log('✓ MongoDB reconnected'));
 
 // ─── Import Routes ────────────────────────────────────────────────────────────
-import authRoutes from './routes/auth.js';
-import employeeRoutes from './routes/employees.js';
-import attendanceRoutes from './routes/attendance.js';
-import payrollRoutes from './routes/payroll.js';
-import performanceRoutes from './routes/performance.js';
-import requestRoutes from './routes/requests.js';
-import notificationRoutes from './routes/notifications.js';
+import authRoutes from '../backend/routes/auth.js';
+import employeeRoutes from '../backend/routes/employees.js';
+import attendanceRoutes from '../backend/routes/attendance.js';
+import payrollRoutes from '../backend/routes/payroll.js';
+import performanceRoutes from '../backend/routes/performance.js';
+import requestRoutes from '../backend/routes/requests.js';
+import notificationRoutes from '../backend/routes/notifications.js';
 
 // ─── Import Middleware ────────────────────────────────────────────────────────
-import errorHandler from './middleware/errorHandler.js';
+import errorHandler from '../backend/middleware/errorHandler.js';
 
 // ─── Register Routes ──────────────────────────────────────────────────────────
 app.use('/api/auth', authRoutes);
