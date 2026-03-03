@@ -7,12 +7,12 @@
       "config": { "distDir": "build" }
     },
     {
-      "src": "api/server.js",
+      "src": "backend/server.js",
       "use": "@vercel/node"
     }
   ],
   "routes": [
-    { "src": "/api/(.*)", "dest": "/api/server.js" },
+    { "src": "/api/(.*)", "dest": "/backend/server.js" },
     { "src": "/static/(.*)", "dest": "/frontend/static/$1" },
     { "src": "/favicon.ico", "dest": "/frontend/favicon.ico" },
     { "src": "/manifest.json", "dest": "/frontend/manifest.json" },
