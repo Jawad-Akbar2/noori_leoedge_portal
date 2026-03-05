@@ -255,7 +255,7 @@ export default function EmployeeOnboarding() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Account Number *</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">IBAN Number *</label>
                 <input
                   type="text"
                   name="bank.accountNumber"

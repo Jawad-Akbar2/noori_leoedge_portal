@@ -252,7 +252,7 @@ export default function Profile() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-600 mb-1">Iban Number</label>
+              <label className="block text-sm font-medium text-gray-600 mb-1">IBAN Number</label>
               <input
                 type="text"
                 value={employee?.bank?.accountNumber || ""}
