@@ -48,10 +48,9 @@ async function resolveUser(req, res) {
   }
 
   // Role is the source of truth from the DB, not the token payload.
-  // Token role is kept for quick reads but DB always wins.
   req.user = user;
   req.userId = String(user._id);
-  req.role = user.role; // 'admin' | 'employee'
+  req.role = user.role; // 'admin' | 'employee' | 'hybrid'
 
   return user;
 }
@@ -59,7 +58,7 @@ async function resolveUser(req, res) {
 // ─── middleware functions ─────────────────────────────────────────────────────
 
 /**
- * auth — any authenticated user (admin or active employee).
+ * auth — any authenticated user (admin, employee, hybrid)
  */
 async function auth(req, res, next) {
   try {
@@ -74,14 +73,14 @@ async function auth(req, res, next) {
 }
 
 /**
- * adminAuth — authenticated AND role === 'admin'.
+ * adminAuth — authenticated AND role === 'admin' or 'superadmin' or 'hybrid'
  */
 async function adminAuth(req, res, next) {
   try {
     const user = await resolveUser(req, res);
     if (!user) return;
 
-    if (!["admin", "superadmin"].includes(user.role)) {
+    if (!["admin", "superadmin", "hybrid"].includes(user.role)) {
       return res
         .status(403)
         .json({ success: false, message: "Admin access required" });
@@ -96,7 +95,7 @@ async function adminAuth(req, res, next) {
 }
 
 /**
- * employeeAuth — authenticated AND (role === 'employee' with Active status).
+ * employeeAuth — authenticated AND role === 'employee' OR 'hybrid' with Active status
  * Admins are intentionally blocked here; use `auth` if both should be allowed.
  */
 async function employeeAuth(req, res, next) {
@@ -104,7 +103,7 @@ async function employeeAuth(req, res, next) {
     const user = await resolveUser(req, res);
     if (!user) return;
 
-    if (user.role !== "employee") {
+    if (!["employee", "hybrid"].includes(user.role)) {
       return res
         .status(403)
         .json({ success: false, message: "Employee access required" });

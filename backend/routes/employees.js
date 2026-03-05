@@ -1,5 +1,3 @@
-// routes/employees.js
-
 import express from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import Employee from '../models/Employee.js';
@@ -42,9 +40,6 @@ const resolveNewRole = (creatorRole, requestedRole) => {
 };
 
 // ─── GET /api/employees/me ────────────────────────────────────────────────────
-// Any authenticated user (employee, admin, superadmin) can fetch their own
-// full profile — no adminAuth required.
-// IMPORTANT: must be registered BEFORE /:id so Express doesn't treat "me" as an id.
 
 router.get('/me', auth, async (req, res) => {
   try {
@@ -62,8 +57,44 @@ router.get('/me', auth, async (req, res) => {
   }
 });
 
-// ─── GET /api/employees ───────────────────────────────────────────────────────
+// ─── PUT /api/employees/me ────────────────────────────────────────────────
+router.put('/me', auth, async (req, res) => {
+  try {
+    const employee = await Employee.findOne({ _id: req.userId, isDeleted: false });
+    if (!employee) return res.status(404).json({ success: false, message: 'Employee not found' });
 
+    // Only allow email & bank updates
+    const allowedFields = ['email', 'bank'];
+
+    allowedFields.forEach(field => {
+      if (req.body[field] !== undefined) {
+        // For bank, merge safely if employee.bank is empty
+        if (field === 'bank') {
+          employee.bank = { ...(employee.bank || {}), ...req.body.bank };
+        } else {
+          employee[field] = req.body[field];
+        }
+      }
+    });
+
+    // Check email uniqueness
+    if (req.body.email) {
+      const trimmed = req.body.email.toLowerCase().trim();
+      const conflict = await Employee.findOne({ email: trimmed, _id: { $ne: req.userId }, isDeleted: false });
+      if (conflict) {
+        return res.status(409).json({ success: false, message: 'Email already exists', field: 'email' });
+      }
+      employee.email = trimmed;
+    }
+
+    await employee.save();
+    return res.json({ success: true, message: 'Profile updated', employee: publicEmployee(employee) });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// ─── GET /api/employees ───────────────────────────────────────────────────────
 router.get('/', adminAuth, async (req, res) => {
   try {
     const {
@@ -115,7 +146,6 @@ router.get('/', adminAuth, async (req, res) => {
 });
 
 // ─── GET /api/employees/:id ───────────────────────────────────────────────────
-
 router.get('/:id', adminAuth, async (req, res) => {
   try {
     const employee = await Employee.findOne({
@@ -134,7 +164,6 @@ router.get('/:id', adminAuth, async (req, res) => {
 });
 
 // ─── POST /api/employees ──────────────────────────────────────────────────────
-
 router.post('/', adminAuth, async (req, res) => {
   try {
     const {
@@ -213,7 +242,6 @@ router.post('/', adminAuth, async (req, res) => {
 });
 
 // ─── PUT /api/employees/:id ───────────────────────────────────────────────────
-
 router.put('/:id', adminAuth, async (req, res) => {
   try {
     if (String(req.userId) === String(req.params.id)) {
@@ -314,7 +342,6 @@ router.put('/:id', adminAuth, async (req, res) => {
 });
 
 // ─── PATCH /api/employees/:id/freeze ─────────────────────────────────────────
-
 router.patch('/:id/freeze', adminAuth, async (req, res) => {
   try {
     if (String(req.userId) === String(req.params.id)) {
@@ -335,7 +362,6 @@ router.patch('/:id/freeze', adminAuth, async (req, res) => {
 });
 
 // ─── PATCH /api/employees/:id/archive ────────────────────────────────────────
-
 router.patch('/:id/archive', adminAuth, async (req, res) => {
   try {
     if (String(req.userId) === String(req.params.id)) {
@@ -353,7 +379,6 @@ router.patch('/:id/archive', adminAuth, async (req, res) => {
 });
 
 // ─── POST /api/employees/:id/resend-invite ────────────────────────────────────
-
 router.post('/:id/resend-invite', adminAuth, async (req, res) => {
   try {
     const employee = await Employee.findOne({ _id: req.params.id, isDeleted: false, ...roleVisibilityFilter(req.role) });
@@ -370,7 +395,6 @@ router.post('/:id/resend-invite', adminAuth, async (req, res) => {
 });
 
 // ─── POST /api/employees/:id/reset-password ───────────────────────────────────
-
 router.post('/:id/reset-password', adminAuth, async (req, res) => {
   try {
     const employee = await Employee.findOne({ _id: req.params.id, isDeleted: false, ...roleVisibilityFilter(req.role) });
@@ -389,7 +413,6 @@ router.post('/:id/reset-password', adminAuth, async (req, res) => {
 });
 
 // ─── DELETE /api/employees/:id ────────────────────────────────────────────────
-
 router.delete('/:id', adminAuth, async (req, res) => {
   try {
     if (String(req.userId) === String(req.params.id)) {

@@ -31,7 +31,7 @@ const employeeSchema = new mongoose.Schema({
   },
   role: {
     type: String,
-    enum: ['admin', 'superadmin', 'employee'],
+    enum: ['admin', 'superadmin', 'employee', 'hybrid'], // <-- ADDED 'hybrid' role
     default: 'employee',
     index: true
   },
@@ -39,7 +39,6 @@ const employeeSchema = new mongoose.Schema({
   joiningDate: { type: Date, required: true },
 
   // ── Shift ─────────────────────────────────────────────────────────────────
-  // Required for admin + employee. Optional (null) for superadmin only.
   shift: {
     start: {
       type: String,
@@ -59,20 +58,6 @@ const employeeSchema = new mongoose.Schema({
     }
   },
 
-  // ── Salary ────────────────────────────────────────────────────────────────
-  // Required for admin + employee. Cleared to null for superadmin only.
-  //
-  // salaryType:
-  //   'hourly'  — paid per hour worked (hourlyRate × hoursWorked)
-  //   'monthly' — fixed monthly salary; deductions/OT still applied on top
-  //
-  // hourlyRate:
-  //   Required for admin + employee. For monthly employees it is derived:
-  //     hourlyRate = monthlySalary / (workingDaysPerMonth × scheduledHoursPerDay)
-  //   but an explicit override is also accepted.
-  //
-  // monthlySalary:
-  //   Required when salaryType === 'monthly'.
   salaryType: {
     type: String,
     enum: ['hourly', 'monthly', null],
@@ -112,12 +97,8 @@ const employeeSchema = new mongoose.Schema({
 }, { timestamps: true });
 
 // ─── Cross-field validation ───────────────────────────────────────────────────
-// Only superadmin is exempt from salary + shift requirements.
-// admin is validated exactly like a regular employee.
-
 employeeSchema.pre('validate', function (next) {
   if (SYSTEM_ROLES.includes(this.role)) {
-    // superadmin: login-only account — clear salary/shift data
     this.salaryType    = null;
     this.hourlyRate    = null;
     this.monthlySalary = null;
@@ -128,7 +109,6 @@ employeeSchema.pre('validate', function (next) {
     return next();
   }
 
-  // ── admin + employee: must have valid salary + shift ──────────────────────
   const errors = [];
 
   if (!this.shift?.start) errors.push('shift.start is required');
@@ -155,7 +135,6 @@ employeeSchema.pre('validate', function (next) {
 });
 
 // ─── Password hashing ─────────────────────────────────────────────────────────
-
 employeeSchema.pre('save', async function (next) {
   if (!this.isModified('password') && !this.isModified('tempPassword')) return next();
 
@@ -175,7 +154,6 @@ employeeSchema.pre('save', async function (next) {
 });
 
 // ─── Instance methods ─────────────────────────────────────────────────────────
-
 employeeSchema.methods.comparePassword = async function (entered) {
   return bcryptjs.compare(entered, this.password);
 };
@@ -190,19 +168,11 @@ employeeSchema.methods.getDaysUntilLeaveEligible = function () {
   return Math.max(0, 90 - days);
 };
 
-/**
- * Compute effective hourly rate for payroll calculations.
- * Returns null for superadmin only — they are not on payroll.
- * admin is on payroll and returns a real rate.
- *
- * @param {number} workingDaysInPeriod  – actual working days in the payroll period
- * @param {number} scheduledHoursPerDay – hours per scheduled shift (default 8)
- */
 employeeSchema.methods.getEffectiveHourlyRate = function (
   workingDaysInPeriod = 26,
   scheduledHoursPerDay = 8
 ) {
-  if (SYSTEM_ROLES.includes(this.role)) return null;   // superadmin only
+  if (SYSTEM_ROLES.includes(this.role)) return null;
 
   if (this.salaryType === 'monthly' && this.monthlySalary) {
     return this.monthlySalary / (workingDaysInPeriod * scheduledHoursPerDay);
@@ -210,10 +180,6 @@ employeeSchema.methods.getEffectiveHourlyRate = function (
   return this.hourlyRate;
 };
 
-/**
- * Returns true only for superadmin (login-only, no payroll data).
- * admin returns false — they are a full payroll participant.
- */
 employeeSchema.methods.isSystemAccount = function () {
   return SYSTEM_ROLES.includes(this.role);
 };

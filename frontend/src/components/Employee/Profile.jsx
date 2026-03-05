@@ -32,6 +32,34 @@ export default function Profile() {
     return `${day}/${month}/${year}`;
   };
 
+  const handleSaveProfile = async () => {
+    setSaving(true);
+    try {
+      const token = localStorage.getItem('token');
+      const payload = {
+        email: employee.email || '',
+        bank: {
+          bankName: employee.bank?.bankName || '',
+          accountName: employee.bank?.accountName || '',
+          accountNumber: employee.bank?.accountNumber || '',
+        },
+      };
+      const { data } = await axios.put('/api/employees/me', payload, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (data.success) {
+        setEmployee(data.employee); // ← update state with returned employee
+        toast.success('Profile updated successfully');
+      } else {
+        toast.error('Failed to update profile');
+      }
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Failed to update profile');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const fetchProfile = async () => {
     try {
       const token = localStorage.getItem('token');
@@ -104,7 +132,6 @@ export default function Profile() {
     );
   }
 
-  // ── Reusable read-only field ───────────────────────────────────────────────
   const InfoField = ({ label, value }) => (
     <div>
       <label className="block text-sm font-medium text-gray-600 mb-1">{label}</label>
@@ -114,20 +141,19 @@ export default function Profile() {
     </div>
   );
 
-  // ── Salary display helper ──────────────────────────────────────────────────
   const salaryDisplay = () => {
     if (!employee?.salaryType) return null;
     if (employee.salaryType === 'monthly') {
       return (
         <>
-          <InfoField label="Salary Type"      value="Monthly" />
+          <InfoField label="Salary Type" value="Monthly" />
           <InfoField label="Monthly Salary (PKR)" value={employee.monthlySalary?.toLocaleString('en-PK')} />
         </>
       );
     }
     return (
       <>
-        <InfoField label="Salary Type"      value="Hourly" />
+        <InfoField label="Salary Type" value="Hourly" />
         <InfoField label="Hourly Rate (PKR)" value={employee.hourlyRate?.toLocaleString('en-PK')} />
       </>
     );
@@ -139,7 +165,7 @@ export default function Profile() {
 
       <div className="max-w-3xl space-y-6">
 
-        {/* ── Personal Information ── */}
+        {/* Personal Information */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
           <div className="flex items-center gap-2 mb-5">
             <User size={18} className="text-blue-600" />
@@ -152,7 +178,17 @@ export default function Profile() {
               <InfoField label="Last Name"  value={employee?.lastName} />
             </div>
 
-            <InfoField label="Email" value={employee?.email} />
+            <div>
+              <label className="block text-sm font-medium text-gray-600 mb-1">Email</label>
+              <input
+                type="email"
+                value={employee?.email || ""}
+                onChange={(e) =>
+                  setEmployee((prev) => ({ ...prev, email: e.target.value }))
+                }
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <InfoField label="Employee ID" value={employee?.employeeNumber} />
@@ -160,7 +196,6 @@ export default function Profile() {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* Joining Date — needs special formatting */}
               <div>
                 <label className="block text-sm font-medium text-gray-600 mb-1">Joining Date</label>
                 <div className="flex items-center gap-2 px-4 py-2 bg-gray-100 border border-gray-200 rounded-lg text-gray-700 min-h-[40px]">
@@ -173,10 +208,9 @@ export default function Profile() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <InfoField label="Shift Start" value={employee?.shift?.start} />
-              <InfoField label="Shift End"   value={employee?.shift?.end} />
+              <InfoField label="Shift End" value={employee?.shift?.end} />
             </div>
 
-            {/* Salary info */}
             {employee?.salaryType && (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {salaryDisplay()}
@@ -185,25 +219,64 @@ export default function Profile() {
           </div>
         </div>
 
-        {/* ── Bank Details ── */}
+        {/* Bank Details */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
           <div className="flex items-center gap-2 mb-5">
             <CreditCard size={18} className="text-blue-600" />
             <h2 className="text-lg font-semibold text-gray-800">Bank Details</h2>
           </div>
 
-          {employee?.bank?.bankName || employee?.bank?.accountName || employee?.bank?.accountNumber ? (
-            <div className="space-y-4">
-              <InfoField label="Bank Name"      value={employee?.bank?.bankName} />
-              <InfoField label="Account Name"   value={employee?.bank?.accountName} />
-              <InfoField label="Account Number" value={employee?.bank?.accountNumber} />
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-600 mb-1">Bank Name</label>
+              <input
+                type="text"
+                value={employee?.bank?.bankName || ""}
+                onChange={(e) =>
+                  setEmployee((prev) => ({ ...prev, bank: { ...prev.bank, bankName: e.target.value } }))
+                }
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
             </div>
-          ) : (
-            <p className="text-sm text-gray-400 italic">No bank details on file.</p>
-          )}
+
+            <div>
+              <label className="block text-sm font-medium text-gray-600 mb-1">Account Name</label>
+              <input
+                type="text"
+                value={employee?.bank?.accountName || ""}
+                onChange={(e) =>
+                  setEmployee((prev) => ({ ...prev, bank: { ...prev.bank, accountName: e.target.value } }))
+                }
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-600 mb-1">Iban Number</label>
+              <input
+                type="text"
+                value={employee?.bank?.accountNumber || ""}
+                onChange={(e) =>
+                  setEmployee((prev) => ({ ...prev, bank: { ...prev.bank, accountNumber: e.target.value } }))
+                }
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+
+            {/* ── Save Profile Button ── */}
+            <div className="flex justify-end mt-4">
+              <button
+                onClick={handleSaveProfile}
+                disabled={saving}
+                className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition font-medium disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                {saving ? 'Saving…' : 'Save Profile'}
+              </button>
+            </div>
+          </div>
         </div>
 
-        {/* ── Change Password ── */}
+        {/* Change Password */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
           <div className="flex items-center justify-between mb-5">
             <div className="flex items-center gap-2">
@@ -231,7 +304,7 @@ export default function Profile() {
             <form onSubmit={handleChangePassword} className="space-y-4">
               {[
                 { label: 'Current Password', field: 'current', key: 'currentPassword', placeholder: 'Enter current password' },
-                { label: 'New Password',     field: 'new',     key: 'newPassword',     placeholder: 'At least 8 characters' },
+                { label: 'New Password', field: 'new', key: 'newPassword', placeholder: 'At least 8 characters' },
                 { label: 'Confirm New Password', field: 'confirm', key: 'confirmPassword', placeholder: 'Repeat new password' },
               ].map(({ label, field, key, placeholder }) => (
                 <div key={field}>
