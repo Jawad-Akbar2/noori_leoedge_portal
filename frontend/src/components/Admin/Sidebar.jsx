@@ -6,7 +6,8 @@ import {
   Clock,
   BarChart3,
   Bell,
-  LogOut
+  LogOut,
+  User
 } from 'lucide-react';
 import { logout } from '../../services/auth';
 import toast from 'react-hot-toast';
@@ -16,7 +17,8 @@ const menuItems = [
   { icon: Users,           label: 'Employees',     path: '/admin/employees' },
   { icon: Clock,           label: 'Attendance',    path: '/admin/attendance' },
   { icon: BarChart3,       label: 'Report',       path: '/admin/payroll' },
-  { icon: Bell,            label: 'Notifications', path: '/admin/notifications' }
+  { icon: Bell,            label: 'Notifications', path: '/admin/notifications' },
+   { icon: User, label: 'My Profile', path: '/admin/profile' }
 ];
 
 export default function AdminSidebar({ isOpen, isMobile, onClose }) {

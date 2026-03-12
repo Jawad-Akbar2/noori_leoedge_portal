@@ -3,9 +3,12 @@
 import mongoose from 'mongoose';
 import bcryptjs from 'bcryptjs';
 
-// Only superadmin is a login-only system account.
-// admin is a regular payroll employee (shift + salary required).
+// Roles that are login-only system accounts (no shift / salary / payroll).
+// All other roles — admin, employee, hybrid — are full payroll employees.
 const SYSTEM_ROLES = ['superadmin'];
+
+// Roles that require shift + salary validation (i.e. everyone except system roles)
+const PAYROLL_ROLES = ['admin', 'employee', 'hybrid'];
 
 const employeeSchema = new mongoose.Schema({
   email: {
@@ -29,9 +32,14 @@ const employeeSchema = new mongoose.Schema({
     enum: ['IT', 'Customer Support', 'Manager', 'Marketing', 'HR', 'Finance'],
     required: true
   },
+
   role: {
     type: String,
-    enum: ['admin', 'superadmin', 'employee', 'hybrid'], // <-- ADDED 'hybrid' role
+    // superadmin — login-only system account, no payroll
+    // admin      — full employee with shift + salary + admin panel access
+    // employee   — standard employee
+    // hybrid     — employee with extra admin modules (attendance + notifications)
+    enum: ['superadmin', 'admin', 'employee', 'hybrid'],
     default: 'employee',
     index: true
   },
@@ -94,10 +102,15 @@ const employeeSchema = new mongoose.Schema({
   },
 
   isDeleted: { type: Boolean, default: false }
+
 }, { timestamps: true });
 
 // ─── Cross-field validation ───────────────────────────────────────────────────
+
 employeeSchema.pre('validate', function (next) {
+
+  // ── System accounts (superadmin) ──
+  // Strip all payroll fields — they don't have a shift or salary.
   if (SYSTEM_ROLES.includes(this.role)) {
     this.salaryType    = null;
     this.hourlyRate    = null;
@@ -109,32 +122,39 @@ employeeSchema.pre('validate', function (next) {
     return next();
   }
 
-  const errors = [];
+  // ── Payroll accounts (admin, employee, hybrid) ──
+  // All three require shift + salaryType + hourlyRate.
+  // hybrid is intentionally identical to employee in payroll terms —
+  // the only difference is which UI modules they can access.
+  if (PAYROLL_ROLES.includes(this.role)) {
+    const errors = [];
 
-  if (!this.shift?.start) errors.push('shift.start is required');
-  if (!this.shift?.end)   errors.push('shift.end is required');
+    if (!this.shift?.start) errors.push('shift.start is required');
+    if (!this.shift?.end)   errors.push('shift.end is required');
 
-  if (!this.salaryType) {
-    errors.push('salaryType is required');
-  } else {
-    if (!this.hourlyRate || this.hourlyRate <= 0) {
-      errors.push('hourlyRate is required and must be > 0');
+    if (!this.salaryType) {
+      errors.push('salaryType is required');
+    } else {
+      if (!this.hourlyRate || this.hourlyRate <= 0) {
+        errors.push('hourlyRate is required and must be > 0');
+      }
+      if (this.salaryType === 'monthly' && (!this.monthlySalary || this.monthlySalary <= 0)) {
+        errors.push('monthlySalary is required and must be > 0 for monthly salary type');
+      }
     }
-    if (this.salaryType === 'monthly' && (!this.monthlySalary || this.monthlySalary <= 0)) {
-      errors.push('monthlySalary is required and must be > 0 for monthly salary type');
-    }
-  }
 
-  if (errors.length) {
-    return next(new mongoose.Error.ValidationError(
-      Object.assign(new Error(errors.join('; ')), { name: 'ValidationError' })
-    ));
+    if (errors.length) {
+      return next(new mongoose.Error.ValidationError(
+        Object.assign(new Error(errors.join('; ')), { name: 'ValidationError' })
+      ));
+    }
   }
 
   next();
 });
 
 // ─── Password hashing ─────────────────────────────────────────────────────────
+
 employeeSchema.pre('save', async function (next) {
   if (!this.isModified('password') && !this.isModified('tempPassword')) return next();
 
@@ -154,6 +174,7 @@ employeeSchema.pre('save', async function (next) {
 });
 
 // ─── Instance methods ─────────────────────────────────────────────────────────
+
 employeeSchema.methods.comparePassword = async function (entered) {
   return bcryptjs.compare(entered, this.password);
 };
@@ -173,15 +194,20 @@ employeeSchema.methods.getEffectiveHourlyRate = function (
   scheduledHoursPerDay = 8
 ) {
   if (SYSTEM_ROLES.includes(this.role)) return null;
-
   if (this.salaryType === 'monthly' && this.monthlySalary) {
     return this.monthlySalary / (workingDaysInPeriod * scheduledHoursPerDay);
   }
   return this.hourlyRate;
 };
 
+/** True only for login-only accounts that have no payroll record */
 employeeSchema.methods.isSystemAccount = function () {
   return SYSTEM_ROLES.includes(this.role);
+};
+
+/** True for any role that appears in attendance + payroll reports */
+employeeSchema.methods.isPayrollAccount = function () {
+  return PAYROLL_ROLES.includes(this.role);
 };
 
 const Employee = mongoose.model('Employee', employeeSchema);

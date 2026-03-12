@@ -1,7 +1,7 @@
 import express from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import Employee from '../models/Employee.js';
-import { adminAuth, auth } from '../middleware/auth.js';   // ← added `auth`
+import { adminAuth, auth } from '../middleware/auth.js';
 import { parseDDMMYYYY } from '../utils/dateUtils.js';
 
 const router = express.Router();
@@ -15,7 +15,7 @@ const constructInviteLink = (token) => {
   return `${base}/join/${token}`;
 };
 
-/** Safe employee payload — never expose password hashes */
+/** Safe employee payload — never expose password hashes or tokens */
 const publicEmployee = (emp) => {
   const obj = emp.toObject ? emp.toObject() : { ...emp };
   delete obj.password;
@@ -40,12 +40,13 @@ const resolveNewRole = (creatorRole, requestedRole) => {
 };
 
 // ─── GET /api/employees/me ────────────────────────────────────────────────────
+// Any authenticated user (employee, admin, superadmin) can fetch their own profile.
 
 router.get('/me', auth, async (req, res) => {
   try {
     const employee = await Employee.findOne({
       _id:       req.userId,
-      isDeleted: false
+      isDeleted: false,
     }).select('-password -tempPassword -inviteToken -inviteTokenExpires');
 
     if (!employee) {
@@ -57,44 +58,81 @@ router.get('/me', auth, async (req, res) => {
   }
 });
 
-// ─── PUT /api/employees/me ────────────────────────────────────────────────
+// ─── PUT /api/employees/me ────────────────────────────────────────────────────
+// Any authenticated user can update their own email and bank details.
+// All other fields are intentionally locked here — admins/superadmins
+// edit name/shift/salary for others via PUT /api/employees/:id.
+//
+// Roles allowed: employee, admin, superadmin (all via `auth` middleware).
+
 router.put('/me', auth, async (req, res) => {
   try {
-    const employee = await Employee.findOne({ _id: req.userId, isDeleted: false });
-    if (!employee) return res.status(404).json({ success: false, message: 'Employee not found' });
-
-    // Only allow email & bank updates
-    const allowedFields = ['email', 'bank'];
-
-    allowedFields.forEach(field => {
-      if (req.body[field] !== undefined) {
-        // For bank, merge safely if employee.bank is empty
-        if (field === 'bank') {
-          employee.bank = { ...(employee.bank || {}), ...req.body.bank };
-        } else {
-          employee[field] = req.body[field];
-        }
-      }
+    const employee = await Employee.findOne({
+      _id:       req.userId,
+      isDeleted: false,
     });
+    if (!employee) {
+      return res.status(404).json({ success: false, message: 'Employee not found' });
+    }
 
-    // Check email uniqueness
-    if (req.body.email) {
+    // ── Email update ──────────────────────────────────────────────────────────
+    if (req.body.email !== undefined) {
       const trimmed = req.body.email.toLowerCase().trim();
-      const conflict = await Employee.findOne({ email: trimmed, _id: { $ne: req.userId }, isDeleted: false });
-      if (conflict) {
-        return res.status(409).json({ success: false, message: 'Email already exists', field: 'email' });
+
+      if (!trimmed) {
+        return res.status(400).json({ success: false, message: 'Email cannot be empty', field: 'email' });
       }
+
+      // Basic email format check
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(trimmed)) {
+        return res.status(400).json({ success: false, message: 'Invalid email format', field: 'email' });
+      }
+
+      // Uniqueness check — exclude self
+      const conflict = await Employee.findOne({
+        email:     trimmed,
+        _id:       { $ne: req.userId },
+        isDeleted: false,
+      });
+      if (conflict) {
+        return res.status(409).json({ success: false, message: 'Email already in use', field: 'email' });
+      }
+
       employee.email = trimmed;
     }
 
+    // ── Bank update ───────────────────────────────────────────────────────────
+    // Merge patch — only overwrite keys that were explicitly sent.
+    // Sending { bankName: 'HBL' } won't clear accountNumber.
+    if (req.body.bank !== undefined) {
+      const incoming = req.body.bank;
+      employee.bank = {
+        bankName:      incoming.bankName      !== undefined ? String(incoming.bankName      || '').trim() : (employee.bank?.bankName      || ''),
+        accountName:   incoming.accountName   !== undefined ? String(incoming.accountName   || '').trim() : (employee.bank?.accountName   || ''),
+        accountNumber: incoming.accountNumber !== undefined ? String(incoming.accountNumber || '').trim() : (employee.bank?.accountNumber || ''),
+      };
+    }
+
     await employee.save();
-    return res.json({ success: true, message: 'Profile updated', employee: publicEmployee(employee) });
+
+    return res.json({
+      success:  true,
+      message:  'Profile updated',
+      employee: publicEmployee(employee),
+    });
   } catch (err) {
+    // Mongoose validation errors (e.g. duplicate key race condition)
+    if (err.code === 11000) {
+      return res.status(409).json({ success: false, message: 'Email already in use', field: 'email' });
+    }
     return res.status(500).json({ success: false, message: err.message });
   }
 });
 
 // ─── GET /api/employees ───────────────────────────────────────────────────────
+// Admin/SuperAdmin only — list employees with filters and pagination.
+
 router.get('/', adminAuth, async (req, res) => {
   try {
     const {
@@ -103,12 +141,12 @@ router.get('/', adminAuth, async (req, res) => {
       search,
       includeArchived = 'false',
       page  = 1,
-      limit = 200
+      limit = 200,
     } = req.query;
 
     const query = {
       isDeleted: false,
-      ...roleVisibilityFilter(req.role)
+      ...roleVisibilityFilter(req.role),
     };
 
     if (includeArchived !== 'true') query.isArchived = false;
@@ -120,7 +158,7 @@ router.get('/', adminAuth, async (req, res) => {
         { firstName:      { $regex: search, $options: 'i' } },
         { lastName:       { $regex: search, $options: 'i' } },
         { email:          { $regex: search, $options: 'i' } },
-        { employeeNumber: { $regex: search, $options: 'i' } }
+        { employeeNumber: { $regex: search, $options: 'i' } },
       ];
     }
 
@@ -132,13 +170,18 @@ router.get('/', adminAuth, async (req, res) => {
         .skip(skip)
         .limit(Number(limit))
         .lean(),
-      Employee.countDocuments(query)
+      Employee.countDocuments(query),
     ]);
 
     return res.json({
       success: true,
       employees,
-      pagination: { total, page: Number(page), limit: Number(limit), pages: Math.ceil(total / Number(limit)) }
+      pagination: {
+        total,
+        page:  Number(page),
+        limit: Number(limit),
+        pages: Math.ceil(total / Number(limit)),
+      },
     });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -146,12 +189,13 @@ router.get('/', adminAuth, async (req, res) => {
 });
 
 // ─── GET /api/employees/:id ───────────────────────────────────────────────────
+
 router.get('/:id', adminAuth, async (req, res) => {
   try {
     const employee = await Employee.findOne({
       _id:       req.params.id,
       isDeleted: false,
-      ...roleVisibilityFilter(req.role)
+      ...roleVisibilityFilter(req.role),
     }).select('-password -tempPassword -inviteToken -inviteTokenExpires');
 
     if (!employee) {
@@ -164,6 +208,7 @@ router.get('/:id', adminAuth, async (req, res) => {
 });
 
 // ─── POST /api/employees ──────────────────────────────────────────────────────
+
 router.post('/', adminAuth, async (req, res) => {
   try {
     const {
@@ -171,13 +216,13 @@ router.post('/', adminAuth, async (req, res) => {
       department, joiningDate, shift,
       salaryType, hourlyRate, monthlySalary,
       bank,
-      role: requestedRole
+      role: requestedRole,
     } = req.body;
 
     if (!email || !employeeNumber || !firstName || !lastName || !department || !joiningDate) {
       return res.status(400).json({
         success: false,
-        message: 'email, employeeNumber, firstName, lastName, department, and joiningDate are required'
+        message: 'email, employeeNumber, firstName, lastName, department, and joiningDate are required',
       });
     }
 
@@ -186,16 +231,16 @@ router.post('/', adminAuth, async (req, res) => {
     const existing = await Employee.findOne({
       $or: [
         { email: email.toLowerCase().trim() },
-        { employeeNumber: employeeNumber.trim() }
+        { employeeNumber: employeeNumber.trim() },
       ],
-      isDeleted: false
+      isDeleted: false,
     });
     if (existing) {
       const field = existing.email === email.toLowerCase().trim() ? 'Email' : 'Employee number';
       return res.status(409).json({ success: false, message: `${field} already exists` });
     }
 
-    let parsedJoiningDate = parseDDMMYYYY(joiningDate) || new Date(joiningDate);
+    const parsedJoiningDate = parseDDMMYYYY(joiningDate) || new Date(joiningDate);
     if (!parsedJoiningDate || isNaN(parsedJoiningDate)) {
       return res.status(400).json({ success: false, message: 'Invalid joiningDate. Use dd/mm/yyyy or YYYY-MM-DD' });
     }
@@ -225,7 +270,7 @@ router.post('/', adminAuth, async (req, res) => {
       status:             'Inactive',
       inviteToken,
       inviteTokenExpires: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-      bank:               bank || {}
+      bank:               bank || {},
     });
 
     await employee.save();
@@ -234,7 +279,7 @@ router.post('/', adminAuth, async (req, res) => {
       success:    true,
       message:    'Employee created. Invite link generated.',
       employee:   publicEmployee(employee),
-      inviteLink: constructInviteLink(inviteToken)
+      inviteLink: constructInviteLink(inviteToken),
     });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -242,23 +287,27 @@ router.post('/', adminAuth, async (req, res) => {
 });
 
 // ─── PUT /api/employees/:id ───────────────────────────────────────────────────
+// Admin/SuperAdmin edit another employee's record.
+// Self-edit is blocked here — use PUT /me instead.
+
 router.put('/:id', adminAuth, async (req, res) => {
   try {
+    // Block self-edit via this route — profile page uses /me
     if (String(req.userId) === String(req.params.id)) {
       return res.status(403).json({
         success: false,
-        message: 'You cannot edit your own employee record. Contact another admin.'
+        message: 'Use the profile page to edit your own account.',
       });
     }
 
     const employee = await Employee.findOne({
       _id:       req.params.id,
       isDeleted: false,
-      ...roleVisibilityFilter(req.role)
+      ...roleVisibilityFilter(req.role),
     });
     if (!employee) return res.status(404).json({ success: false, message: 'Employee not found' });
 
-    // ── employeeNumber — check uniqueness before applying ─────────────────────
+    // ── employeeNumber ────────────────────────────────────────────────────────
     if (req.body.employeeNumber !== undefined) {
       const trimmed = req.body.employeeNumber.trim();
       if (!trimmed) {
@@ -267,19 +316,15 @@ router.put('/:id', adminAuth, async (req, res) => {
       const conflict = await Employee.findOne({
         employeeNumber: trimmed,
         isDeleted:      false,
-        _id:            { $ne: req.params.id }   // exclude the employee being edited
+        _id:            { $ne: req.params.id },
       });
       if (conflict) {
-        return res.status(409).json({
-          success: false,
-          message: 'Employee number already exists',
-          field:   'employeeNumber'          // ← frontend uses this to target the field
-        });
+        return res.status(409).json({ success: false, message: 'Employee number already exists', field: 'employeeNumber' });
       }
       employee.employeeNumber = trimmed;
     }
 
-    // ── email — check uniqueness before applying ──────────────────────────────
+    // ── email ─────────────────────────────────────────────────────────────────
     if (req.body.email !== undefined) {
       const trimmed = req.body.email.toLowerCase().trim();
       if (!trimmed) {
@@ -288,31 +333,28 @@ router.put('/:id', adminAuth, async (req, res) => {
       const conflict = await Employee.findOne({
         email:     trimmed,
         isDeleted: false,
-        _id:       { $ne: req.params.id }
+        _id:       { $ne: req.params.id },
       });
       if (conflict) {
-        return res.status(409).json({
-          success: false,
-          message: 'Email already exists',
-          field:   'email'
-        });
+        return res.status(409).json({ success: false, message: 'Email already exists', field: 'email' });
       }
       employee.email = trimmed;
     }
 
+    // ── Basic fields ──────────────────────────────────────────────────────────
     ['firstName', 'lastName', 'department', 'shift', 'bank'].forEach(f => {
       if (req.body[f] !== undefined) employee[f] = req.body[f];
     });
 
-    if (req.body.role !== undefined) {
-      if (req.role === 'superadmin') {
-        if (!['employee', 'admin', 'superadmin'].includes(req.body.role)) {
-          return res.status(400).json({ success: false, message: 'Invalid role' });
-        }
-        employee.role = req.body.role;
+    // ── Role (superadmin only) ────────────────────────────────────────────────
+    if (req.body.role !== undefined && req.role === 'superadmin') {
+      if (!['employee', 'admin', 'superadmin'].includes(req.body.role)) {
+        return res.status(400).json({ success: false, message: 'Invalid role' });
       }
+      employee.role = req.body.role;
     }
 
+    // ── Salary ────────────────────────────────────────────────────────────────
     if (req.body.salaryType !== undefined) {
       if (!['hourly', 'monthly'].includes(req.body.salaryType)) {
         return res.status(400).json({ success: false, message: "salaryType must be 'hourly' or 'monthly'" });
@@ -326,6 +368,7 @@ router.put('/:id', adminAuth, async (req, res) => {
       return res.status(400).json({ success: false, message: 'monthlySalary is required when salaryType is monthly' });
     }
 
+    // ── Joining date ──────────────────────────────────────────────────────────
     if (req.body.joiningDate) {
       const parsed = parseDDMMYYYY(req.body.joiningDate) || new Date(req.body.joiningDate);
       if (!parsed || isNaN(parsed)) {
@@ -337,17 +380,23 @@ router.put('/:id', adminAuth, async (req, res) => {
     await employee.save();
     return res.json({ success: true, message: 'Employee updated', employee: publicEmployee(employee) });
   } catch (err) {
+    if (err.code === 11000) {
+      return res.status(409).json({ success: false, message: 'Duplicate key — email or employee number already exists' });
+    }
     res.status(500).json({ success: false, message: err.message });
   }
 });
 
 // ─── PATCH /api/employees/:id/freeze ─────────────────────────────────────────
+
 router.patch('/:id/freeze', adminAuth, async (req, res) => {
   try {
     if (String(req.userId) === String(req.params.id)) {
       return res.status(403).json({ success: false, message: 'You cannot freeze your own account' });
     }
-    const employee = await Employee.findOne({ _id: req.params.id, isDeleted: false, ...roleVisibilityFilter(req.role) });
+    const employee = await Employee.findOne({
+      _id: req.params.id, isDeleted: false, ...roleVisibilityFilter(req.role),
+    });
     if (!employee) return res.status(404).json({ success: false, message: 'Employee not found' });
 
     if (employee.status === 'Inactive') {
@@ -355,49 +404,72 @@ router.patch('/:id/freeze', adminAuth, async (req, res) => {
     }
     employee.status = employee.status === 'Frozen' ? 'Active' : 'Frozen';
     await employee.save();
-    return res.json({ success: true, message: `Employee ${employee.status === 'Frozen' ? 'frozen' : 'unfrozen'}`, employee: publicEmployee(employee) });
+    return res.json({
+      success:  true,
+      message:  `Employee ${employee.status === 'Frozen' ? 'frozen' : 'unfrozen'}`,
+      employee: publicEmployee(employee),
+    });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
 });
 
 // ─── PATCH /api/employees/:id/archive ────────────────────────────────────────
+
 router.patch('/:id/archive', adminAuth, async (req, res) => {
   try {
     if (String(req.userId) === String(req.params.id)) {
       return res.status(403).json({ success: false, message: 'You cannot archive your own account' });
     }
-    const employee = await Employee.findOne({ _id: req.params.id, isDeleted: false, ...roleVisibilityFilter(req.role) });
+    const employee = await Employee.findOne({
+      _id: req.params.id, isDeleted: false, ...roleVisibilityFilter(req.role),
+    });
     if (!employee) return res.status(404).json({ success: false, message: 'Employee not found' });
 
     employee.isArchived = !employee.isArchived;
     await employee.save();
-    return res.json({ success: true, message: `Employee ${employee.isArchived ? 'archived' : 'unarchived'}`, employee: publicEmployee(employee) });
+    return res.json({
+      success:  true,
+      message:  `Employee ${employee.isArchived ? 'archived' : 'unarchived'}`,
+      employee: publicEmployee(employee),
+    });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
 });
 
 // ─── POST /api/employees/:id/resend-invite ────────────────────────────────────
+
 router.post('/:id/resend-invite', adminAuth, async (req, res) => {
   try {
-    const employee = await Employee.findOne({ _id: req.params.id, isDeleted: false, ...roleVisibilityFilter(req.role) });
+    const employee = await Employee.findOne({
+      _id: req.params.id, isDeleted: false, ...roleVisibilityFilter(req.role),
+    });
     if (!employee) return res.status(404).json({ success: false, message: 'Employee not found' });
-    if (employee.status === 'Active') return res.status(400).json({ success: false, message: 'Employee is already activated' });
+    if (employee.status === 'Active') {
+      return res.status(400).json({ success: false, message: 'Employee is already activated' });
+    }
 
     employee.inviteToken        = generateInviteToken();
     employee.inviteTokenExpires = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
     await employee.save();
-    return res.json({ success: true, message: 'Invite resent', inviteLink: constructInviteLink(employee.inviteToken) });
+    return res.json({
+      success:    true,
+      message:    'Invite resent',
+      inviteLink: constructInviteLink(employee.inviteToken),
+    });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
 });
 
 // ─── POST /api/employees/:id/reset-password ───────────────────────────────────
+
 router.post('/:id/reset-password', adminAuth, async (req, res) => {
   try {
-    const employee = await Employee.findOne({ _id: req.params.id, isDeleted: false, ...roleVisibilityFilter(req.role) });
+    const employee = await Employee.findOne({
+      _id: req.params.id, isDeleted: false, ...roleVisibilityFilter(req.role),
+    });
     if (!employee) return res.status(404).json({ success: false, message: 'Employee not found' });
 
     const seg = () => Math.random().toString(36).slice(2, 6).toUpperCase();
@@ -406,19 +478,26 @@ router.post('/:id/reset-password', adminAuth, async (req, res) => {
     await employee.save();
 
     const revealInDev = process.env.NODE_ENV !== 'production' || process.env.RETURN_TEMP_PASSWORD === 'true';
-    return res.json({ success: true, message: 'Temporary password generated.', ...(revealInDev && { tempPassword }) });
+    return res.json({
+      success: true,
+      message: 'Temporary password generated.',
+      ...(revealInDev && { tempPassword }),
+    });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
 });
 
 // ─── DELETE /api/employees/:id ────────────────────────────────────────────────
+
 router.delete('/:id', adminAuth, async (req, res) => {
   try {
     if (String(req.userId) === String(req.params.id)) {
       return res.status(403).json({ success: false, message: 'You cannot delete your own account' });
     }
-    const employee = await Employee.findOne({ _id: req.params.id, isDeleted: false, ...roleVisibilityFilter(req.role) });
+    const employee = await Employee.findOne({
+      _id: req.params.id, isDeleted: false, ...roleVisibilityFilter(req.role),
+    });
     if (!employee) return res.status(404).json({ success: false, message: 'Employee not found' });
 
     employee.isDeleted  = true;

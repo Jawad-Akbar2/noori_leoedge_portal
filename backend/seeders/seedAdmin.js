@@ -3,7 +3,8 @@
 // Creates:
 //   1. Superadmin users      (login-only — no salary / shift)
 //   2. Admin user            (full employee — has shift + salary + payroll)
-//   3. Day/night-shift employees (hourly)
+//   3. Hybrid user           (employee + attendance/notifications admin access)
+//   4. Regular employees     (hourly, various shifts)
 
 import mongoose from 'mongoose';
 import Employee from '../models/Employee.js';
@@ -39,9 +40,8 @@ const EMPLOYEES = [
   },
 
   // ── Admin ─────────────────────────────────────────────────────────────────
-  // Treated exactly like a regular employee:
-  //   - requires shift + salaryType + hourlyRate
-  //   - appears in attendance, payroll, and performance reports
+  // Full payroll employee with admin panel access.
+  // Requires shift + salaryType + hourlyRate (same as employee).
   {
     email:          'admin@example.com',
     employeeNumber: 'ADMIN001',
@@ -58,7 +58,28 @@ const EMPLOYEES = [
     password:       'Admin@123456'
   },
 
-  // ── Customer Support — day shift (hourly) ─────────────────────────────────
+  // ── Hybrid ────────────────────────────────────────────────────────────────
+  // Full payroll employee who also has access to:
+  //   - Manage Attendance (ManualAttendance module)
+  //   - Notifications (NotificationCenter module)
+  // Shift + salary required — treated identically to employee in payroll.
+  {
+    email:          'hybrid@example.com',
+    employeeNumber: 'HYBRID001',
+    firstName:      'Hybrid',
+    lastName:       'User',
+    department:     'IT',
+    role:           'hybrid',
+    joiningDate:    new Date(Date.now() - 30 * 86_400_000),
+    shift:          { start: '09:00', end: '18:00' },
+    salaryType:     'hourly',
+    hourlyRate:     400,
+    monthlySalary:  null,
+    status:         'Active',
+    password:       'Hybrid@123456'
+  },
+
+  // ── Customer Support — various shifts (hourly) ────────────────────────────
   {
     email:          'iqbalrafay9@gmail.com',
     employeeNumber: '1',
@@ -229,7 +250,7 @@ const EMPLOYEES = [
 async function seedAdmin() {
   try {
     await mongoose.connect(process.env.MONGODB_URI);
-    console.log('✓ Connected to MongoDB');
+    console.log('✓ Connected to MongoDB\n');
 
     for (const data of EMPLOYEES) {
       const existing = await Employee.findOne({ email: data.email });
@@ -242,10 +263,13 @@ async function seedAdmin() {
       const emp = new Employee(data);
       await emp.save();
 
-      const isSystem = emp.isSystemAccount();   // true only for superadmin
-      console.log(`✓ Created [${emp.role.padEnd(10)}] ${emp.firstName} ${emp.lastName}`);
+      const isSystem = emp.isSystemAccount();
+      const roleTag  = emp.role.padEnd(10);
+
+      console.log(`✓ Created [${roleTag}] ${emp.firstName} ${emp.lastName}`);
       console.log(`    email    : ${emp.email}`);
       console.log(`    empNo    : ${emp.employeeNumber}`);
+      console.log(`    password : ${data.password}`);  // plain — only shown at seed time
 
       if (isSystem) {
         console.log(`    shift    : N/A (login-only system account)`);
@@ -256,9 +280,10 @@ async function seedAdmin() {
           ? `monthly = PKR ${emp.monthlySalary}`
           : `hourly  = PKR ${emp.hourlyRate}/hr`}`);
       }
+      console.log();
     }
 
-    console.log('\n✓ seedAdmin complete');
+    console.log('✓ seedAdmin complete');
     process.exit(0);
   } catch (err) {
     console.error('✗ seedAdmin error:', err.message);

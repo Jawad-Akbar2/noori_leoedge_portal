@@ -14,7 +14,8 @@ import ResetPassword       from './components/Auth/ResetPassword';
 import ProtectedRoute      from './components/Auth/ProtectedRoute';
 
 // ── Shared layout ──────────────────────────────────────────────────────────
-import Header from './components/Common/Header';
+import Header    from './components/Common/Header';
+import MyProfile from './components/Common/MyProfile.jsx';
 
 // ── Admin ──────────────────────────────────────────────────────────────────
 import AdminSidebar        from './components/Admin/Sidebar';
@@ -30,7 +31,10 @@ import EmployeeDashboard   from './components/Employee/EmployeeDashboard';
 import AttendanceHistory   from './components/Employee/AttendanceHistory';
 import MySalary            from './components/Employee/MySalary';
 import MyRequests          from './components/Employee/MyRequests';
-import Profile             from './components/Employee/Profile';
+
+// ── Hybrid ─────────────────────────────────────────────────────────────────
+// Only the sidebar is new — all page components are reused from admin/employee
+import HybridSidebar       from './components/Common/HybridSidebar.jsx';
 
 import { useWindowSize }   from './hooks/useWindowSize.js';
 
@@ -72,6 +76,7 @@ function AdminLayoutWrapper() {
         <Route path="attendance"    element={<ManualAttendance />} />
         <Route path="payroll"       element={<PayrollReports />} />
         <Route path="notifications" element={<NotificationCenter />} />
+        <Route path="profile"       element={<MyProfile />} />
         <Route path="/"             element={<Navigate to="dashboard" replace />} />
         <Route path="*"             element={<Navigate to="dashboard" replace />} />
       </Routes>
@@ -89,9 +94,35 @@ function EmployeeLayoutWrapper() {
         <Route path="attendance" element={<AttendanceHistory />} />
         <Route path="salary"     element={<MySalary />} />
         <Route path="requests"   element={<MyRequests />} />
-        <Route path="profile"    element={<Profile />} />
+        <Route path="profile"    element={<MyProfile />} />
         <Route path="/"          element={<Navigate to="dashboard" replace />} />
         <Route path="*"          element={<Navigate to="dashboard" replace />} />
+      </Routes>
+    </AppLayout>
+  );
+}
+
+// ─── Hybrid layout ────────────────────────────────────────────────────────────
+// Same employee experience + Manage Attendance + Notifications from admin.
+// Zero new page components — everything is reused.
+
+function HybridLayoutWrapper() {
+  return (
+    <AppLayout Sidebar={HybridSidebar}>
+      <Routes>
+        {/* Employee modules */}
+        <Route path="dashboard"         element={<EmployeeDashboard />} />
+        <Route path="attendance"        element={<AttendanceHistory />} />
+        <Route path="salary"            element={<MySalary />} />
+        <Route path="requests"          element={<MyRequests />} />
+        <Route path="profile"           element={<MyProfile />} />
+
+        {/* Extra admin modules */}
+        <Route path="manage-attendance" element={<ManualAttendance />} />
+        <Route path="notifications"     element={<NotificationCenter />} />
+
+        <Route path="/"                 element={<Navigate to="dashboard" replace />} />
+        <Route path="*"                 element={<Navigate to="dashboard" replace />} />
       </Routes>
     </AppLayout>
   );
@@ -103,7 +134,9 @@ function RootRedirect() {
   const { user, role, loading } = useAuth();
   if (loading) return null;
   if (user && role) {
-    return <Navigate to={role === 'admin' || role === 'superadmin' ? '/admin/dashboard' : '/employee/dashboard'} replace />;
+    if (role === 'admin' || role === 'superadmin') return <Navigate to="/admin/dashboard"    replace />;
+    if (role === 'hybrid')                         return <Navigate to="/hybrid/dashboard"   replace />;
+    return                                                <Navigate to="/employee/dashboard" replace />;
   }
   return <Navigate to="/login" replace />;
 }
@@ -120,29 +153,20 @@ export default function App() {
             position="top-right"
             toastOptions={{
               duration: 4000,
-              style: {
-                borderRadius: '8px',
-                fontSize: '14px',
-              },
-              success: {
-                iconTheme: { primary: '#2563eb', secondary: '#fff' },
-              },
-              error: {
-                iconTheme: { primary: '#dc2626', secondary: '#fff' },
-              },
+              style: { borderRadius: '8px', fontSize: '14px' },
+              success: { iconTheme: { primary: '#2563eb', secondary: '#fff' } },
+              error:   { iconTheme: { primary: '#dc2626', secondary: '#fff' } },
             }}
           />
 
           <Routes>
             {/* Public */}
-            <Route path="/login"            element={<Login />} />
-            <Route path="/join/:token"      element={<EmployeeOnboarding />} />
+            <Route path="/login"           element={<Login />} />
+            <Route path="/join/:token"     element={<EmployeeOnboarding />} />
+            <Route path="/forgot-password" element={<ForgotPassword />} />
+            <Route path="/reset-password"  element={<ResetPassword />} />
 
-            {/* Password reset flow — ResetPassword is guarded internally */}
-            <Route path="/forgot-password"  element={<ForgotPassword />} />
-            <Route path="/reset-password"   element={<ResetPassword />} />
-
-            {/* Admin — protected */}
+            {/* Admin — superadmin + admin */}
             <Route
               path="/admin/*"
               element={
@@ -152,12 +176,22 @@ export default function App() {
               }
             />
 
-            {/* Employee — protected */}
+            {/* Employee */}
             <Route
               path="/employee/*"
               element={
                 <ProtectedRoute requiredRole="employee">
                   <EmployeeLayoutWrapper />
+                </ProtectedRoute>
+              }
+            />
+
+            {/* Hybrid */}
+            <Route
+              path="/hybrid/*"
+              element={
+                <ProtectedRoute requiredRole="hybrid">
+                  <HybridLayoutWrapper />
                 </ProtectedRoute>
               }
             />

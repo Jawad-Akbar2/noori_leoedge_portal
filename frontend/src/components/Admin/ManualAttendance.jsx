@@ -97,17 +97,60 @@ function AttendanceFormModal({ mode = 'add', record = null, onClose, onSuccess, 
       const amount = parseFloat(otDraft.amount);
       if (!amount || amount < 0) return toast.error('Enter a valid OT amount');
       setForm(prev => ({ ...prev, otDetails: [...prev.otDetails, { type: 'manual', amount, reason: otDraft.reason.trim() }] }));
-    } else {
-      const hours = parseFloat(otDraft.hours);
-      const rate  = parseFloat(otDraft.rate) || 1;
-      if (!hours || hours <= 0) return toast.error('Enter valid OT hours');
-      setForm(prev => ({ ...prev, otDetails: [...prev.otDetails, { type: 'calc', hours, rate, reason: otDraft.reason.trim() }] }));
-    }
+   } else {
+  const hours = parseFloat(otDraft.hours);
+  const rate  = parseFloat(otDraft.rate) || 1;  // ✅ already correct
+  if (!hours || hours <= 0) return toast.error('Enter valid OT hours');
+  setForm(prev => ({ ...prev, otDetails: [...prev.otDetails, { 
+    type: 'calc', 
+    hours,           // number ✅
+    rate,            // number ✅ (parseFloat converts "1.5" → 1.5)
+    reason: otDraft.reason.trim() 
+  }] }));
+}
     setOtDraft({ type: 'calc', amount: '', hours: '', rate: '1.5', reason: '' });
   };
 
-  const removeDetail = (key, index) =>
-    setForm(prev => ({ ...prev, [key]: prev[key].filter((_, i) => i !== index) }));
+// Replace removeDetail with this in AttendanceFormModal:
+
+const removeDetail = async (key, index) => {
+  const updated = form[key].filter((_, i) => i !== index);
+  setForm(prev => ({ ...prev, [key]: updated }));
+
+  // Only auto-save in edit mode — in add mode user hasn't saved yet
+  if (!isEdit) return;
+
+  try {
+    const token = localStorage.getItem('token');
+    const raw = record?.empId;
+    let resolvedEmpId;
+    if (typeof raw === 'object' && raw !== null) {
+      resolvedEmpId = raw._id?.toString?.() || String(raw);
+    } else {
+      resolvedEmpId = String(raw);
+    }
+
+    const payload = {
+      empId:            resolvedEmpId,
+      date:             form.date,
+      status:           form.status,
+      inTime:           form.inTime  || null,
+      outTime:          form.outTime || null,
+      outNextDay:       form.outNextDay || false,
+      deductionDetails: key === 'deductionDetails' ? updated : form.deductionDetails,
+      otDetails:        key === 'otDetails'        ? updated : form.otDetails,
+    };
+
+    await axios.post('/api/attendance/save-row', payload, {
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
+    });
+
+    toast.success('Removed and saved');
+    onSuccess(); // refresh the table so earning updates live
+  } catch (err) {
+    toast.error(err.response?.data?.message || 'Failed to save after removal');
+  }
+};
 
   const handleSubmit = async () => {
     if (!isEdit && !form.empId) return toast.error('Please select an employee');
@@ -147,16 +190,23 @@ function AttendanceFormModal({ mode = 'add', record = null, onClose, onSuccess, 
         resolvedEmpId = form.empId;
       }
 
-      const payload = {
-        empId:            resolvedEmpId,
-        date:             form.date,
-        status:           form.status,
-        inTime:           form.inTime  || null,
-        outTime:          form.outTime || null,
-        outNextDay:       form.outNextDay || false,
-        deductionDetails: form.deductionDetails,
-        otDetails:        form.otDetails,
-      };
+
+
+
+
+const payload = {
+  empId:      resolvedEmpId,
+  date:       form.date,
+  status:     form.status,
+  inTime:     form.inTime  || null,
+  outTime:    form.outTime || null,
+  outNextDay: form.outNextDay || false,
+  otDetails:  form.otDetails,
+  // Only send deductionDetails if editing OR admin added manual entries
+  ...(isEdit || form.deductionDetails.length > 0
+    ? { deductionDetails: form.deductionDetails }
+    : {}),
+};
 
       await axios.post('/api/attendance/save-row', payload, {
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }

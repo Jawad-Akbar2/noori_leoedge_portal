@@ -6,11 +6,11 @@ const deductionDetailSchema = new mongoose.Schema(
   {
     amount: { type: Number, required: true, min: 0 },
     reason: { type: String, required: true, trim: true },
-    type: {
-      type: String,
-      enum: ["late_login", "early_logout", "fixed_penalty", "hourly_penalty"],
-      required: true,
-    },
+   type: {
+  type: String,
+  enum: ["late_login", "early_logout", "fixed_penalty", "hourly_penalty", "manual"],
+  default: "manual",
+},
     createdAt: { type: Date, default: Date.now },
   },
   { _id: false },
@@ -18,11 +18,18 @@ const deductionDetailSchema = new mongoose.Schema(
 
 const otDetailSchema = new mongoose.Schema(
   {
-    type: { type: String, enum: ['manual'], default: 'manual' },
+    type:   { type: String, enum: ['manual', 'calc'], default: 'manual' },
     amount: { type: Number, min: 0, default: 0 },
-    hours: { type: Number, min: 0, default: 0 },
-    rate: { type: Number, enum: [1, 1.5, 2], default: 1 },
-    reason: { type: String, required: true, trim: true },
+    hours:  { type: Number, min: 0, default: 0 },
+    rate:   { 
+      type: Number, 
+      default: 1,
+      validate: {
+        validator: v => [1, 1.5, 2].includes(v),
+        message: 'rate must be 1, 1.5, or 2'
+      }
+    },
+    reason:    { type: String, required: true, trim: true },
     createdAt: { type: Date, default: Date.now },
   },
   { _id: false },
