@@ -31,9 +31,21 @@ async function resolveUser(req, res) {
     "-password -tempPassword",
   );
 
-  if (!user || user.isDeleted) {
+    if (!user || user.isDeleted) {
     res.status(401).json({ success: false, message: "User not found" });
     return null;
+  }
+
+  // ⚠️ Reject tokens issued before the last password change
+  if (user.passwordChangedAt) {
+    const tokenIssuedAt = decoded.iat * 1000;
+    if (user.passwordChangedAt.getTime() > tokenIssuedAt) {
+      res.status(401).json({
+        success: false,
+        message: "Password was changed. Please log in again.",
+      });
+      return null;
+    }
   }
 
   // Frozen accounts cannot access anything

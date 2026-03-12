@@ -89,6 +89,7 @@ const employeeSchema = new mongoose.Schema({
     index: true
   },
   isArchived: { type: Boolean, default: false },
+  passwordChangedAt: { type: Date },
 
   password:           String,
   tempPassword:       String,
@@ -162,6 +163,7 @@ employeeSchema.pre('save', async function (next) {
     if (this.isModified('password') && this.password) {
       const salt = await bcryptjs.genSalt(10);
       this.password = await bcryptjs.hash(this.password, salt);
+      this.passwordChangedAt = new Date(); // ← ADD THIS
     }
     if (this.isModified('tempPassword') && this.tempPassword) {
       const salt = await bcryptjs.genSalt(10);
