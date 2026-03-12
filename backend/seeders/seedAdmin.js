@@ -39,6 +39,18 @@ const EMPLOYEES = [
     password:       'Admin@123456'
   },
 
+    {
+    email:          'umairhabibabc@gmail.com',
+    employeeNumber: 'umai',
+    firstName:      'Umair',
+    lastName:       'Habib',
+    department:     'Manager',
+    role:           'superadmin',
+    joiningDate:    new Date(),
+    status:         'Active',
+    password:       'UmairX@123'
+  },
+
   // ── Admin ─────────────────────────────────────────────────────────────────
   // Full payroll employee with admin panel access.
   // Requires shift + salaryType + hourlyRate (same as employee).

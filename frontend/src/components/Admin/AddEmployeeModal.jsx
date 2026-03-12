@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import axios from 'axios';
+import axios from 'axios'
 import { X, Save, AlertCircle, Calendar, Shield } from 'lucide-react';
 import toast from 'react-hot-toast';
 import EmployeeLinkDialog from './EmployeeLinkDialog';
