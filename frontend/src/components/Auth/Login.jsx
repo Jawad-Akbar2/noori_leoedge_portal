@@ -1,12 +1,9 @@
 /**
- * components/auth/Login.jsx
- *
- * Calls the auth service (which uses apiClient) and stores credentials
- * via AuthContext.login() — single source of truth for auth state.
+ * components/auth/Login.jsx  (updated — adds "Forgot password?" link)
  */
 
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { LogIn, Eye, EyeOff } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { login as authLogin } from '../../services/auth.js';
@@ -22,14 +19,12 @@ export default function Login() {
   const navigate = useNavigate();
   const { login: ctxLogin, user, role } = useAuth();
 
-  // Already logged in → redirect immediately
   useEffect(() => {
     if (user && role) {
       navigate(role === 'admin' || role === 'superadmin' ? '/admin/dashboard' : '/employee/dashboard', { replace: true });
     }
   }, [user, role, navigate]);
 
-  // Restore saved email on mount
   useEffect(() => {
     const saved = localStorage.getItem('savedEmail');
     if (saved) {
@@ -40,7 +35,6 @@ export default function Login() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-
     if (!email.trim() || !password) {
       toast.error('Email and password are required');
       return;
@@ -48,13 +42,9 @@ export default function Login() {
 
     setLoading(true);
     try {
-      // authLogin calls POST /api/auth/login via apiClient
       const { token, user: userData } = await authLogin(email.trim(), password);
-
-      // Sync AuthContext state (single source of truth)
       ctxLogin(userData, token);
 
-      // Handle remember me
       if (rememberMe) {
         localStorage.setItem('savedEmail', email.trim());
       } else {
@@ -62,7 +52,6 @@ export default function Login() {
       }
 
       toast.success(`Welcome, ${userData.firstName}!`);
-
       navigate(
         userData.role === 'admin' || userData.role === 'superadmin' ? '/admin/dashboard' : '/employee/dashboard',
         { replace: true }
@@ -87,7 +76,6 @@ export default function Login() {
           <p className="text-gray-600">Employee Management System</p>
         </div>
 
-        {/* Login Form */}
         <form onSubmit={handleSubmit} className="space-y-4">
 
           {/* Email */}
@@ -109,9 +97,18 @@ export default function Login() {
 
           {/* Password */}
           <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-2">
-              Password
-            </label>
+            <div className="flex items-center justify-between mb-2">
+              <label className="text-sm font-semibold text-gray-700">
+                Password
+              </label>
+              {/* ── Forgot password link ── */}
+              <Link
+                to="/forgot-password"
+                className="text-xs text-blue-600 hover:text-blue-700 font-medium hover:underline"
+              >
+                Forgot password?
+              </Link>
+            </div>
             <div className="relative">
               <input
                 type={showPassword ? 'text' : 'password'}

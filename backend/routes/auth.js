@@ -3,9 +3,14 @@
 import express from 'express';
 import jwt from 'jsonwebtoken';
 import Employee from '../models/Employee.js';
+import Verification from '../models/Verification.js';
+import { sendPasswordResetEmail } from '../utils/mailer.js';
 import { auth } from '../middleware/auth.js';
 
 const router = express.Router();
+import dotenv from 'dotenv';
+
+dotenv.config();
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
@@ -211,6 +216,127 @@ router.post('/change-password', auth, async (req, res) => {
     return res.json({ success: true, message: 'Password changed successfully' });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+
+// routes/auth.js  — ADD THESE TWO ROUTES to your existing auth router
+
+
+router.post('/forgot-password', async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({ success: false, message: 'Email is required' });
+    }
+
+    const employee = await Employee.findOne({
+      email:     email.toLowerCase().trim(),
+      isDeleted: false,
+      status:    { $ne: 'Frozen' }
+    });
+
+    // Always respond 200 — never reveal whether the email exists
+    if (!employee) {
+      return res.json({
+        success: true,
+        message: 'If that email is registered, a reset link has been sent.'
+      });
+    }
+
+    const plainToken = await Verification.createForEmail(employee.email, 15); // 15-min TTL
+
+    await sendPasswordResetEmail(employee.email, employee.firstName, plainToken);
+
+    return res.json({
+      success: true,
+      message: 'If that email is registered, a reset link has been sent.'
+    });
+  } catch (err) {
+    console.error('[forgot-password]', err);
+    res.status(500).json({ success: false, message: 'Failed to send reset email. Please try again.' });
+  }
+});
+
+// ─── POST /api/auth/reset-password ───────────────────────────────────────────
+// Validates the token from the email link and sets a new password.
+
+router.post('/reset-password', async (req, res) => {
+  try {
+    const { email, token, newPassword } = req.body;
+
+    if (!email || !token || !newPassword) {
+      return res.status(400).json({
+        success: false,
+        message: 'email, token, and newPassword are required'
+      });
+    }
+
+    if (newPassword.length < 8) {
+      return res.status(400).json({
+        success: false,
+        message: 'Password must be at least 8 characters'
+      });
+    }
+
+    const verification = await Verification.findValid(email, token);
+
+    if (!verification) {
+      return res.status(400).json({
+        success: false,
+        message: 'Reset link is invalid or has expired. Please request a new one.'
+      });
+    }
+
+    const employee = await Employee.findOne({
+      email:     email.toLowerCase().trim(),
+      isDeleted: false
+    });
+
+    if (!employee) {
+      return res.status(404).json({ success: false, message: 'Account not found' });
+    }
+
+    employee.password = newPassword;   // hashed by pre-save hook
+    await employee.save();
+
+    // Invalidate the token immediately after use
+    await verification.deleteOne();
+
+    return res.json({ success: true, message: 'Password has been reset successfully. You can now log in.' });
+  } catch (err) {
+    console.error('[reset-password]', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+
+router.post('/verify-reset-token', async (req, res) => {
+  try {
+    const { email, token } = req.body;
+
+    if (!email || !token) {
+      return res.status(400).json({ success: false, valid: false, message: 'email and token are required' });
+    }
+
+    const verification = await Verification.findValid(email, token);
+
+    if (!verification) {
+      return res.status(400).json({
+        success: false,
+        valid:   false,
+        message: 'Reset link is invalid or has expired.'
+      });
+    }
+
+    // Tell the client it's valid and how many seconds remain
+    const secondsLeft = Math.floor((new Date(verification.expiresAt) - Date.now()) / 1000);
+
+    return res.json({ success: true, valid: true, expiresInSeconds: secondsLeft });
+  } catch (err) {
+    console.error('[verify-reset-token]', err);
+    res.status(500).json({ success: false, valid: false, message: err.message });
   }
 });
 

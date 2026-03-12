@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { Toaster } from 'react-hot-toast';   // ← ADD THIS
+import { Toaster } from 'react-hot-toast';
 
 // ── Providers ──────────────────────────────────────────────────────────────
 import { AuthProvider, useAuth }             from './context/AuthContext.js';
@@ -9,6 +9,8 @@ import { NotificationProvider }              from './context/NotificationContext
 // ── Auth ───────────────────────────────────────────────────────────────────
 import Login               from './components/Auth/Login';
 import EmployeeOnboarding  from './components/Auth/EmployeeOnboarding';
+import ForgotPassword      from './components/Auth/ForgotPassword';
+import ResetPassword       from './components/Auth/ResetPassword';
 import ProtectedRoute      from './components/Auth/ProtectedRoute';
 
 // ── Shared layout ──────────────────────────────────────────────────────────
@@ -114,7 +116,6 @@ export default function App() {
       <NotificationProvider>
         <Router>
 
-          {/* ── Toaster: render ONCE here, inside Router so navigate works in toasts ── */}
           <Toaster
             position="top-right"
             toastOptions={{
@@ -134,8 +135,12 @@ export default function App() {
 
           <Routes>
             {/* Public */}
-            <Route path="/login"       element={<Login />} />
-            <Route path="/join/:token" element={<EmployeeOnboarding />} />
+            <Route path="/login"            element={<Login />} />
+            <Route path="/join/:token"      element={<EmployeeOnboarding />} />
+
+            {/* Password reset flow — ResetPassword is guarded internally */}
+            <Route path="/forgot-password"  element={<ForgotPassword />} />
+            <Route path="/reset-password"   element={<ResetPassword />} />
 
             {/* Admin — protected */}
             <Route
