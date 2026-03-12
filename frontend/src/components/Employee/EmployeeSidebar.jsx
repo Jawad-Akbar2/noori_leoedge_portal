@@ -18,10 +18,10 @@ export default function EmployeeSidebar({ isOpen, isMobile }) {
 
   const menuItems = [
     { icon: LayoutDashboard, label: 'Dashboard', path: '/employee/dashboard' },
-    { icon: Clock, label: 'Attendance', path: '/employee/attendance' },
-    { icon: DollarSign, label: 'Salary', path: '/employee/salary' },
+    { icon: Clock, label: 'My Attendance', path: '/employee/attendance' },
+    { icon: DollarSign, label: 'My Salary', path: '/employee/salary' },
     { icon: FileText, label: 'My Requests', path: '/employee/requests' },
-    { icon: User, label: 'Profile', path: '/employee/profile' }
+    { icon: User, label: 'My Profile', path: '/employee/profile' }
   ];
 
   const isActive = (path) => location.pathname === path;
