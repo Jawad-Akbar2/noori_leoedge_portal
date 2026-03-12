@@ -332,6 +332,7 @@ export default function EditEmployeeModal({ employee, onClose, onSave, currentUs
                     <option value="employee">Employee</option>
                     <option value="admin">Admin</option>
                     <option value="superadmin">Superadmin</option>
+                     <option value="hybrid">Hybrid</option>
                   </select>
                   {['admin','superadmin'].includes(formData.role) && (
                     <p className="text-xs text-purple-700 mt-1 flex items-center gap-1">

@@ -330,6 +330,7 @@ export default function ManageEmployees() {
               <option value="employee">Employee</option>
               <option value="admin">Admin</option>
               <option value="superadmin">Superadmin</option>
+              <option value="hybrid">Hybrid</option>
             </select>
           )}
         </div>

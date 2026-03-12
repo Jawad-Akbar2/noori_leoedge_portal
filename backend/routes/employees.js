@@ -348,7 +348,7 @@ router.put('/:id', adminAuth, async (req, res) => {
 
     // ── Role (superadmin only) ────────────────────────────────────────────────
     if (req.body.role !== undefined && req.role === 'superadmin') {
-      if (!['employee', 'admin', 'superadmin'].includes(req.body.role)) {
+      if (!['employee', 'admin', 'superadmin', 'hybrid'].includes(req.body.role)) {
         return res.status(400).json({ success: false, message: 'Invalid role' });
       }
       employee.role = req.body.role;

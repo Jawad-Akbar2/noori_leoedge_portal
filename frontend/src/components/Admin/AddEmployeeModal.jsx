@@ -280,6 +280,7 @@ export default function AddEmployeeModal({ onClose, onSave, currentUserRole }) {
                       <option value="employee">Employee</option>
                       <option value="admin">Admin</option>
                       <option value="superadmin">Superadmin</option>
+                       <option value="hybrid">Hybrid</option>
                     </select>
                     {selectedRoleIsPrivileged && (
                       <p className="text-xs text-purple-700 mt-1 flex items-center gap-1">
