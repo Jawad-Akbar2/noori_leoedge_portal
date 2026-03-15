@@ -15,16 +15,16 @@
 
 // utils/csvParser.js
 
-import { normalizeTime } from './timeNormalizer.js';
-import { parseDate, formatDate } from './dateUtils.js';
+import { normalizeTime } from "./timeNormalizer.js";
+import { parseDate, formatDate } from "./dateUtils.js";
 
 // ─── delimiter detection ──────────────────────────────────────────────────────
 
 function detectDelimiter(csvContent) {
-  const first = csvContent.trim().split('\n')[0] || '';
-  const pipes  = (first.match(/\|/g) || []).length;
-  const commas = (first.match(/,/g)  || []).length;
-  return pipes >= commas ? '|' : ',';
+  const first = csvContent.trim().split("\n")[0] || "";
+  const pipes = (first.match(/\|/g) || []).length;
+  const commas = (first.match(/,/g) || []).length;
+  return pipes >= commas ? "|" : ",";
 }
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
@@ -32,34 +32,34 @@ function detectDelimiter(csvContent) {
 /** "HH:mm" → total minutes from midnight */
 const toMin = (t) => {
   if (!t) return 0;
-  const [h, m] = t.split(':').map(Number);
+  const [h, m] = t.split(":").map(Number);
   return h * 60 + m;
 };
 
 // ─── parseCSV ─────────────────────────────────────────────────────────────────
 
 export function parseCSV(csvContent) {
-  const lines     = csvContent.trim().split('\n');
-  const parsed    = [];
-  const errors    = [];
+  const lines = csvContent.trim().split("\n");
+  const parsed = [];
+  const errors = [];
   const delimiter = detectDelimiter(csvContent);
 
   // Skip header row if present
   let startIndex = 0;
-  if (lines[0]?.toLowerCase().includes('empid')) startIndex = 1;
+  if (lines[0]?.toLowerCase().includes("empid")) startIndex = 1;
 
   for (let i = startIndex; i < lines.length; i++) {
-    const line      = lines[i].trim();
+    const line = lines[i].trim();
     if (!line) continue;
 
     const rowNumber = i + 1;
-    const parts     = line.split(delimiter).map(p => p.trim());
+    const parts = line.split(delimiter).map((p) => p.trim());
 
     if (parts.length < 6) {
       errors.push({
         rowNumber,
-        error:   `Expected 6 columns (delimiter "${delimiter}"), got ${parts.length}`,
-        rawLine: line
+        error: `Expected 6 columns (delimiter "${delimiter}"), got ${parts.length}`,
+        rawLine: line,
       });
       continue;
     }
@@ -67,40 +67,52 @@ export function parseCSV(csvContent) {
     const [empId, firstName, lastName, dateStr, timeStr, statusStr] = parts;
 
     if (!empId) {
-      errors.push({ rowNumber, error: 'Employee ID is empty', rawLine: line });
+      errors.push({ rowNumber, error: "Employee ID is empty", rawLine: line });
       continue;
     }
 
     const parsedDate = parseDate(dateStr);
     if (!parsedDate) {
-      errors.push({ rowNumber, error: `Invalid date "${dateStr}" (expected dd/mm/yyyy)`, rawLine: line });
+      errors.push({
+        rowNumber,
+        error: `Invalid date "${dateStr}" (expected dd/mm/yyyy)`,
+        rawLine: line,
+      });
       continue;
     }
 
     const normalizedTime = normalizeTime(timeStr);
     if (!normalizedTime) {
-      errors.push({ rowNumber, error: `Invalid time "${timeStr}"`, rawLine: line });
+      errors.push({
+        rowNumber,
+        error: `Invalid time "${timeStr}"`,
+        rawLine: line,
+      });
       continue;
     }
 
     const status = parseInt(statusStr, 10);
     if (isNaN(status) || (status !== 0 && status !== 1)) {
-      errors.push({ rowNumber, error: `Invalid status "${statusStr}" (0=in, 1=out)`, rawLine: line });
+      errors.push({
+        rowNumber,
+        error: `Invalid status "${statusStr}" (0=in, 1=out)`,
+        rawLine: line,
+      });
       continue;
     }
 
     parsed.push({
       rowNumber,
-      empId:      empId.trim().toUpperCase(),
-      firstName:  firstName.trim(),
-      lastName:   lastName.trim(),
-      date:       parsedDate,
-      dateStr:    formatDate(parsedDate),
-      time:       normalizedTime,
+      empId: empId.trim().toUpperCase(),
+      firstName: firstName.trim(),
+      lastName: lastName.trim(),
+      date: parsedDate,
+      dateStr: formatDate(parsedDate),
+      time: normalizedTime,
       status,
-      isCheckIn:  status === 0,
+      isCheckIn: status === 0,
       isCheckOut: status === 1,
-      rawLine:    line
+      rawLine: line,
     });
   }
 
@@ -119,7 +131,6 @@ export function parseCSV(csvContent) {
 export function groupByEmployeeAndDate(parsedRows) {
   const grouped = {};
 
-  // First pass — group by date as written in the CSV (same as before)
   for (const row of parsedRows) {
     const key = `${row.empId}|${row.dateStr}`;
     if (!grouped[key]) {
@@ -141,62 +152,6 @@ export function groupByEmployeeAndDate(parsedRows) {
     });
   }
 
-  // Second pass — fix night-shift check-outs that landed on the next calendar day.
-  //
-  // Rule: if a group has ONLY check-outs (no check-ins), look for the
-  // previous calendar day's group for the same employee. If that group has
-  // ONLY check-ins (no check-outs), merge this group's punches into it
-  // and delete this group.
-  //
-  // Example:
-  //   12th group: EMP006 22:00 in  → has check-in, no check-out
-  //   13th group: EMP006 05:00 out → has check-out, no check-in
-  //   Result: 12th group gets the 05:00 out, 13th group is removed.
-
-  const keys = Object.keys(grouped);
-
-  for (const key of keys) {
-    const group = grouped[key];
-    const hasIns  = group.rows.some(r => r.isCheckIn);
-    const hasOuts = group.rows.some(r => r.isCheckOut);
-
-    // Only process groups that are pure check-outs (orphan outs)
-    if (hasIns || !hasOuts) continue;
-
-    // Find the previous calendar day for this employee
-    const prevDate = new Date(group.date);
-    prevDate.setDate(prevDate.getDate() - 1);
-
-    // Format previous date as dd/mm/yyyy to build the lookup key
-    const pd = prevDate;
-    const prevDateStr = [
-      String(pd.getDate()).padStart(2, '0'),
-      String(pd.getMonth() + 1).padStart(2, '0'),
-      pd.getFullYear()
-    ].join('/');
-
-    const prevKey = `${group.empId}|${prevDateStr}`;
-    const prevGroup = grouped[prevKey];
-
-    if (!prevGroup) continue;
-
-    const prevHasIns  = prevGroup.rows.some(r => r.isCheckIn);
-    const prevHasOuts = prevGroup.rows.some(r => r.isCheckOut);
-
-    // Only merge if the previous day has check-ins but no check-outs
-    if (!prevHasIns || prevHasOuts) continue;
-
-    // Move all punches from this (orphan) group into the previous day's group
-    prevGroup.rows.push(...group.rows);
-
-    // Remove the orphan group so it doesn't get processed again
-    delete grouped[key];
-  }
-
-   for (const group of Object.values(grouped)) {
-    group.hasOrphanOut = group.rows.every(r => r.isCheckOut);
-  }
-
   return grouped;
 }
 
@@ -210,10 +165,16 @@ export function groupByEmployeeAndDate(parsedRows) {
 //   (i.e. the check-out crossed midnight).
 
 export function mergeTimes(rows) {
-  const ins  = rows.filter(r => r.isCheckIn).map(r => r.time).sort();
-  const outs = rows.filter(r => r.isCheckOut).map(r => r.time).sort();
+  const ins = rows
+    .filter((r) => r.isCheckIn)
+    .map((r) => r.time)
+    .sort();
+  const outs = rows
+    .filter((r) => r.isCheckOut)
+    .map((r) => r.time)
+    .sort();
 
-  const inTime  = ins.length  > 0 ? ins[0]               : null;
+  const inTime = ins.length > 0 ? ins[0] : null;
   const outTime = outs.length > 0 ? outs[outs.length - 1] : null;
 
   // Detect midnight crossing: raw out time is numerically less than in time
@@ -245,12 +206,12 @@ export function applyNightShiftPairing(shiftStart, punchTimes) {
   }
 
   const shiftStartMin = toMin(shiftStart);
-  const windowEnd     = shiftStartMin + 14 * 60;   // 14 h from shift start
+  const windowEnd = shiftStartMin + 14 * 60; // 14 h from shift start
 
   // Normalise: punches that appear before shift start are next-day
   const normalised = punchTimes
     .filter(Boolean)
-    .map(t => {
+    .map((t) => {
       let m = toMin(t);
       if (m < shiftStartMin) m += 1440;
       return { time: t, norm: m };
@@ -258,13 +219,18 @@ export function applyNightShiftPairing(shiftStart, punchTimes) {
     .sort((a, b) => a.norm - b.norm);
 
   // inTime: first punch inside the 14-h window
-  const inEntry = normalised.find(p => p.norm >= shiftStartMin && p.norm <= windowEnd);
+  const inEntry = normalised.find(
+    (p) => p.norm >= shiftStartMin && p.norm <= windowEnd,
+  );
   if (!inEntry) return { inTime: null, outTime: null, outNextDay: false };
 
   // outTime: first punch strictly after inEntry and still within window
   // Window is measured from SHIFT START (not from inEntry) — req #4 spec
-  const outEntry = normalised.find(p => p.norm > inEntry.norm && p.norm <= windowEnd);
-  if (!outEntry) return { inTime: inEntry.time, outTime: null, outNextDay: false };
+  const outEntry = normalised.find(
+    (p) => p.norm > inEntry.norm && p.norm <= windowEnd,
+  );
+  if (!outEntry)
+    return { inTime: inEntry.time, outTime: null, outNextDay: false };
 
   const outNextDay = toMin(outEntry.time) < toMin(inEntry.time);
 
@@ -288,5 +254,5 @@ export default {
   groupByEmployeeAndDate,
   mergeTimes,
   applyNightShiftPairing,
-  applyPairingRule
+  applyPairingRule,
 };

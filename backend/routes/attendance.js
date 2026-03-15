@@ -55,6 +55,28 @@ const toMin = (t) => {
   return h * 60 + m;
 };
 
+function resolveNightShiftCheckoutDate(outTime, csvDate, shift) {
+  const isNightShift = toMin(shift.end) < toMin(shift.start);
+  if (!isNightShift) {
+    // Day shift: always use the CSV date as-is
+    return { shiftDate: csvDate, outNextDay: false };
+  }
+
+  const outMin = toMin(outTime);
+  const shiftStartMin = toMin(shift.start);
+
+  if (outMin >= shiftStartMin) {
+    // Checkout is on or after shift start — same-day shift
+    return { shiftDate: csvDate, outNextDay: false };
+  } else {
+    // Checkout is before shift start (next-morning) — belongs to previous day
+    const prevDay = new Date(csvDate);
+    prevDay.setDate(prevDay.getDate() - 1);
+    prevDay.setHours(0, 0, 0, 0);
+    return { shiftDate: prevDay, outNextDay: true };
+  }
+}
+
 /** Hours between two HH:mm times, respecting outNextDay for night shifts */
 function calcHours(inTime, outTime, outNextDay = false) {
   if (!inTime || !outTime) return 0;
@@ -347,13 +369,11 @@ function applyShiftBasedPairing(shiftStart, punchTimes) {
     })
     .sort((a, b) => a.norm - b.norm);
 
-  const inEntry = normalised.find(
-    (p) => p.norm >= shiftStartMin && p.norm <= windowEnd,
-  );
-  if (!inEntry) {
+  const inEntry = normalised.find(p => p.norm >= shiftStartMin && p.norm <= windowEnd);
+if (!inEntry) {
     const outOnly = normalised.find(
-      (p) => p.norm > shiftStartMin && p.norm <= windowEnd,
-    );
+  (p) => p.norm >= shiftStartMin && p.norm <= windowEnd   // was: p.norm > shiftStartMin
+);
     if (outOnly) {
       return {
         inTime: null,
@@ -468,8 +488,8 @@ router.post(
         let inTime, outTime, outNextDay;
 
         if (merged.inTime || merged.outTime) {
-          inTime = merged.inTime;
-          outTime = merged.outTime;
+          inTime     = merged.inTime;
+          outTime    = merged.outTime;
           outNextDay = merged.outNextDay || false;
         } else {
           ({ inTime, outTime, outNextDay } = applyShiftBasedPairing(
@@ -478,17 +498,18 @@ router.post(
           ));
         }
 
-        // ── Apply shift-start assumption when login is missing ──────────────
-        const loginAssumption = assumeLoginFromShift(
-          inTime, outTime, outNextDay, employee.shift
-        );
-        if (loginAssumption.assumed === "in") {
-          inTime     = loginAssumption.inTime;
-          outNextDay = loginAssumption.outNextDay;
-          log.push({
-            type:    "WARN",
-            message: `  ⚠️ Login missing — assumed inTime = ${inTime} (shift start)`,
-          });
+        // ── Resolve the attendance date (night-shift checkout may belong to prev day) ──
+        let attendanceDate = date;
+        if (!inTime && outTime) {
+          const resolved = resolveNightShiftCheckoutDate(outTime, date, employee.shift);
+          attendanceDate = resolved.shiftDate;
+          outNextDay     = resolved.outNextDay;
+          if (resolved.shiftDate.getTime() !== date.getTime()) {
+            log.push({
+              type:    "INFO",
+              message: `  ℹ️ Night-shift checkout — resolved to shift date: ${formatDate(resolved.shiftDate)}`,
+            });
+          }
         }
 
         if (inTime)  log.push({ type: "INFO", message: `  ✓ In:  ${inTime}` });
@@ -498,8 +519,7 @@ router.post(
 
         let status = "Absent";
         if (inTime || outTime) {
-          status =
-            inTime && isLate(inTime, employee.shift.start) ? "Late" : "Present";
+          status = inTime && isLate(inTime, employee.shift.start) ? "Late" : "Present";
         }
 
         const rate = effectiveHourlyRate(employee, 26);
@@ -529,7 +549,7 @@ router.post(
         try {
           const existing = await AttendanceLog.findOne({
             empId: employee._id,
-            date,
+            date: attendanceDate,           // ← fixed
           });
 
           if (existing) {
@@ -542,7 +562,6 @@ router.post(
               continue;
             }
 
-            // Merge: earliest IN, latest OUT
             let mergedIn  = earliestTime(existing.inOut?.in, inTime);
             let mergedOut = latestTime(existing.inOut?.out, outTime);
 
@@ -550,19 +569,6 @@ router.post(
               existing.shift?.isNightShift && mergedIn && mergedOut
                 ? toMin(mergedOut) < toMin(mergedIn)
                 : outNextDay;
-
-            // ── Apply shift-start assumption on merged result too ───────────
-            const mergedLoginAssumption = assumeLoginFromShift(
-              mergedIn, mergedOut, mergedOutNextDay, employee.shift
-            );
-            if (mergedLoginAssumption.assumed === "in") {
-              mergedIn         = mergedLoginAssumption.inTime;
-              mergedOutNextDay = mergedLoginAssumption.outNextDay;
-              log.push({
-                type:    "WARN",
-                message: `  ⚠️ Merged login still missing — assumed inTime = ${mergedIn} (shift start)`,
-              });
-            }
 
             let mergedStatus = existing.status;
             if (mergedIn || mergedOut) {
@@ -572,7 +578,6 @@ router.post(
                   : "Present";
             }
 
-            // Re-run deductions with merged times; preserve existing OT
             const mergedFinancials = buildFinancials({
               status: mergedStatus,
               inTime: mergedIn,
@@ -581,27 +586,26 @@ router.post(
               shift: employee.shift,
               hourlyRate: rate,
               salaryType: employee.salaryType,
-              // Preserve existing admin-set OT — never overwrite
-              otHours: existing.financials?.otHours || 0,
-              otAmount: existing.financials?.otAmount || 0,
+              otHours:      existing.financials?.otHours      || 0,
+              otAmount:     existing.financials?.otAmount     || 0,
               otMultiplier: existing.financials?.otMultiplier || 1,
-              otDetails: existing.financials?.otDetails || [],
+              otDetails:    existing.financials?.otDetails    || [],
             });
 
             await AttendanceLog.updateOne(
               { _id: existing._id },
               {
                 $set: {
-                  status,
+                  status: mergedStatus,     // ← fixed (was: status)
                   salaryType: employee.salaryType,
-                  "inOut.in": mergedIn || null,
-                  "inOut.out": mergedOut || null,
-                  "inOut.outNextDay": mergedOutNextDay,
+                  "inOut.in":          mergedIn  || null,
+                  "inOut.out":         mergedOut || null,
+                  "inOut.outNextDay":  mergedOutNextDay,
                   hourlyRate: rate,
                   financials: mergedFinancials,
-                  "metadata.source": "csv",
-                  "metadata.lastUpdatedBy": req.userId,
-                  "metadata.lastModifiedAt": new Date(),
+                  "metadata.source":          "csv",
+                  "metadata.lastUpdatedBy":   req.userId,
+                  "metadata.lastModifiedAt":  new Date(),
                 },
               },
             );
@@ -613,7 +617,7 @@ router.post(
             });
           } else {
             await AttendanceLog.create({
-              date,
+              date: attendanceDate,         // ← fixed (was: date)
               empId: employee._id,
               empNumber: employee.employeeNumber,
               empName: `${employee.firstName} ${employee.lastName}`,
@@ -621,23 +625,22 @@ router.post(
               status,
               salaryType: employee.salaryType,
               inOut: {
-                in: inTime || null,
-                out: outTime || null,
+                in:         inTime    || null,
+                out:        outTime   || null,
                 outNextDay: outNextDay || false,
               },
               shift: {
-                start: employee.shift.start,
-                end: employee.shift.end,
-                isNightShift:
-                  toMin(employee.shift.end) < toMin(employee.shift.start),
+                start:        employee.shift.start,
+                end:          employee.shift.end,
+                isNightShift: toMin(employee.shift.end) < toMin(employee.shift.start),
               },
               hourlyRate: rate,
               financials,
               manualOverride: false,
               metadata: {
-                source: "csv",
-                lastUpdatedBy: req.userId,
-                lastModifiedAt: new Date(),
+                source:          "csv",
+                lastUpdatedBy:   req.userId,
+                lastModifiedAt:  new Date(),
               },
             });
 
@@ -978,17 +981,6 @@ router.post("/save-row", adminAuth, async (req, res) => {
     let resolvedInTime  = inTime  || null;
     let resolvedOutTime = outTime || null;
 
-    // ── Apply shift-start assumption when login missing (manual entry) ────────
-    // Only for Present/Late — Absent and Leave have no times by design.
-    if ((status === "Present" || status === "Late") && !resolvedInTime && resolvedOutTime) {
-      const loginAssumption = assumeLoginFromShift(
-        null, resolvedOutTime, resolvedOutNextDay, employee.shift
-      );
-      if (loginAssumption.assumed === "in") {
-        resolvedInTime     = loginAssumption.inTime;
-        resolvedOutNextDay = loginAssumption.outNextDay;
-      }
-    }
 
     // ── Sanitise OT details ───────────────────────────────────────────────────
     const cleanOtDetails = (Array.isArray(otDetails) ? otDetails : [])
