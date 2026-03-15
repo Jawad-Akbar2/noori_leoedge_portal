@@ -115,12 +115,13 @@ export function parseCSV(csvContent) {
 // That resolution happens in mergeTimes / applyNightShiftPairing — here we
 // simply group by the date column as written in the CSV.
 
+// ─── groupByEmployeeAndDate ───────────────────────────────────────────────────
 export function groupByEmployeeAndDate(parsedRows) {
   const grouped = {};
 
+  // First pass — group by date as written in the CSV (same as before)
   for (const row of parsedRows) {
     const key = `${row.empId}|${row.dateStr}`;
-
     if (!grouped[key]) {
       grouped[key] = {
         empId:     row.empId,
@@ -131,7 +132,6 @@ export function groupByEmployeeAndDate(parsedRows) {
         rows:      []
       };
     }
-
     grouped[key].rows.push({
       rowNumber:  row.rowNumber,
       time:       row.time,
@@ -139,6 +139,58 @@ export function groupByEmployeeAndDate(parsedRows) {
       isCheckOut: row.isCheckOut,
       rawLine:    row.rawLine
     });
+  }
+
+  // Second pass — fix night-shift check-outs that landed on the next calendar day.
+  //
+  // Rule: if a group has ONLY check-outs (no check-ins), look for the
+  // previous calendar day's group for the same employee. If that group has
+  // ONLY check-ins (no check-outs), merge this group's punches into it
+  // and delete this group.
+  //
+  // Example:
+  //   12th group: EMP006 22:00 in  → has check-in, no check-out
+  //   13th group: EMP006 05:00 out → has check-out, no check-in
+  //   Result: 12th group gets the 05:00 out, 13th group is removed.
+
+  const keys = Object.keys(grouped);
+
+  for (const key of keys) {
+    const group = grouped[key];
+    const hasIns  = group.rows.some(r => r.isCheckIn);
+    const hasOuts = group.rows.some(r => r.isCheckOut);
+
+    // Only process groups that are pure check-outs (orphan outs)
+    if (hasIns || !hasOuts) continue;
+
+    // Find the previous calendar day for this employee
+    const prevDate = new Date(group.date);
+    prevDate.setDate(prevDate.getDate() - 1);
+
+    // Format previous date as dd/mm/yyyy to build the lookup key
+    const pd = prevDate;
+    const prevDateStr = [
+      String(pd.getDate()).padStart(2, '0'),
+      String(pd.getMonth() + 1).padStart(2, '0'),
+      pd.getFullYear()
+    ].join('/');
+
+    const prevKey = `${group.empId}|${prevDateStr}`;
+    const prevGroup = grouped[prevKey];
+
+    if (!prevGroup) continue;
+
+    const prevHasIns  = prevGroup.rows.some(r => r.isCheckIn);
+    const prevHasOuts = prevGroup.rows.some(r => r.isCheckOut);
+
+    // Only merge if the previous day has check-ins but no check-outs
+    if (!prevHasIns || prevHasOuts) continue;
+
+    // Move all punches from this (orphan) group into the previous day's group
+    prevGroup.rows.push(...group.rows);
+
+    // Remove the orphan group so it doesn't get processed again
+    delete grouped[key];
   }
 
   return grouped;
