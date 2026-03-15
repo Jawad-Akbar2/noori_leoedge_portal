@@ -55,26 +55,25 @@ const toMin = (t) => {
   return h * 60 + m;
 };
 
+// ─── Night-shift checkout date resolver ──────────────────────────────────────
+// When we have ONLY a checkout (no check-in), decide which shift-date it
+// belongs to.
+//   out >= shiftStart  →  same-day shift (e.g. 23:00 on a 22:00–07:00 shift)
+//   out <  shiftStart  →  next-morning checkout → shift date = csvDate − 1
 function resolveNightShiftCheckoutDate(outTime, csvDate, shift) {
   const isNightShift = toMin(shift.end) < toMin(shift.start);
   if (!isNightShift) {
-    // Day shift: always use the CSV date as-is
     return { shiftDate: csvDate, outNextDay: false };
   }
-
-  const outMin = toMin(outTime);
+  const outMin        = toMin(outTime);
   const shiftStartMin = toMin(shift.start);
-
   if (outMin >= shiftStartMin) {
-    // Checkout is on or after shift start — same-day shift
     return { shiftDate: csvDate, outNextDay: false };
-  } else {
-    // Checkout is before shift start (next-morning) — belongs to previous day
-    const prevDay = new Date(csvDate);
-    prevDay.setDate(prevDay.getDate() - 1);
-    prevDay.setHours(0, 0, 0, 0);
-    return { shiftDate: prevDay, outNextDay: true };
   }
+  const prevDay = new Date(csvDate);
+  prevDay.setDate(prevDay.getDate() - 1);
+  prevDay.setHours(0, 0, 0, 0);
+  return { shiftDate: prevDay, outNextDay: true };
 }
 
 /** Hours between two HH:mm times, respecting outNextDay for night shifts */
@@ -123,56 +122,9 @@ function latestTime(a, b) {
   return toMin(a) >= toMin(b) ? a : b;
 }
 
-// ─── MISSING LOGIN ASSUMPTION (shift-start rule) ──────────────────────────────
-//
-// When outTime is known but inTime is missing, assume inTime = shift.start.
-// outNextDay is set automatically for night shifts where the out punch
-// numerically precedes the shift start (e.g. out=05:00, shift.start=22:00).
-//
-// Returns { inTime, outTime, outNextDay, assumed: 'in' | null }
-// ─────────────────────────────────────────────────────────────────────────────
-function assumeLoginFromShift(inTime, outTime, outNextDay, shift) {
-  if (inTime || !outTime || !shift?.start) {
-    return { inTime, outTime, outNextDay, assumed: null };
-  }
-
-  const isNightShift = toMin(shift.end) < toMin(shift.start);
-  const resolvedOutNextDay =
-    outNextDay || (isNightShift && toMin(outTime) < toMin(shift.start));
-
-  return {
-    inTime:     shift.start,
-    outTime,
-    outNextDay: resolvedOutNextDay,
-    assumed:    "in",
-  };
-}
-
 // ═════════════════════════════════════════════════════════════════════════════
 // ─── DEDUCTION ENGINE ────────────────────────────────────────────────────────
 // ═════════════════════════════════════════════════════════════════════════════
-//
-// Single source of truth for ALL deduction logic.
-// Called by CSV import, save-row, bulk-save, and correction re-calc.
-//
-// LOGIN brackets (relative to shift.start):
-//   inTime ≤ shiftStart − 10 min             → 0 PKR
-//   inTime in (shiftStart−10, shiftStart−5]  → 250 PKR  fixed_penalty
-//   inTime in (shiftStart−5,  shiftStart]    → 500 PKR  fixed_penalty
-//   inTime > shiftStart (late)               → 800 PKR  fixed_penalty
-//   inTime > shiftStart + 30 min             → 800 PKR  fixed_penalty
-//                                            + 1 × hourlyRate  hourly_penalty
-//
-// LOGOUT brackets (relative to shift.end, night-shift aware):
-//   outTime ≥ shiftEnd                       → 0 PKR
-//   outTime in [shiftEnd−30, shiftEnd)       → 500 PKR  early_logout
-//   outTime < shiftEnd − 30 min              → 800 PKR  early_logout
-//
-// Both penalties STACK on the same day.
-// No deduction is applied when inTime or outTime is absent (handled by 50%-pay
-// logic inside buildFinancials instead).
-// OT is NEVER touched here — admin-only manual field.
-// ─────────────────────────────────────────────────────────────────────────────
 
 function computeDeductions({
   inTime,
@@ -186,47 +138,26 @@ function computeDeductions({
   let earlyLogoutMinutes = 0;
 
   const shiftStartMin = toMin(shift.start);
-  const isNightShift = toMin(shift.end) < toMin(shift.start);
+  const isNightShift  = toMin(shift.end) < toMin(shift.start);
 
   // ── LOGIN penalty ──────────────────────────────────────────────────────────
   if (inTime) {
     const inMin = toMin(inTime);
     let normInMin = inMin;
     if (isNightShift && inMin < shiftStartMin) normInMin += 1440;
-
     const diffFromStart = normInMin - shiftStartMin;
 
     if (diffFromStart > 30) {
       lateMinutes = diffFromStart;
-      details.push({
-        type: "fixed_penalty",
-        amount: 800,
-        reason: `Late login: ${diffFromStart} min after shift start (>30 min bracket)`,
-      });
-      details.push({
-        type: "hourly_penalty",
-        amount: Math.round(hourlyRate),
-        reason: `Additional 1-hour salary deduction for login >30 min late`,
-      });
+      details.push({ type: "fixed_penalty",  amount: 800,                    reason: `Late login: ${diffFromStart} min after shift start (>30 min bracket)` });
+      details.push({ type: "hourly_penalty", amount: Math.round(hourlyRate), reason: `Additional 1-hour salary deduction for login >30 min late` });
     } else if (diffFromStart > 0) {
       lateMinutes = diffFromStart;
-      details.push({
-        type: "fixed_penalty",
-        amount: 800,
-        reason: `Late login: ${diffFromStart} min after shift start (1–30 min bracket)`,
-      });
+      details.push({ type: "fixed_penalty", amount: 800, reason: `Late login: ${diffFromStart} min after shift start (1–30 min bracket)` });
     } else if (diffFromStart > -5) {
-      details.push({
-        type: "fixed_penalty",
-        amount: 500,
-        reason: `Login 0–5 min before shift start (${Math.abs(diffFromStart)} min early)`,
-      });
+      details.push({ type: "fixed_penalty", amount: 500, reason: `Login 0–5 min before shift start (${Math.abs(diffFromStart)} min early)` });
     } else if (diffFromStart > -10) {
-      details.push({
-        type: "fixed_penalty",
-        amount: 250,
-        reason: `Login 6–10 min before shift start (${Math.abs(diffFromStart)} min early)`,
-      });
+      details.push({ type: "fixed_penalty", amount: 250, reason: `Login 6–10 min before shift start (${Math.abs(diffFromStart)} min early)` });
     }
   }
 
@@ -234,40 +165,23 @@ function computeDeductions({
   if (outTime) {
     const shiftEndMin = toMin(shift.end);
     let normShiftEndMin = shiftEndMin;
-    let normOutMin = toMin(outTime);
-
+    let normOutMin      = toMin(outTime);
     if (isNightShift) {
       normShiftEndMin += 1440;
       if (outNextDay) normOutMin += 1440;
     }
-
     const minutesBeforeEnd = normShiftEndMin - normOutMin;
-
     if (minutesBeforeEnd > 30) {
       earlyLogoutMinutes = minutesBeforeEnd;
-      details.push({
-        type: "early_logout",
-        amount: 800,
-        reason: `Early logout: ${minutesBeforeEnd} min before shift end (>30 min bracket)`,
-      });
+      details.push({ type: "early_logout", amount: 800, reason: `Early logout: ${minutesBeforeEnd} min before shift end (>30 min bracket)` });
     } else if (minutesBeforeEnd > 0) {
       earlyLogoutMinutes = minutesBeforeEnd;
-      details.push({
-        type: "early_logout",
-        amount: 500,
-        reason: `Early logout: ${minutesBeforeEnd} min before shift end (1–30 min bracket)`,
-      });
+      details.push({ type: "early_logout", amount: 500, reason: `Early logout: ${minutesBeforeEnd} min before shift end (1–30 min bracket)` });
     }
   }
 
   const totalDeduction = details.reduce((s, d) => s + d.amount, 0);
-
-  return {
-    deductionDetails: details,
-    totalDeduction,
-    lateMinutes,
-    earlyLogoutMinutes,
-  };
+  return { deductionDetails: details, totalDeduction, lateMinutes, earlyLogoutMinutes };
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -289,24 +203,24 @@ function buildFinancials({
 }) {
   const scheduledHrs = shiftHours(shift);
   let hoursWorked = 0;
-  let basePay = 0;
+  let basePay     = 0;
 
   if (status === "Leave") {
     hoursWorked = scheduledHrs;
-    basePay = hoursWorked * hourlyRate;
+    basePay     = hoursWorked * hourlyRate;
   } else if ((status === "Present" || status === "Late") && inTime && outTime) {
     hoursWorked = calcHours(inTime, outTime, outNextDay);
-    basePay = hoursWorked * hourlyRate;
+    basePay     = hoursWorked * hourlyRate;
   } else if ((inTime && !outTime) || (!inTime && outTime)) {
-    // Incomplete punch → 50% penalty on scheduled hours
+    // Incomplete punch → 50% of scheduled hours
     hoursWorked = scheduledHrs;
-    basePay = hoursWorked * hourlyRate * 0.5;
+    basePay     = hoursWorked * hourlyRate * 0.5;
   }
   // Absent → hoursWorked = 0, basePay = 0
 
-  let deductionDetails = [];
-  let totalDeduction = 0;
-  let lateMinutes = 0;
+  let deductionDetails  = [];
+  let totalDeduction    = 0;
+  let lateMinutes       = 0;
   let earlyLogoutMinutes = 0;
 
   if (status !== "Leave" && status !== "Absent") {
@@ -325,10 +239,7 @@ function buildFinancials({
     ? otDetails.reduce((s, e) => s + (e.hours || 0), 0)
     : otHours || 0;
 
-  const finalDayEarning = Math.max(
-    0,
-    basePay - totalDeduction + resolvedOtAmount,
-  );
+  const finalDayEarning = Math.max(0, basePay - totalDeduction + resolvedOtAmount);
 
   return {
     hoursWorked,
@@ -339,8 +250,8 @@ function buildFinancials({
     deduction: totalDeduction,
     deductionDetails,
     otMultiplier: otMultiplier || 1,
-    otHours: resolvedOtHours,
-    otAmount: resolvedOtAmount,
+    otHours:      resolvedOtHours,
+    otAmount:     resolvedOtAmount,
     otDetails,
     finalDayEarning,
   };
@@ -359,7 +270,7 @@ function applyShiftBasedPairing(shiftStart, punchTimes) {
   }
 
   const shiftStartMin = toMin(shiftStart);
-  const windowEnd = shiftStartMin + 14 * 60;
+  const windowEnd     = shiftStartMin + 14 * 60;
 
   const normalised = punchTimes
     .map((t) => {
@@ -369,17 +280,19 @@ function applyShiftBasedPairing(shiftStart, punchTimes) {
     })
     .sort((a, b) => a.norm - b.norm);
 
-  const inEntry = normalised.find(p => p.norm >= shiftStartMin && p.norm <= windowEnd);
-if (!inEntry) {
+  const inEntry = normalised.find(
+    (p) => p.norm >= shiftStartMin && p.norm <= windowEnd,
+  );
+
+  if (!inEntry) {
     const outOnly = normalised.find(
-  (p) => p.norm >= shiftStartMin && p.norm <= windowEnd   // was: p.norm > shiftStartMin
-);
+      (p) => p.norm >= shiftStartMin && p.norm <= windowEnd,
+    );
     if (outOnly) {
       return {
-        inTime: null,
-        outTime: outOnly.time,
-        outNextDay:
-          outOnly.norm > 1440 || toMin(outOnly.time) < shiftStartMin % 1440,
+        inTime:     null,
+        outTime:    outOnly.time,
+        outNextDay: outOnly.norm > 1440 || toMin(outOnly.time) < shiftStartMin % 1440,
       };
     }
     return { inTime: null, outTime: null, outNextDay: false };
@@ -407,18 +320,12 @@ router.post(
   validateCSVFile,
   async (req, res) => {
     const log = [];
-    let rowsProcessed = 0,
-      rowsSuccess = 0,
-      rowsSkipped = 0;
-    let recordsCreated = 0,
-      recordsUpdated = 0;
+    let rowsProcessed = 0, rowsSuccess = 0, rowsSkipped = 0;
+    let recordsCreated = 0, recordsUpdated = 0;
 
     try {
       const csvContent = req.file.buffer.toString("utf-8");
-      log.push({
-        type: "INFO",
-        message: `📁 File: ${req.file.originalname} (${req.file.size} bytes)`,
-      });
+      log.push({ type: "INFO", message: `📁 File: ${req.file.originalname} (${req.file.size} bytes)` });
 
       const { parsed, errors } = parseCSV(csvContent);
       errors.forEach((e) =>
@@ -432,58 +339,37 @@ router.post(
           success: false,
           message: "No valid rows found in CSV file",
           processingLog: log,
-          summary: {
-            total: 0,
-            success: 0,
-            failed: errors.length,
-            skipped: 0,
-            recordsCreated: 0,
-            recordsUpdated: 0,
-          },
+          summary: { total: 0, success: 0, failed: errors.length, skipped: 0, recordsCreated: 0, recordsUpdated: 0 },
         });
       }
 
-      log.push({
-        type: "INFO",
-        message: `✓ Parsed ${parsed.length} valid row(s)`,
-      });
+      log.push({ type: "INFO", message: `✓ Parsed ${parsed.length} valid row(s)` });
 
       const empNumbers = [...new Set(parsed.map((r) => r.empId))];
-      const employees = await Employee.find({
+      const employees  = await Employee.find({
         employeeNumber: { $in: empNumbers },
-        role: { $nin: SYSTEM_ROLES },
-        isDeleted: false,
+        role:           { $nin: SYSTEM_ROLES },
+        isDeleted:      false,
       }).lean();
-      const empMap = Object.fromEntries(
-        employees.map((e) => [e.employeeNumber, e]),
-      );
+      const empMap = Object.fromEntries(employees.map((e) => [e.employeeNumber, e]));
 
       const grouped = groupByEmployeeAndDate(parsed);
-      log.push({
-        type: "INFO",
-        message: `📦 ${Object.keys(grouped).length} employee-date group(s)`,
-      });
+      log.push({ type: "INFO", message: `📦 ${Object.keys(grouped).length} employee-date group(s)` });
 
       for (const [, groupData] of Object.entries(grouped)) {
         const { empId, firstName, lastName, dateStr, date, rows } = groupData;
 
-        log.push({
-          type: "INFO",
-          message: `\n👤 ${empId} (${firstName} ${lastName}) — ${dateStr}`,
-        });
+        log.push({ type: "INFO", message: `\n👤 ${empId} (${firstName} ${lastName}) — ${dateStr}` });
 
         const employee = empMap[empId];
         if (!employee) {
-          log.push({
-            type: "WARN",
-            message: `  ⚠️ Employee #${empId} not found or is a superadmin. Skipped.`,
-          });
+          log.push({ type: "WARN", message: `  ⚠️ Employee #${empId} not found or is a superadmin. Skipped.` });
           rowsSkipped += rows.length;
           continue;
         }
 
         const punchTimes = rows.map((r) => r.time).filter(Boolean);
-        const merged = mergeTimes(rows);
+        const merged     = mergeTimes(rows);
 
         let inTime, outTime, outNextDay;
 
@@ -498,7 +384,141 @@ router.post(
           ));
         }
 
-        // ── Resolve the attendance date (night-shift checkout may belong to prev day) ──
+        // ═══════════════════════════════════════════════════════════════════
+        // ── MIXED SAME-DATE GROUP SPLIT ────────────────────────────────────
+        //
+        // Problem: a night-shift CSV can have BOTH a next-morning checkout
+        // AND a same-evening check-in on the same calendar date, e.g.:
+        //
+        //   EMP001|John|Doe|23/02/2026|10:19|1   ← checkout from 22nd's shift
+        //   EMP001|John|Doe|23/02/2026|22:19|0   ← check-in for 23rd's shift
+        //
+        // mergeTimes returns inTime=22:19, outTime=10:19, outNextDay=true.
+        // Without this block, 10:19 would be saved as the checkout for 23/02
+        // which is wrong — it belongs to 22/02.
+        //
+        // Detection: night shift + outNextDay=true + outTime < shiftStart
+        //   (outTime numerically before shift start means it's a next-morning
+        //   checkout, not a same-night early logout)
+        //
+        // Action:
+        //   1. Save the outTime to the PREVIOUS day's record (create or merge)
+        //   2. Strip outTime from the current group so today only gets check-in
+        // ═══════════════════════════════════════════════════════════════════
+        const isNightShiftEmp = toMin(employee.shift.end) < toMin(employee.shift.start);
+
+        if (isNightShiftEmp && inTime && outTime && outNextDay) {
+          const outMin        = toMin(outTime);
+          const shiftStartMin = toMin(employee.shift.start);
+
+          if (outMin < shiftStartMin) {
+            // outTime is a next-morning checkout — send it to the previous shift date
+            const prevDay = new Date(date);
+            prevDay.setDate(prevDay.getDate() - 1);
+            prevDay.setHours(0, 0, 0, 0);
+
+            log.push({
+              type:    "INFO",
+              message: `  ℹ️ Mixed group: out=${outTime} → prev shift ${formatDate(prevDay)}, in=${inTime} → today ${dateStr}`,
+            });
+
+            const prevRate = effectiveHourlyRate(employee, 26);
+
+            try {
+              const prevExisting = await AttendanceLog.findOne({
+                empId: employee._id,
+                date:  prevDay,
+              });
+
+              if (prevExisting && prevExisting.manualOverride) {
+                log.push({ type: "WARN", message: `  ⚠️ Prev shift (${formatDate(prevDay)}) has manual override — checkout skipped` });
+
+              } else if (prevExisting) {
+                const prevMergedOut  = latestTime(prevExisting.inOut?.out, outTime);
+                const prevMergedIn   = prevExisting.inOut?.in || null;
+                const prevOutNextDay = prevMergedIn && prevMergedOut
+                  ? toMin(prevMergedOut) < toMin(prevMergedIn)
+                  : true;
+                const prevStatus = prevMergedIn && isLate(prevMergedIn, employee.shift.start)
+                  ? "Late" : "Present";
+                const prevFinancials = buildFinancials({
+                  status:       prevStatus,
+                  inTime:       prevMergedIn,
+                  outTime:      prevMergedOut,
+                  outNextDay:   prevOutNextDay,
+                  shift:        employee.shift,
+                  hourlyRate:   prevRate,
+                  salaryType:   employee.salaryType,
+                  otHours:      prevExisting.financials?.otHours      || 0,
+                  otAmount:     prevExisting.financials?.otAmount     || 0,
+                  otMultiplier: prevExisting.financials?.otMultiplier || 1,
+                  otDetails:    prevExisting.financials?.otDetails    || [],
+                });
+                await AttendanceLog.updateOne(
+                  { _id: prevExisting._id },
+                  { $set: {
+                    status:                    prevStatus,
+                    "inOut.out":               prevMergedOut,
+                    "inOut.outNextDay":        prevOutNextDay,
+                    financials:                prevFinancials,
+                    "metadata.source":         "csv",
+                    "metadata.lastUpdatedBy":  req.userId,
+                    "metadata.lastModifiedAt": new Date(),
+                  }},
+                );
+                recordsUpdated++;
+                log.push({ type: "SUCCESS", message: `  ✓ Prev shift (${formatDate(prevDay)}) updated with out=${outTime}` });
+
+              } else {
+                // No record for previous day — create one with just the checkout
+                const prevFinancials = buildFinancials({
+                  status:     "Present",
+                  inTime:     null,
+                  outTime,
+                  outNextDay: true,
+                  shift:      employee.shift,
+                  hourlyRate: prevRate,
+                  salaryType: employee.salaryType,
+                });
+                await AttendanceLog.create({
+                  date:       prevDay,
+                  empId:      employee._id,
+                  empNumber:  employee.employeeNumber,
+                  empName:    `${employee.firstName} ${employee.lastName}`,
+                  department: employee.department,
+                  status:     "Present",
+                  salaryType: employee.salaryType,
+                  inOut:      { in: null, out: outTime, outNextDay: true },
+                  shift: {
+                    start:        employee.shift.start,
+                    end:          employee.shift.end,
+                    isNightShift: true,
+                  },
+                  hourlyRate:     prevRate,
+                  financials:     prevFinancials,
+                  manualOverride: false,
+                  metadata: {
+                    source:          "csv",
+                    lastUpdatedBy:   req.userId,
+                    lastModifiedAt:  new Date(),
+                  },
+                });
+                recordsCreated++;
+                log.push({ type: "SUCCESS", message: `  ✓ Prev shift (${formatDate(prevDay)}) created with out=${outTime}` });
+              }
+            } catch (splitErr) {
+              log.push({ type: "ERROR", message: `  ✗ Prev shift save failed: ${splitErr.message}` });
+            }
+
+            // Strip the checkout — today's record only keeps the check-in
+            outTime    = null;
+            outNextDay = false;
+          }
+        }
+        // ── END MIXED SAME-DATE GROUP SPLIT ───────────────────────────────
+
+        // ── Resolve attendance date for checkout-only groups ───────────────
+        // (handles the case where only a checkout arrived, on a separate date)
         let attendanceDate = date;
         if (!inTime && outTime) {
           const resolved = resolveNightShiftCheckoutDate(outTime, date, employee.shift);
@@ -522,42 +542,33 @@ router.post(
           status = inTime && isLate(inTime, employee.shift.start) ? "Late" : "Present";
         }
 
-        const rate = effectiveHourlyRate(employee, 26);
+        const rate       = effectiveHourlyRate(employee, 26);
         const financials = buildFinancials({
           status,
           inTime,
           outTime,
           outNextDay,
-          shift: employee.shift,
+          shift:      employee.shift,
           hourlyRate: rate,
           salaryType: employee.salaryType,
         });
 
-        log.push({
-          type: "INFO",
-          message: `  💰 ${hoursLabel(financials)} | Status: ${status}`,
-        });
+        log.push({ type: "INFO", message: `  💰 ${hoursLabel(financials)} | Status: ${status}` });
         if (financials.deductionDetails.length > 0) {
           financials.deductionDetails.forEach((d) =>
-            log.push({
-              type: "INFO",
-              message: `    ⚠️ Deduction: ${d.type} — PKR ${d.amount} (${d.reason})`,
-            }),
+            log.push({ type: "INFO", message: `    ⚠️ Deduction: ${d.type} — PKR ${d.amount} (${d.reason})` }),
           );
         }
 
         try {
           const existing = await AttendanceLog.findOne({
             empId: employee._id,
-            date: attendanceDate,           // ← fixed
+            date:  attendanceDate,
           });
 
           if (existing) {
             if (existing.manualOverride) {
-              log.push({
-                type: "WARN",
-                message: `  ⚠️ Skipped — record has manual override.`,
-              });
+              log.push({ type: "WARN", message: `  ⚠️ Skipped — record has manual override.` });
               rowsSkipped += rows.length;
               continue;
             }
@@ -572,20 +583,18 @@ router.post(
 
             let mergedStatus = existing.status;
             if (mergedIn || mergedOut) {
-              mergedStatus =
-                mergedIn && isLate(mergedIn, employee.shift.start)
-                  ? "Late"
-                  : "Present";
+              mergedStatus = mergedIn && isLate(mergedIn, employee.shift.start)
+                ? "Late" : "Present";
             }
 
             const mergedFinancials = buildFinancials({
-              status: mergedStatus,
-              inTime: mergedIn,
-              outTime: mergedOut,
-              outNextDay: mergedOutNextDay,
-              shift: employee.shift,
-              hourlyRate: rate,
-              salaryType: employee.salaryType,
+              status:       mergedStatus,
+              inTime:       mergedIn,
+              outTime:      mergedOut,
+              outNextDay:   mergedOutNextDay,
+              shift:        employee.shift,
+              hourlyRate:   rate,
+              salaryType:   employee.salaryType,
               otHours:      existing.financials?.otHours      || 0,
               otAmount:     existing.financials?.otAmount     || 0,
               otMultiplier: existing.financials?.otMultiplier || 1,
@@ -596,31 +605,29 @@ router.post(
               { _id: existing._id },
               {
                 $set: {
-                  status: mergedStatus,     // ← fixed (was: status)
-                  salaryType: employee.salaryType,
-                  "inOut.in":          mergedIn  || null,
-                  "inOut.out":         mergedOut || null,
-                  "inOut.outNextDay":  mergedOutNextDay,
-                  hourlyRate: rate,
-                  financials: mergedFinancials,
-                  "metadata.source":          "csv",
-                  "metadata.lastUpdatedBy":   req.userId,
-                  "metadata.lastModifiedAt":  new Date(),
+                  status:                    mergedStatus,
+                  salaryType:                employee.salaryType,
+                  "inOut.in":                mergedIn  || null,
+                  "inOut.out":               mergedOut || null,
+                  "inOut.outNextDay":        mergedOutNextDay,
+                  hourlyRate:                rate,
+                  financials:                mergedFinancials,
+                  "metadata.source":         "csv",
+                  "metadata.lastUpdatedBy":  req.userId,
+                  "metadata.lastModifiedAt": new Date(),
                 },
               },
             );
 
             recordsUpdated++;
-            log.push({
-              type: "SUCCESS",
-              message: `  ✓ Updated (merged — ${mergedStatus})`,
-            });
+            log.push({ type: "SUCCESS", message: `  ✓ Updated (merged — ${mergedStatus})` });
+
           } else {
             await AttendanceLog.create({
-              date: attendanceDate,         // ← fixed (was: date)
-              empId: employee._id,
-              empNumber: employee.employeeNumber,
-              empName: `${employee.firstName} ${employee.lastName}`,
+              date:       attendanceDate,
+              empId:      employee._id,
+              empNumber:  employee.employeeNumber,
+              empName:    `${employee.firstName} ${employee.lastName}`,
               department: employee.department,
               status,
               salaryType: employee.salaryType,
@@ -634,7 +641,7 @@ router.post(
                 end:          employee.shift.end,
                 isNightShift: toMin(employee.shift.end) < toMin(employee.shift.start),
               },
-              hourlyRate: rate,
+              hourlyRate:     rate,
               financials,
               manualOverride: false,
               metadata: {
@@ -650,27 +657,24 @@ router.post(
 
           rowsSuccess += rows.length;
         } catch (dbErr) {
-          log.push({
-            type: "ERROR",
-            message: `  ✗ DB error: ${dbErr.message}`,
-          });
+          log.push({ type: "ERROR", message: `  ✗ DB error: ${dbErr.message}` });
         }
       }
 
       log.push({
-        type: "SUMMARY",
+        type:    "SUMMARY",
         message: `✅ DONE — Rows: ${rowsProcessed} | OK: ${rowsSuccess} | Skipped: ${rowsSkipped} | Errors: ${errors.length} | Created: ${recordsCreated} | Updated: ${recordsUpdated}`,
       });
 
       return res.json({
-        success: true,
-        message: "CSV import complete",
+        success:      true,
+        message:      "CSV import complete",
         processingLog: log,
         summary: {
-          total: rowsProcessed,
-          success: rowsSuccess,
-          failed: errors.length,
-          skipped: rowsSkipped,
+          total:          rowsProcessed,
+          success:        rowsSuccess,
+          failed:         errors.length,
+          skipped:        rowsSkipped,
           recordsCreated,
           recordsUpdated,
         },
@@ -678,15 +682,15 @@ router.post(
     } catch (err) {
       log.push({ type: "ERROR", message: `Fatal: ${err.message}` });
       return res.status(500).json({
-        success: false,
-        message: "Error processing CSV file",
-        error: err.message,
+        success:      false,
+        message:      "Error processing CSV file",
+        error:        err.message,
         processingLog: log,
         summary: {
-          total: rowsProcessed,
-          success: rowsSuccess,
-          failed: 0,
-          skipped: rowsSkipped,
+          total:          rowsProcessed,
+          success:        rowsSuccess,
+          failed:         0,
+          skipped:        rowsSkipped,
           recordsCreated,
           recordsUpdated,
         },
@@ -704,21 +708,14 @@ router.get("/range", adminAuth, async (req, res) => {
     const { fromDate, toDate } = req.query;
 
     if (!fromDate || !toDate) {
-      return res
-        .status(400)
-        .json({ success: false, message: "fromDate and toDate required" });
+      return res.status(400).json({ success: false, message: "fromDate and toDate required" });
     }
 
     const from = parseDDMMYYYY(fromDate);
-    const to = parseDDMMYYYY(toDate);
+    const to   = parseDDMMYYYY(toDate);
 
     if (!from || !to) {
-      return res
-        .status(400)
-        .json({
-          success: false,
-          message: "Invalid date format. Use dd/mm/yyyy",
-        });
+      return res.status(400).json({ success: false, message: "Invalid date format. Use dd/mm/yyyy" });
     }
 
     to.setHours(23, 59, 59, 999);
@@ -729,13 +726,13 @@ router.get("/range", adminAuth, async (req, res) => {
         : { role: "employee" };
 
     const records = await AttendanceLog.find({
-      date: { $gte: from, $lte: to },
+      date:      { $gte: from, $lte: to },
       isDeleted: false,
     })
       .populate({
-        path: "empId",
+        path:   "empId",
         select: "firstName lastName email employeeNumber shift role",
-        match: populateRoleMatch,
+        match:  populateRoleMatch,
       })
       .sort({ date: -1, empNumber: 1 })
       .lean();
@@ -744,19 +741,17 @@ router.get("/range", adminAuth, async (req, res) => {
       .filter((r) => r.empId != null)
       .map((r) => ({
         ...r,
-        empRole: r.empId?.role || "employee",
+        empRole:       r.empId?.role || "employee",
         dateFormatted: formatDate(r.date),
-        inTime: r.inOut?.in || null,
-        outTime: r.inOut?.out || null,
-        outNextDay: r.inOut?.outNextDay || false,
+        inTime:        r.inOut?.in        || null,
+        outTime:       r.inOut?.out       || null,
+        outNextDay:    r.inOut?.outNextDay || false,
         financials: {
           ...r.financials,
           deductionDetails: r.financials?.deductionDetails || [],
-          otDetails: r.financials?.otDetails || [],
+          otDetails:        r.financials?.otDetails        || [],
         },
-        lastModified: r.metadata?.lastModifiedAt
-          ? formatDateTimeForDisplay(r.metadata.lastModifiedAt)
-          : "--",
+        lastModified:    r.metadata?.lastModifiedAt ? formatDateTimeForDisplay(r.metadata.lastModifiedAt) : "--",
         lastModifiedRaw: r.metadata?.lastModifiedAt || null,
       }));
 
@@ -775,28 +770,19 @@ router.post("/worksheet", adminAuth, async (req, res) => {
     const { fromDate, toDate } = req.body;
 
     if (!fromDate || !toDate) {
-      return res
-        .status(400)
-        .json({ success: false, message: "fromDate and toDate required" });
+      return res.status(400).json({ success: false, message: "fromDate and toDate required" });
     }
 
     const start = parseDDMMYYYY(fromDate);
-    const end = parseDDMMYYYY(toDate);
+    const end   = parseDDMMYYYY(toDate);
 
     if (!start || !end || isNaN(start) || isNaN(end)) {
-      return res
-        .status(400)
-        .json({
-          success: false,
-          message: "Invalid date format. Use dd/mm/yyyy",
-        });
+      return res.status(400).json({ success: false, message: "Invalid date format. Use dd/mm/yyyy" });
     }
 
     const daySpan = Math.round((end - start) / 86_400_000);
     if (daySpan > 93) {
-      return res
-        .status(400)
-        .json({ success: false, message: "Date range cannot exceed 93 days" });
+      return res.status(400).json({ success: false, message: "Date range cannot exceed 93 days" });
     }
 
     end.setHours(23, 59, 59, 999);
@@ -810,9 +796,9 @@ router.post("/worksheet", adminAuth, async (req, res) => {
     }
 
     const empIds = employees.map((e) => e._id);
-    const logs = await AttendanceLog.find({
-      empId: { $in: empIds },
-      date: { $gte: start, $lte: end },
+    const logs   = await AttendanceLog.find({
+      empId:     { $in: empIds },
+      date:      { $gte: start, $lte: end },
       isDeleted: false,
     }).lean();
 
@@ -825,72 +811,70 @@ router.post("/worksheet", adminAuth, async (req, res) => {
     const worksheet = [];
 
     for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-      const iso = d.toISOString().slice(0, 10);
+      const iso  = d.toISOString().slice(0, 10);
       const disp = formatDate(new Date(d));
 
       for (const emp of employees) {
-        const key = `${emp._id}_${iso}`;
+        const key      = `${emp._id}_${iso}`;
         const existing = logMap[key];
 
         if (existing) {
           worksheet.push({
-            _id: existing._id,
-            date: disp,
-            dateRaw: existing.date,
-            empId: emp._id,
-            empNumber: emp.employeeNumber,
-            empName: `${emp.firstName} ${emp.lastName}`,
+            _id:        existing._id,
+            date:       disp,
+            dateRaw:    existing.date,
+            empId:      emp._id,
+            empNumber:  emp.employeeNumber,
+            empName:    `${emp.firstName} ${emp.lastName}`,
             department: emp.department,
-            shift: emp.shift,
+            shift:      emp.shift,
             salaryType: existing.salaryType || emp.salaryType,
             hourlyRate: existing.hourlyRate,
-            status: existing.status,
-            inOut: existing.inOut,
+            status:     existing.status,
+            inOut:      existing.inOut,
             financials: {
               ...existing.financials,
               deductionDetails: existing.financials?.deductionDetails || [],
-              otDetails: existing.financials?.otDetails || [],
+              otDetails:        existing.financials?.otDetails        || [],
             },
-            manualOverride: existing.manualOverride,
-            lastModified: existing.metadata?.lastModifiedAt
-              ? formatDateTimeForDisplay(existing.metadata.lastModifiedAt)
-              : "--",
+            manualOverride:  existing.manualOverride,
+            lastModified:    existing.metadata?.lastModifiedAt ? formatDateTimeForDisplay(existing.metadata.lastModifiedAt) : "--",
             lastModifiedRaw: existing.metadata?.lastModifiedAt || null,
-            isVirtual: false,
-            isModified: false,
+            isVirtual:       false,
+            isModified:      false,
           });
         } else {
           worksheet.push({
-            date: disp,
-            dateRaw: new Date(iso),
-            empId: emp._id,
-            empNumber: emp.employeeNumber,
-            empName: `${emp.firstName} ${emp.lastName}`,
+            date:       disp,
+            dateRaw:    new Date(iso),
+            empId:      emp._id,
+            empNumber:  emp.employeeNumber,
+            empName:    `${emp.firstName} ${emp.lastName}`,
             department: emp.department,
-            shift: emp.shift,
+            shift:      emp.shift,
             salaryType: emp.salaryType,
             hourlyRate: effectiveHourlyRate(emp, 26),
-            status: "Absent",
-            inOut: { in: null, out: null, outNextDay: false },
+            status:     "Absent",
+            inOut:      { in: null, out: null, outNextDay: false },
             financials: {
-              hoursWorked: 0,
-              scheduledHours: shiftHours(emp.shift),
-              lateMinutes: 0,
+              hoursWorked:        0,
+              scheduledHours:     shiftHours(emp.shift),
+              lateMinutes:        0,
               earlyLogoutMinutes: 0,
-              basePay: 0,
-              deduction: 0,
-              deductionDetails: [],
-              otMultiplier: 1,
-              otHours: 0,
-              otAmount: 0,
-              otDetails: [],
-              finalDayEarning: 0,
+              basePay:            0,
+              deduction:          0,
+              deductionDetails:   [],
+              otMultiplier:       1,
+              otHours:            0,
+              otAmount:           0,
+              otDetails:          [],
+              finalDayEarning:    0,
             },
-            manualOverride: false,
-            lastModified: "--",
+            manualOverride:  false,
+            lastModified:    "--",
             lastModifiedRaw: null,
-            isVirtual: true,
-            isModified: false,
+            isVirtual:       true,
+            isModified:      false,
           });
         }
       }
@@ -910,11 +894,6 @@ router.post("/worksheet", adminAuth, async (req, res) => {
 // ═════════════════════════════════════════════════════════════════════════════
 // ─── POST /api/attendance/save-row ───────────────────────────────────────────
 // ═════════════════════════════════════════════════════════════════════════════
-//
-// Admin manual entry for a single row.
-// Deductions are computed server-side — frontend must NOT send deductionDetails.
-// OT fields ARE accepted from the frontend (admin-only manual input).
-// ─────────────────────────────────────────────────────────────────────────────
 
 router.post("/save-row", adminAuth, async (req, res) => {
   try {
@@ -932,12 +911,7 @@ router.post("/save-row", adminAuth, async (req, res) => {
     } = req.body;
 
     if (!empId || !date || !status) {
-      return res
-        .status(400)
-        .json({
-          success: false,
-          message: "empId, date, and status are required",
-        });
+      return res.status(400).json({ success: false, message: "empId, date, and status are required" });
     }
 
     const roleFilter =
@@ -945,42 +919,29 @@ router.post("/save-row", adminAuth, async (req, res) => {
         ? { role: { $nin: ["superadmin"] } }
         : { role: "employee" };
 
-    const employee = await Employee.findOne({
-      _id: empId,
-      ...roleFilter,
-      isDeleted: false,
-    });
+    const employee = await Employee.findOne({ _id: empId, ...roleFilter, isDeleted: false });
     if (!employee) {
       return res.status(404).json({
         success: false,
-        message:
-          "Employee not found or you do not have permission to edit this account",
+        message: "Employee not found or you do not have permission to edit this account",
       });
     }
 
     const dateObj = parseDDMMYYYY(date);
     if (!dateObj || isNaN(dateObj)) {
-      return res
-        .status(400)
-        .json({
-          success: false,
-          message: "Invalid date (dd/mm/yyyy required)",
-        });
+      return res.status(400).json({ success: false, message: "Invalid date (dd/mm/yyyy required)" });
     }
     dateObj.setHours(0, 0, 0, 0);
 
-    const isNightShift =
-      toMin(employee.shift.end) < toMin(employee.shift.start);
+    const isNightShift = toMin(employee.shift.end) < toMin(employee.shift.start);
 
     let resolvedOutNextDay = Boolean(outNextDay);
     if (outNextDay === undefined && inTime && outTime) {
       resolvedOutNextDay = isNightShift && toMin(outTime) < toMin(inTime);
     }
 
-    // Shadow const destructures with lets so assumption can overwrite them
     let resolvedInTime  = inTime  || null;
     let resolvedOutTime = outTime || null;
-
 
     // ── Sanitise OT details ───────────────────────────────────────────────────
     const cleanOtDetails = (Array.isArray(otDetails) ? otDetails : [])
@@ -993,12 +954,12 @@ router.post("/save-row", adminAuth, async (req, res) => {
       }))
       .filter((e) => e.reason && (e.type === "calc" ? e.hours > 0 : e.amount > 0));
 
-    // ── Sanitise manual deduction overrides (if admin sent them) ─────────────
-    const hasManualDeductions = Array.isArray(manualDeductionDetails);
+    // ── Sanitise manual deduction overrides ───────────────────────────────────
+    const hasManualDeductions  = Array.isArray(manualDeductionDetails);
     const cleanDeductionDetails = hasManualDeductions
       ? manualDeductionDetails
           .map((d) => ({
-            type: d?.type || "manual",
+            type:   d?.type || "manual",
             amount: Number(d?.amount) || 0,
             reason: String(d?.reason || "").trim(),
           }))
@@ -1009,7 +970,7 @@ router.post("/save-row", adminAuth, async (req, res) => {
 
     const existingRecord = await AttendanceLog.findOne({
       empId: employee._id,
-      date: dateObj,
+      date:  dateObj,
     });
 
     const otWasExplicitlySent = Array.isArray(otDetails);
@@ -1033,59 +994,43 @@ router.post("/save-row", adminAuth, async (req, res) => {
       inTime:     resolvedInTime,
       outTime:    resolvedOutTime,
       outNextDay: resolvedOutNextDay,
-      shift: employee.shift,
+      shift:      employee.shift,
       hourlyRate: rate,
       salaryType: employee.salaryType,
       ...preservedOt,
     });
 
     if (cleanDeductionDetails !== null && (existingRecord || cleanDeductionDetails.length > 0)) {
-      const totalDeduction = cleanDeductionDetails.reduce(
-        (s, d) => s + d.amount,
-        0,
-      );
+      const totalDeduction = cleanDeductionDetails.reduce((s, d) => s + d.amount, 0);
       financials.deductionDetails = cleanDeductionDetails;
-      financials.deduction = totalDeduction;
-      financials.finalDayEarning = Math.max(
-        0,
-        financials.basePay - totalDeduction + financials.otAmount,
-      );
+      financials.deduction        = totalDeduction;
+      financials.finalDayEarning  = Math.max(0, financials.basePay - totalDeduction + financials.otAmount);
     }
 
-    let record =
-      existingRecord ||
-      new AttendanceLog({ empId: employee._id, date: dateObj });
+    let record = existingRecord || new AttendanceLog({ empId: employee._id, date: dateObj });
 
-    record.empNumber = employee.employeeNumber;
-    record.empName = `${employee.firstName} ${employee.lastName}`;
-    record.department = employee.department;
-    record.status = status;
-    record.salaryType = employee.salaryType;
-    record.inOut = {
-      in:         resolvedInTime,
-      out:        resolvedOutTime,
-      outNextDay: resolvedOutNextDay,
-    };
-    record.shift = {
-      start: employee.shift.start,
-      end: employee.shift.end,
-      isNightShift: isNightShift,
-    };
-    record.hourlyRate = rate;
-    record.financials = financials;
+    record.empNumber    = employee.employeeNumber;
+    record.empName      = `${employee.firstName} ${employee.lastName}`;
+    record.department   = employee.department;
+    record.status       = status;
+    record.salaryType   = employee.salaryType;
+    record.inOut        = { in: resolvedInTime, out: resolvedOutTime, outNextDay: resolvedOutNextDay };
+    record.shift        = { start: employee.shift.start, end: employee.shift.end, isNightShift };
+    record.hourlyRate   = rate;
+    record.financials   = financials;
     record.manualOverride = true;
-    record.metadata = {
+    record.metadata     = {
       ...(record.metadata?.toObject?.() || { ...(record.metadata || {}) }),
-      source: "manual",
-      lastUpdatedBy: req.userId,
-      lastModifiedAt: new Date(),
+      source:          "manual",
+      lastUpdatedBy:   req.userId,
+      lastModifiedAt:  new Date(),
     };
 
     await record.save();
 
     return res.json({
-      success: true,
-      message: "Attendance saved",
+      success:      true,
+      message:      "Attendance saved",
       record,
       lastModified: formatDateTimeForDisplay(new Date()),
     });
@@ -1103,21 +1048,10 @@ router.post("/bulk-save", adminAuth, async (req, res) => {
     const { rows, forceOverride = false } = req.body;
 
     if (!Array.isArray(rows) || rows.length === 0) {
-      return res
-        .status(400)
-        .json({
-          success: false,
-          message: "rows array is required and must not be empty",
-        });
+      return res.status(400).json({ success: false, message: "rows array is required and must not be empty" });
     }
-
     if (rows.length > 500) {
-      return res
-        .status(400)
-        .json({
-          success: false,
-          message: "Maximum 500 rows per bulk-save request",
-        });
+      return res.status(400).json({ success: false, message: "Maximum 500 rows per bulk-save request" });
     }
 
     const roleFilter =
@@ -1125,15 +1059,9 @@ router.post("/bulk-save", adminAuth, async (req, res) => {
         ? { role: { $nin: ["superadmin"] } }
         : { role: "employee" };
 
-    const empIds = [
-      ...new Set(rows.map((r) => String(r.empId)).filter(Boolean)),
-    ];
-    const employees = await Employee.find({
-      _id: { $in: empIds },
-      ...roleFilter,
-      isDeleted: false,
-    }).lean();
-    const empMap = Object.fromEntries(employees.map((e) => [String(e._id), e]));
+    const empIds   = [...new Set(rows.map((r) => String(r.empId)).filter(Boolean))];
+    const employees = await Employee.find({ _id: { $in: empIds }, ...roleFilter, isDeleted: false }).lean();
+    const empMap   = Object.fromEntries(employees.map((e) => [String(e._id), e]));
 
     const results = { saved: 0, skipped: 0, errors: [] };
     const bulkOps = [];
@@ -1141,31 +1069,22 @@ router.post("/bulk-save", adminAuth, async (req, res) => {
     for (const row of rows) {
       const emp = empMap[String(row.empId)];
       if (!emp) {
-        results.errors.push({
-          empId: row.empId,
-          date: row.date,
-          error: "Employee not found or no permission",
-        });
+        results.errors.push({ empId: row.empId, date: row.date, error: "Employee not found or no permission" });
         results.skipped++;
         continue;
       }
 
-      const dateObj =
-        parseDDMMYYYY(row.date) || (row.dateRaw ? new Date(row.dateRaw) : null);
+      const dateObj = parseDDMMYYYY(row.date) || (row.dateRaw ? new Date(row.dateRaw) : null);
       if (!dateObj || isNaN(dateObj)) {
-        results.errors.push({
-          empId: row.empId,
-          date: row.date,
-          error: "Invalid date",
-        });
+        results.errors.push({ empId: row.empId, date: row.date, error: "Invalid date" });
         results.skipped++;
         continue;
       }
       dateObj.setHours(0, 0, 0, 0);
 
       const isNightShift = toMin(emp.shift.end) < toMin(emp.shift.start);
-      const inTime  = row.inOut?.in  || row.inTime  || null;
-      const outTime = row.inOut?.out || row.outTime || null;
+      const inTime       = row.inOut?.in  || row.inTime  || null;
+      const outTime      = row.inOut?.out || row.outTime || null;
 
       let resolvedOutNextDay = Boolean(row.inOut?.outNextDay || row.outNextDay);
       if (!row.inOut?.outNextDay && inTime && outTime) {
@@ -1175,7 +1094,6 @@ router.post("/bulk-save", adminAuth, async (req, res) => {
       const rate   = effectiveHourlyRate(emp, 26);
       const status = row.status || "Absent";
 
-      // OT from the row — only manual entries; preserve amounts, never derive
       const rowOtDetails = (
         Array.isArray(row.financials?.otDetails) ? row.financials.otDetails : []
       ).map((e) => ({ ...e, type: "manual" }));
@@ -1184,10 +1102,10 @@ router.post("/bulk-save", adminAuth, async (req, res) => {
         status,
         inTime,
         outTime,
-        outNextDay: resolvedOutNextDay,
-        shift: emp.shift,
-        hourlyRate: rate,
-        salaryType: emp.salaryType,
+        outNextDay:   resolvedOutNextDay,
+        shift:        emp.shift,
+        hourlyRate:   rate,
+        salaryType:   emp.salaryType,
         otHours:      Number(row.financials?.otHours)      || 0,
         otMultiplier: Number(row.financials?.otMultiplier) || 1,
         otDetails:    rowOtDetails,
@@ -1200,26 +1118,18 @@ router.post("/bulk-save", adminAuth, async (req, res) => {
           update: {
             $setOnInsert: { empId: emp._id, date: dateObj },
             $set: {
-              empNumber: emp.employeeNumber,
-              empName: `${emp.firstName} ${emp.lastName}`,
+              empNumber:  emp.employeeNumber,
+              empName:    `${emp.firstName} ${emp.lastName}`,
               department: emp.department,
               status,
               salaryType: emp.salaryType,
-              inOut: {
-                in:         inTime,
-                out:        outTime,
-                outNextDay: resolvedOutNextDay,
-              },
-              shift: {
-                start: emp.shift.start,
-                end: emp.shift.end,
-                isNightShift,
-              },
+              inOut: { in: inTime, out: outTime, outNextDay: resolvedOutNextDay },
+              shift: { start: emp.shift.start, end: emp.shift.end, isNightShift },
               hourlyRate: rate,
               financials,
-              manualOverride: Boolean(forceOverride),
-              "metadata.source": "manual",
-              "metadata.lastUpdatedBy": req.userId,
+              manualOverride:            Boolean(forceOverride),
+              "metadata.source":         "manual",
+              "metadata.lastUpdatedBy":  req.userId,
               "metadata.lastModifiedAt": new Date(),
             },
           },
