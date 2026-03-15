@@ -549,13 +549,13 @@ export default function ManualAttendance() {
               </button>
               <button onClick={() => setShowImportModal(true)} disabled={loading || refreshing}
                 className="flex items-center gap-2 px-3 md:px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition disabled:opacity-50 text-sm">
-                <Upload size={18} /><span className="hidden sm:inline">Import CSV</span>
+                <Download size={18} /><span className="hidden sm:inline">Import CSV</span>
               </button>
             </>
           )}
           <button onClick={handleExport} disabled={loading || !attendance.length}
             className="flex items-center gap-2 px-3 md:px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition disabled:opacity-50 text-sm">
-            <Download size={18} /><span className="hidden sm:inline">Export</span>
+            <Upload size={18} /><span className="hidden sm:inline">Export</span>
           </button>
           <button onClick={() => { setRefreshing(true); fetchAttendance().finally(() => setRefreshing(false)); }}
             disabled={loading || refreshing}

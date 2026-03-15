@@ -85,6 +85,47 @@ function effectiveHourlyRate(emp, workingDaysInPeriod = 26) {
   return emp.hourlyRate || 0;
 }
 
+// ─── Null-safe time merge helpers ────────────────────────────────────────────
+
+function earliestTime(a, b) {
+  if (!a && !b) return null;
+  if (!a) return b;
+  if (!b) return a;
+  return toMin(a) <= toMin(b) ? a : b;
+}
+
+function latestTime(a, b) {
+  if (!a && !b) return null;
+  if (!a) return b;
+  if (!b) return a;
+  return toMin(a) >= toMin(b) ? a : b;
+}
+
+// ─── MISSING LOGIN ASSUMPTION (shift-start rule) ──────────────────────────────
+//
+// When outTime is known but inTime is missing, assume inTime = shift.start.
+// outNextDay is set automatically for night shifts where the out punch
+// numerically precedes the shift start (e.g. out=05:00, shift.start=22:00).
+//
+// Returns { inTime, outTime, outNextDay, assumed: 'in' | null }
+// ─────────────────────────────────────────────────────────────────────────────
+function assumeLoginFromShift(inTime, outTime, outNextDay, shift) {
+  if (inTime || !outTime || !shift?.start) {
+    return { inTime, outTime, outNextDay, assumed: null };
+  }
+
+  const isNightShift = toMin(shift.end) < toMin(shift.start);
+  const resolvedOutNextDay =
+    outNextDay || (isNightShift && toMin(outTime) < toMin(shift.start));
+
+  return {
+    inTime:     shift.start,
+    outTime,
+    outNextDay: resolvedOutNextDay,
+    assumed:    "in",
+  };
+}
+
 // ═════════════════════════════════════════════════════════════════════════════
 // ─── DEDUCTION ENGINE ────────────────────────────────────────────────────────
 // ═════════════════════════════════════════════════════════════════════════════
@@ -111,20 +152,6 @@ function effectiveHourlyRate(emp, workingDaysInPeriod = 26) {
 // OT is NEVER touched here — admin-only manual field.
 // ─────────────────────────────────────────────────────────────────────────────
 
-/**
- * @param {string|null} inTime       – HH:mm or null
- * @param {string|null} outTime      – HH:mm or null
- * @param {boolean}     outNextDay   – true when outTime crosses midnight
- * @param {{ start: string, end: string, isNightShift?: boolean }} shift
- * @param {number}      hourlyRate   – effective rate at time of log
- *
- * @returns {{
- *   deductionDetails: Array,
- *   totalDeduction:   number,
- *   lateMinutes:      number,
- *   earlyLogoutMinutes: number
- * }}
- */
 function computeDeductions({
   inTime,
   outTime,
@@ -140,19 +167,14 @@ function computeDeductions({
   const isNightShift = toMin(shift.end) < toMin(shift.start);
 
   // ── LOGIN penalty ──────────────────────────────────────────────────────────
-  // Only applies when the employee actually checked in.
   if (inTime) {
     const inMin = toMin(inTime);
-    // For night shifts the "in" time might wrap — normalise to shift-relative minutes
-    // by projecting inMin forward if it appears numerically before shiftStart
     let normInMin = inMin;
     if (isNightShift && inMin < shiftStartMin) normInMin += 1440;
 
-    // Minutes relative to shift start (positive = after start, negative = before)
     const diffFromStart = normInMin - shiftStartMin;
 
     if (diffFromStart > 30) {
-      // More than 30 minutes late → 800 fixed + 1 hour salary
       lateMinutes = diffFromStart;
       details.push({
         type: "fixed_penalty",
@@ -161,11 +183,10 @@ function computeDeductions({
       });
       details.push({
         type: "hourly_penalty",
-        amount: Math.round(hourlyRate), // exactly 1 × hourlyRate
+        amount: Math.round(hourlyRate),
         reason: `Additional 1-hour salary deduction for login >30 min late`,
       });
     } else if (diffFromStart > 0) {
-      // 1–30 minutes late → 800 fixed only
       lateMinutes = diffFromStart;
       details.push({
         type: "fixed_penalty",
@@ -173,47 +194,34 @@ function computeDeductions({
         reason: `Late login: ${diffFromStart} min after shift start (1–30 min bracket)`,
       });
     } else if (diffFromStart > -5) {
-      // Within 5 minutes before shift start → 500 PKR
-      // diffFromStart is in (−5, 0], i.e. 0 to 4 minutes early
       details.push({
         type: "fixed_penalty",
         amount: 500,
         reason: `Login 0–5 min before shift start (${Math.abs(diffFromStart)} min early)`,
       });
     } else if (diffFromStart > -10) {
-      // 6–10 minutes before shift start → 250 PKR
-      // diffFromStart is in (−10, −5]
       details.push({
         type: "fixed_penalty",
         amount: 250,
         reason: `Login 6–10 min before shift start (${Math.abs(diffFromStart)} min early)`,
       });
     }
-    // diffFromStart ≤ −10  → on time, no penalty
   }
 
   // ── LOGOUT penalty ─────────────────────────────────────────────────────────
-  // Only applies when the employee actually checked out.
   if (outTime) {
     const shiftEndMin = toMin(shift.end);
-
-    // For night shifts: project outTime onto the same 48-h timeline
-    // shift.end is "next day" when isNightShift, so add 1440 to it for comparison
     let normShiftEndMin = shiftEndMin;
     let normOutMin = toMin(outTime);
 
     if (isNightShift) {
-      normShiftEndMin += 1440; // shift end is next day
-      if (outNextDay) normOutMin += 1440; // out is also next day
-      // If out looks like it's still same-day on a night shift, it may be early logout
-      // Leave normOutMin as-is; the diff will be negative → early logout
+      normShiftEndMin += 1440;
+      if (outNextDay) normOutMin += 1440;
     }
 
-    // minutesBeforeEnd: positive means left early
     const minutesBeforeEnd = normShiftEndMin - normOutMin;
 
     if (minutesBeforeEnd > 30) {
-      // Left more than 30 min early → 800 PKR
       earlyLogoutMinutes = minutesBeforeEnd;
       details.push({
         type: "early_logout",
@@ -221,7 +229,6 @@ function computeDeductions({
         reason: `Early logout: ${minutesBeforeEnd} min before shift end (>30 min bracket)`,
       });
     } else if (minutesBeforeEnd > 0) {
-      // Left 1–30 min early → 500 PKR
       earlyLogoutMinutes = minutesBeforeEnd;
       details.push({
         type: "early_logout",
@@ -229,7 +236,6 @@ function computeDeductions({
         reason: `Early logout: ${minutesBeforeEnd} min before shift end (1–30 min bracket)`,
       });
     }
-    // minutesBeforeEnd ≤ 0 → left on time or after shift end → no penalty
   }
 
   const totalDeduction = details.reduce((s, d) => s + d.amount, 0);
@@ -245,35 +251,7 @@ function computeDeductions({
 // ═════════════════════════════════════════════════════════════════════════════
 // ─── FINANCIALS BUILDER ──────────────────────────────────────────────────────
 // ═════════════════════════════════════════════════════════════════════════════
-//
-// Computes the full financials sub-document for one attendance record.
-// Always calls computeDeductions internally — callers NEVER pass raw deductions.
-// OT fields are preserved from any existing record (admin-only, never overwritten).
-//
-// basePay rules:
-//   Leave                    → 100% of scheduledHours × rate
-//   Present/Late + both times → actual hoursWorked × rate
-//   Only one of in/out       → 50% of scheduledHours × rate  (incomplete punch)
-//   Absent                   → 0
-// ─────────────────────────────────────────────────────────────────────────────
 
-/**
- * @param {{
- *   status:      string,
- *   inTime:      string|null,
- *   outTime:     string|null,
- *   outNextDay:  boolean,
- *   shift:       object,
- *   hourlyRate:  number,
- *   salaryType:  string,
- *   otHours?:    number,         // preserved from existing record
- *   otAmount?:   number,         // preserved from existing record
- *   otMultiplier?: number,       // preserved from existing record
- *   otDetails?:  Array,          // preserved from existing record
- * }} params
- *
- * @returns {object} financials sub-document (matches AttendanceLog.financials schema)
- */
 function buildFinancials({
   status,
   inTime,
@@ -282,7 +260,6 @@ function buildFinancials({
   shift,
   hourlyRate,
   salaryType,
-  // OT fields — preserved as-is, never auto-computed
   otHours = 0,
   otMultiplier = 1,
   otDetails = [],
@@ -305,10 +282,6 @@ function buildFinancials({
   }
   // Absent → hoursWorked = 0, basePay = 0
 
-  // ── Run the deduction engine ───────────────────────────────────────────────
-  // Leave records never incur login/logout penalties.
-  // Absent records have no times so computeDeductions returns 0 anyway,
-  // but we skip it explicitly for clarity.
   let deductionDetails = [];
   let totalDeduction = 0;
   let lateMinutes = 0;
@@ -319,14 +292,12 @@ function buildFinancials({
       computeDeductions({ inTime, outTime, outNextDay, shift, hourlyRate }));
   }
 
-// In buildFinancials, the OT resolution — already correct after previous fix:
-const resolvedOtAmount = otDetails.length
-  ? otDetails.reduce((s, e) => {
-      if (e.type === 'manual') return s + (e.amount || 0);
-      // calc: hours × rate × hourlyRate (effective rate)
-      return s + (e.hours || 0) * (e.rate || 1) * hourlyRate;
-    }, 0)
-  : otAmount || 0;
+  const resolvedOtAmount = otDetails.length
+    ? otDetails.reduce((s, e) => {
+        if (e.type === "manual") return s + (e.amount || 0);
+        return s + (e.hours || 0) * (e.rate || 1) * hourlyRate;
+      }, 0)
+    : otAmount || 0;
 
   const resolvedOtHours = otDetails.length
     ? otDetails.reduce((s, e) => s + (e.hours || 0), 0)
@@ -360,10 +331,6 @@ const hoursLabel = (f) =>
 // ─── 14-HOUR SHIFT-BASED PAIRING ─────────────────────────────────────────────
 // ═════════════════════════════════════════════════════════════════════════════
 
-/**
- * Window = Shift Start → Shift Start + 14 hours.
- * Login time is NOT used — only Shift Start anchors the window.
- */
 function applyShiftBasedPairing(shiftStart, punchTimes) {
   if (!punchTimes || punchTimes.length === 0) {
     return { inTime: null, outTime: null, outNextDay: false };
@@ -407,22 +374,6 @@ function applyShiftBasedPairing(shiftStart, punchTimes) {
 
   const outNextDay = toMin(outEntry.time) < toMin(inEntry.time);
   return { inTime: inEntry.time, outTime: outEntry.time, outNextDay };
-}
-
-// ─── Null-safe time merge helpers ────────────────────────────────────────────
-
-function earliestTime(a, b) {
-  if (!a && !b) return null;
-  if (!a) return b;
-  if (!b) return a;
-  return toMin(a) <= toMin(b) ? a : b;
-}
-
-function latestTime(a, b) {
-  if (!a && !b) return null;
-  if (!a) return b;
-  if (!b) return a;
-  return toMin(a) >= toMin(b) ? a : b;
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -527,17 +478,23 @@ router.post(
           ));
         }
 
-        if (inTime) log.push({ type: "INFO", message: `  ✓ In:  ${inTime}` });
-        if (outTime)
+        // ── Apply shift-start assumption when login is missing ──────────────
+        const loginAssumption = assumeLoginFromShift(
+          inTime, outTime, outNextDay, employee.shift
+        );
+        if (loginAssumption.assumed === "in") {
+          inTime     = loginAssumption.inTime;
+          outNextDay = loginAssumption.outNextDay;
           log.push({
-            type: "INFO",
-            message: `  ✓ Out: ${outTime}${outNextDay ? " (next day)" : ""}`,
+            type:    "WARN",
+            message: `  ⚠️ Login missing — assumed inTime = ${inTime} (shift start)`,
           });
+        }
+
+        if (inTime)  log.push({ type: "INFO", message: `  ✓ In:  ${inTime}` });
+        if (outTime) log.push({ type: "INFO", message: `  ✓ Out: ${outTime}${outNextDay ? " (next day)" : ""}` });
         if (!inTime && !outTime)
-          log.push({
-            type: "WARN",
-            message: `  ⚠️ No punches found within 14-h shift window`,
-          });
+          log.push({ type: "WARN", message: `  ⚠️ No punches found within 14-h shift window` });
 
         let status = "Absent";
         if (inTime || outTime) {
@@ -586,13 +543,26 @@ router.post(
             }
 
             // Merge: earliest IN, latest OUT
-            const mergedIn = earliestTime(existing.inOut?.in, inTime);
-            const mergedOut = latestTime(existing.inOut?.out, outTime);
+            let mergedIn  = earliestTime(existing.inOut?.in, inTime);
+            let mergedOut = latestTime(existing.inOut?.out, outTime);
 
-            const mergedOutNextDay =
+            let mergedOutNextDay =
               existing.shift?.isNightShift && mergedIn && mergedOut
                 ? toMin(mergedOut) < toMin(mergedIn)
                 : outNextDay;
+
+            // ── Apply shift-start assumption on merged result too ───────────
+            const mergedLoginAssumption = assumeLoginFromShift(
+              mergedIn, mergedOut, mergedOutNextDay, employee.shift
+            );
+            if (mergedLoginAssumption.assumed === "in") {
+              mergedIn         = mergedLoginAssumption.inTime;
+              mergedOutNextDay = mergedLoginAssumption.outNextDay;
+              log.push({
+                type:    "WARN",
+                message: `  ⚠️ Merged login still missing — assumed inTime = ${mergedIn} (shift start)`,
+              });
+            }
 
             let mergedStatus = existing.status;
             if (mergedIn || mergedOut) {
@@ -945,7 +915,6 @@ router.post("/worksheet", adminAuth, async (req, res) => {
 
 router.post("/save-row", adminAuth, async (req, res) => {
   try {
-    // AFTER:
     const {
       empId,
       date,
@@ -956,8 +925,9 @@ router.post("/save-row", adminAuth, async (req, res) => {
       otHours,
       otMultiplier,
       otDetails,
-      deductionDetails: manualDeductionDetails, // admin override — optional
+      deductionDetails: manualDeductionDetails,
     } = req.body;
+
     if (!empId || !date || !status) {
       return res
         .status(400)
@@ -998,23 +968,38 @@ router.post("/save-row", adminAuth, async (req, res) => {
 
     const isNightShift =
       toMin(employee.shift.end) < toMin(employee.shift.start);
+
     let resolvedOutNextDay = Boolean(outNextDay);
     if (outNextDay === undefined && inTime && outTime) {
       resolvedOutNextDay = isNightShift && toMin(outTime) < toMin(inTime);
     }
 
+    // Shadow const destructures with lets so assumption can overwrite them
+    let resolvedInTime  = inTime  || null;
+    let resolvedOutTime = outTime || null;
+
+    // ── Apply shift-start assumption when login missing (manual entry) ────────
+    // Only for Present/Late — Absent and Leave have no times by design.
+    if ((status === "Present" || status === "Late") && !resolvedInTime && resolvedOutTime) {
+      const loginAssumption = assumeLoginFromShift(
+        null, resolvedOutTime, resolvedOutNextDay, employee.shift
+      );
+      if (loginAssumption.assumed === "in") {
+        resolvedInTime     = loginAssumption.inTime;
+        resolvedOutNextDay = loginAssumption.outNextDay;
+      }
+    }
+
     // ── Sanitise OT details ───────────────────────────────────────────────────
-  // In cleanOtDetails map:
-const cleanOtDetails = (Array.isArray(otDetails) ? otDetails : [])
-  .map((e) => ({
-    type:   e?.type === 'calc' ? 'calc' : 'manual',
-    amount: Number(e?.amount) || 0,
-    hours:  Number(e?.hours)  || 0,
-    rate:   [1, 1.5, 2].includes(Number(e?.rate)) ? Number(e.rate) : 1,
-    reason: String(e?.reason || '').trim(),
-  }))
-  .filter((e) => e.reason && (e.type === 'calc' ? e.hours > 0 : e.amount > 0));
-  //                          ^^^ tightened filter: calc needs hours>0, manual needs amount>0
+    const cleanOtDetails = (Array.isArray(otDetails) ? otDetails : [])
+      .map((e) => ({
+        type:   e?.type === "calc" ? "calc" : "manual",
+        amount: Number(e?.amount) || 0,
+        hours:  Number(e?.hours)  || 0,
+        rate:   [1, 1.5, 2].includes(Number(e?.rate)) ? Number(e.rate) : 1,
+        reason: String(e?.reason || "").trim(),
+      }))
+      .filter((e) => e.reason && (e.type === "calc" ? e.hours > 0 : e.amount > 0));
 
     // ── Sanitise manual deduction overrides (if admin sent them) ─────────────
     const hasManualDeductions = Array.isArray(manualDeductionDetails);
@@ -1026,7 +1011,7 @@ const cleanOtDetails = (Array.isArray(otDetails) ? otDetails : [])
             reason: String(d?.reason || "").trim(),
           }))
           .filter((d) => d.reason && d.amount >= 0)
-      : null; // null = let buildFinancials auto-compute from times
+      : null;
 
     const rate = effectiveHourlyRate(employee, 26);
 
@@ -1034,30 +1019,27 @@ const cleanOtDetails = (Array.isArray(otDetails) ? otDetails : [])
       empId: employee._id,
       date: dateObj,
     });
-  
-    // Was checking length, which breaks "remove last item" — now checks if array was sent at all
-const otWasExplicitlySent = Array.isArray(otDetails);
 
-const preservedOt = !otWasExplicitlySent && existingRecord
-  ? {
-      // otDetails not sent in payload → preserve existing (e.g. CSV import)
-      otHours:      existingRecord.financials?.otHours      || 0,
-      otAmount:     existingRecord.financials?.otAmount     || 0,
-      otMultiplier: existingRecord.financials?.otMultiplier || 1,
-      otDetails:    existingRecord.financials?.otDetails    || [],
-    }
-  : {
-      // otDetails was sent (even []) → use it, [] means admin cleared all
-      otHours:      Number(otHours)      || 0,
-      otMultiplier: Number(otMultiplier) || 1,
-      otDetails:    cleanOtDetails,
-      otAmount:     0,
-    };
+    const otWasExplicitlySent = Array.isArray(otDetails);
+
+    const preservedOt = !otWasExplicitlySent && existingRecord
+      ? {
+          otHours:      existingRecord.financials?.otHours      || 0,
+          otAmount:     existingRecord.financials?.otAmount     || 0,
+          otMultiplier: existingRecord.financials?.otMultiplier || 1,
+          otDetails:    existingRecord.financials?.otDetails    || [],
+        }
+      : {
+          otHours:      Number(otHours)      || 0,
+          otMultiplier: Number(otMultiplier) || 1,
+          otDetails:    cleanOtDetails,
+          otAmount:     0,
+        };
 
     const financials = buildFinancials({
       status,
-      inTime: inTime || null,
-      outTime: outTime || null,
+      inTime:     resolvedInTime,
+      outTime:    resolvedOutTime,
       outNextDay: resolvedOutNextDay,
       shift: employee.shift,
       hourlyRate: rate,
@@ -1065,8 +1047,7 @@ const preservedOt = !otWasExplicitlySent && existingRecord
       ...preservedOt,
     });
 
-
-if (cleanDeductionDetails !== null && (existingRecord || cleanDeductionDetails.length > 0)) {
+    if (cleanDeductionDetails !== null && (existingRecord || cleanDeductionDetails.length > 0)) {
       const totalDeduction = cleanDeductionDetails.reduce(
         (s, d) => s + d.amount,
         0,
@@ -1089,8 +1070,8 @@ if (cleanDeductionDetails !== null && (existingRecord || cleanDeductionDetails.l
     record.status = status;
     record.salaryType = employee.salaryType;
     record.inOut = {
-      in: inTime || null,
-      out: outTime || null,
+      in:         resolvedInTime,
+      out:        resolvedOutTime,
       outNextDay: resolvedOutNextDay,
     };
     record.shift = {
@@ -1191,7 +1172,7 @@ router.post("/bulk-save", adminAuth, async (req, res) => {
       dateObj.setHours(0, 0, 0, 0);
 
       const isNightShift = toMin(emp.shift.end) < toMin(emp.shift.start);
-      const inTime = row.inOut?.in || row.inTime || null;
+      const inTime  = row.inOut?.in  || row.inTime  || null;
       const outTime = row.inOut?.out || row.outTime || null;
 
       let resolvedOutNextDay = Boolean(row.inOut?.outNextDay || row.outNextDay);
@@ -1199,7 +1180,7 @@ router.post("/bulk-save", adminAuth, async (req, res) => {
         resolvedOutNextDay = isNightShift && toMin(outTime) < toMin(inTime);
       }
 
-      const rate = effectiveHourlyRate(emp, 26);
+      const rate   = effectiveHourlyRate(emp, 26);
       const status = row.status || "Absent";
 
       // OT from the row — only manual entries; preserve amounts, never derive
@@ -1215,10 +1196,10 @@ router.post("/bulk-save", adminAuth, async (req, res) => {
         shift: emp.shift,
         hourlyRate: rate,
         salaryType: emp.salaryType,
-        otHours: Number(row.financials?.otHours) || 0,
+        otHours:      Number(row.financials?.otHours)      || 0,
         otMultiplier: Number(row.financials?.otMultiplier) || 1,
-        otDetails: rowOtDetails,
-        otAmount: Number(row.financials?.otAmount) || 0,
+        otDetails:    rowOtDetails,
+        otAmount:     Number(row.financials?.otAmount)     || 0,
       });
 
       bulkOps.push({
@@ -1233,8 +1214,8 @@ router.post("/bulk-save", adminAuth, async (req, res) => {
               status,
               salaryType: emp.salaryType,
               inOut: {
-                in: inTime,
-                out: outTime,
+                in:         inTime,
+                out:        outTime,
                 outNextDay: resolvedOutNextDay,
               },
               shift: {

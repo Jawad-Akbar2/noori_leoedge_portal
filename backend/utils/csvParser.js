@@ -193,6 +193,10 @@ export function groupByEmployeeAndDate(parsedRows) {
     delete grouped[key];
   }
 
+   for (const group of Object.values(grouped)) {
+    group.hasOrphanOut = group.rows.every(r => r.isCheckOut);
+  }
+
   return grouped;
 }
 
