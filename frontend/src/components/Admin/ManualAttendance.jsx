@@ -18,6 +18,13 @@ function getCurrentUserRole() {
   }
 }
 
+function getCurrentUserId() {
+  try {
+    const user = JSON.parse(localStorage.getItem('user') || '{}');
+    return user.id || user._id || null;
+  } catch { return null; }
+}
+
 // FIX 1 — null-safe time display helper.
 // Backend returns null for missing times (not '--'). Guard both so this works
 // before and after the backend deploy.
@@ -312,8 +319,9 @@ const payload = {
           )}
 
           {/* Deductions */}
-          <div className="border rounded-lg p-3 bg-gray-50 space-y-2">
-            <p className="text-sm font-semibold text-gray-700">Deductions</p>
+         {currentUserRole !== 'hybrid' && (
+<div className="border rounded-lg p-3 bg-gray-50 space-y-2">
+  <p className="text-sm font-semibold text-gray-700">Deductions</p>
             <div className="grid grid-cols-2 gap-2">
               <input type="number" min="0" placeholder="Amount" value={deductionDraft.amount}
                 onChange={e => setDeductionDraft(prev => ({ ...prev, amount: e.target.value }))}
@@ -336,8 +344,10 @@ const payload = {
               ))}
             </div>
           </div>
+          )}
 
           {/* OT */}
+          {currentUserRole !== 'hybrid' && (
           <div className="border rounded-lg p-3 bg-gray-50 space-y-2">
             <p className="text-sm font-semibold text-gray-700">Overtime (OT)</p>
             <div className="grid grid-cols-2 gap-2">
@@ -367,6 +377,7 @@ const payload = {
                 </>
               )}
             </div>
+            
             <button type="button" onClick={addOT}
               className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-blue-700 bg-blue-50 border border-blue-200 rounded-lg">
               <Plus size={12} /> Add OT
@@ -384,6 +395,7 @@ const payload = {
               ))}
             </div>
           </div>
+          )}
         </div>
 
         <div className="flex justify-end gap-3 px-6 py-4 border-t bg-gray-50 rounded-b-2xl">
@@ -422,6 +434,7 @@ export default function ManualAttendance() {
   const userRole     = getCurrentUserRole();
   const isSuperAdmin = userRole === 'superadmin';
   const isAdmin      = userRole === 'admin' || isSuperAdmin;
+  const isHybrid     = userRole === 'hybrid';
 
   const fetchAttendance = useCallback(async () => {
     setLoading(true);
@@ -632,10 +645,10 @@ export default function ManualAttendance() {
                     <th className="px-4 py-3 text-left font-semibold">Status</th>
                     <th className="px-4 py-3 text-center font-semibold">In Time</th>
                     <th className="px-4 py-3 text-center font-semibold">Out Time</th>
-                    <th className="px-4 py-3 text-right font-semibold">Hours</th>
-                    <th className="px-4 py-3 text-right font-semibold">OT</th>
-                    <th className="px-4 py-3 text-right font-semibold">Deduction</th>
-                    <th className="px-4 py-3 text-right font-semibold">Earning</th>
+                    {!isHybrid && <th className="px-4 py-3 text-right font-semibold">Hours</th>}
+{!isHybrid && <th className="px-4 py-3 text-right font-semibold">OT</th>}
+{!isHybrid && <th className="px-4 py-3 text-right font-semibold">Deduction</th>}
+{!isHybrid && <th className="px-4 py-3 text-right font-semibold">Earning</th>}
                     <th className="px-4 py-3 text-left font-semibold">Last Modified</th>
                     {isAdmin && <th className="px-4 py-3 text-center font-semibold">Actions</th>}
                   </tr>
@@ -662,22 +675,29 @@ export default function ManualAttendance() {
                             <span className="ml-1 text-xs text-orange-500 font-medium">(+1)</span>
                           }
                         </td>
-                        <td className="px-4 py-3 text-right">{(record.financials?.hoursWorked || 0).toFixed(2)}</td>
-                        <td className="px-4 py-3 text-right">
-                          <button type="button" onClick={() => setDetailsModal({ type: 'ot', record })}
-                            className="inline-flex items-center gap-1 text-blue-700 hover:text-blue-900">
-                            PKR {(record.financials?.otAmount || 0).toFixed(2)} <Eye size={12} />
-                          </button>
-                        </td>
-                        <td className="px-4 py-3 text-right">
-                          <button type="button" onClick={() => setDetailsModal({ type: 'deduction', record })}
-                            className="inline-flex items-center gap-1 text-red-700 hover:text-red-900">
-                            PKR {(record.financials?.deduction || 0).toFixed(2)} <Eye size={12} />
-                          </button>
-                        </td>
-                        <td className="px-4 py-3 text-right font-semibold">
-                          PKR {(record.financials?.finalDayEarning || 0).toFixed(2)}
-                        </td>
+                      
+{!isHybrid && <td className="px-4 py-3 text-right">{(record.financials?.hoursWorked || 0).toFixed(2)}</td>}
+{!isHybrid && (
+  <td className="px-4 py-3 text-right">
+    <button type="button" onClick={() => setDetailsModal({ type: 'ot', record })}
+      className="inline-flex items-center gap-1 text-blue-700 hover:text-blue-900">
+      PKR {(record.financials?.otAmount || 0).toFixed(2)} <Eye size={12} />
+    </button>
+  </td>
+)}
+{!isHybrid && (
+  <td className="px-4 py-3 text-right">
+    <button type="button" onClick={() => setDetailsModal({ type: 'deduction', record })}
+      className="inline-flex items-center gap-1 text-red-700 hover:text-red-900">
+      PKR {(record.financials?.deduction || 0).toFixed(2)} <Eye size={12} />
+    </button>
+  </td>
+)}
+{!isHybrid && (
+  <td className="px-4 py-3 text-right font-semibold">
+    PKR {(record.financials?.finalDayEarning || 0).toFixed(2)}
+  </td>
+)}
                         <td className="px-4 py-3 text-xs text-gray-600">{record.lastModified || '--'}</td>
                         {isAdmin && (
                           <td className="px-4 py-3 text-center">
@@ -740,10 +760,10 @@ export default function ManualAttendance() {
                           <span className="ml-1 text-xs text-orange-500">(+1 day)</span>
                         }
                       </p>
-                      <p><span className="font-medium">Hours:</span> {(record.financials?.hoursWorked || 0).toFixed(2)}</p>
-                      <p><span className="font-medium">OT:</span> PKR {(record.financials?.otAmount || 0).toFixed(2)}</p>
-                      <p><span className="font-medium">Deduction:</span> PKR {(record.financials?.deduction || 0).toFixed(2)}</p>
-                      <p><span className="font-medium">Earning:</span> PKR {(record.financials?.finalDayEarning || 0).toFixed(2)}</p>
+                    {!isHybrid && <p><span className="font-medium">Hours:</span> {(record.financials?.hoursWorked || 0).toFixed(2)}</p>}
+{!isHybrid && <p><span className="font-medium">OT:</span> PKR {(record.financials?.otAmount || 0).toFixed(2)}</p>}
+{!isHybrid && <p><span className="font-medium">Deduction:</span> PKR {(record.financials?.deduction || 0).toFixed(2)}</p>}
+{!isHybrid && <p><span className="font-medium">Earning:</span> PKR {(record.financials?.finalDayEarning || 0).toFixed(2)}</p>}
                       <p className="text-xs text-gray-500">
                         <span className="font-medium">Modified:</span> {record.lastModified || '--'}
                       </p>

@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
-import { MoreVertical, Calendar } from 'lucide-react';
+import { MoreVertical, Calendar, Eye, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 // ── date helpers ──────────────────────────────────────────────────────────────
