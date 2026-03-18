@@ -83,16 +83,6 @@ const ROLE_CONFIG = {
 // ─── SMALL RE-USABLE PRIMITIVES ───────────────────────────────────────────────
 // ═════════════════════════════════════════════════════════════════════════════
 
-  const calculateMonthlySalary = () => {
-    if (!formData.hourlyRate || !formData.shift.start || !formData.shift.end) return 0;
-    const [startH, startM] = formData.shift.start.split(':').map(Number);
-    const [endH, endM]     = formData.shift.end.split(':').map(Number);
-    let startMin = startH * 60 + startM;
-    let endMin   = endH * 60 + endM;
-    if (endMin <= startMin) endMin += 24 * 60;
-    return ((endMin - startMin) / 60 * 22 * parseFloat(formData.hourlyRate)).toFixed(2);
-  };
-
 const formatDateToDisplay = (dateStr) => {
   if (!dateStr) return '—';
   const d = new Date(dateStr);
@@ -183,6 +173,16 @@ export default function MyProfile() {
 
   // ── Fetch profile ───────────────────────────────────────────────────────────
   useEffect(() => { fetchProfile(); }, []);
+
+    const calculateMonthlySalary = () => {
+    if (!form.hourlyRate || !form.shift.start || !form.shift.end) return 0;
+    const [startH, startM] = form.shift.start.split(':').map(Number);
+    const [endH, endM]     = form.shift.end.split(':').map(Number);
+    let startMin = startH * 60 + startM;
+    let endMin   = endH * 60 + endM;
+    if (endMin <= startMin) endMin += 24 * 60;
+    return ((endMin - startMin) / 60 * 22 * parseFloat(form.hourlyRate)).toFixed(2);
+  };
 
   const fetchProfile = async () => {
     try {
