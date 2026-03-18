@@ -485,9 +485,9 @@ const handleSave = async () => {
   <EditBox label="Hourly Rate (PKR)" name="hourlyRate" value={form.hourlyRate}
     onChange={handleChange} type="number" placeholder="0"
     accentRing={accentRing} accentBorder={accentBorder} accentBg={accentBg} />
-  {calcEstimatedMonthly() && (
+  {calculateMonthlySalary() && (
     <p className="text-xs text-red-500 mt-1.5">
-      ≈ PKR {calcEstimatedMonthly()} / month &nbsp;·&nbsp;
+      ≈ PKR {calculateMonthlySalary()} / month &nbsp;·&nbsp;
       ({form.shiftStart}–{form.shiftEnd} × PKR {form.hourlyRate}/hr × 22 days)
     </p>
   )}
