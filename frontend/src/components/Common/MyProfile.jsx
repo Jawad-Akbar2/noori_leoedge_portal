@@ -161,6 +161,8 @@ export default function MyProfile() {
   salaryType: 'hourly', hourlyRate: '', monthlySalary: '',
   status: 'Active',
   joiningDate: '',
+  employeeNumber: '',
+
 });
   const [loading, setLoading] = useState(true);
   const [saving,  setSaving]  = useState(false);
@@ -174,10 +176,10 @@ export default function MyProfile() {
   // ── Fetch profile ───────────────────────────────────────────────────────────
   useEffect(() => { fetchProfile(); }, []);
 
-    const calculateMonthlySalary = () => {
-    if (!form.hourlyRate || !form.shift.start || !form.shift.end) return 0;
-    const [startH, startM] = form.shift.start.split(':').map(Number);
-    const [endH, endM]     = form.shift.end.split(':').map(Number);
+const calculateMonthlySalary = () => {
+  if (!form.hourlyRate || !form.shiftStart || !form.shiftEnd) return null;
+  const [startH, startM] = form.shiftStart.split(':').map(Number);
+  const [endH, endM]     = form.shiftEnd.split(':').map(Number);
     let startMin = startH * 60 + startM;
     let endMin   = endH * 60 + endM;
     if (endMin <= startMin) endMin += 24 * 60;
@@ -207,6 +209,7 @@ export default function MyProfile() {
   hourlyRate:    emp.hourlyRate          || '',
   monthlySalary: emp.monthlySalary       || '',
   status:        emp.status              || 'Active',
+  employeeNumber: emp.employeeNumber || '',
   joiningDate:   emp.joiningDate
     ? new Date(emp.joiningDate).toISOString().split('T')[0]
     : '',
@@ -251,6 +254,7 @@ const handleSave = async () => {
           department:    form.department,
           shift:         { start: form.shiftStart, end: form.shiftEnd },
           salaryType:    form.salaryType,
+          employeeNumber: form.employeeNumber.trim(),
           hourlyRate:    parseFloat(form.hourlyRate) || 0,
           monthlySalary: form.salaryType === 'monthly' ? parseFloat(form.monthlySalary) || null : null,
           status:        form.status,
@@ -403,9 +407,15 @@ const handleSave = async () => {
     badge="(editable)"
   />
 
-  {/* Employee ID + Department */}
+  {/* Employee Number + Department */}
   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-    <InfoBox label="Employee ID" value={employee?.employeeNumber} />
+{config.canEditPersonal ? (
+  <EditBox label="Employee Number" name="employeeNumber" value={form.employeeNumber}
+    onChange={handleChange}
+    accentRing={accentRing} accentBorder={accentBorder} accentBg={accentBg} />
+) : (
+  <InfoBox label="Employee Number" value={employee?.employeeNumber} />
+)}
     {config.canEditDepartment ? (
       <div>
         <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Department</p>

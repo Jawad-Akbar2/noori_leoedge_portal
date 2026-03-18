@@ -74,6 +74,7 @@ export default function AttendanceHistory() {
   const [filteredRecords, setFilteredRecords] = useState([]);
   const [loading,         setLoading]         = useState(false);
   const [openMenuId,      setOpenMenuId]      = useState(null);
+  const [detailsModal,    setDetailsModal]    = useState(null);
 
   // ── close context menu on outside click ──────────────────────────────────
   useEffect(() => {
@@ -238,11 +239,11 @@ export default function AttendanceHistory() {
                   <tr>
                     <th className="px-5 py-3 text-left font-semibold">Date</th>
                     <th className="px-5 py-3 text-left font-semibold">In / Out</th>
-                    <th className="px-5 py-3 text-left font-semibold">Hours</th>
                     <th className="px-5 py-3 text-left font-semibold">Status</th>
-                    <th className="px-5 py-3 text-left font-semibold">OT Hours</th>
+                    <th className="px-5 py-3 text-left font-semibold">OT</th>
+<th className="px-5 py-3 text-left font-semibold">Deduction</th>
+<th className="px-5 py-3 text-left font-semibold">Day Earning</th>
                     {/* FIX 3: finalDayEarning (not dailyEarning) */}
-                    <th className="px-5 py-3 text-left font-semibold">Day Earning</th>
                     <th className="px-5 py-3 text-left font-semibold">Actions</th>
                   </tr>
                 </thead>
@@ -258,17 +259,23 @@ export default function AttendanceHistory() {
                           ? `${record.inTime} / ${record.outTime}`
                           : <span className="text-gray-400">— / —</span>}
                       </td>
-                      <td className="px-5 py-3 text-gray-700">
-                        {(record.hoursWorked ?? 0).toFixed(2)}h
-                      </td>
                       <td className="px-5 py-3">
                         <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${statusBadge(record.status)}`}>
                           {record.status}
                         </span>
                       </td>
-                      <td className="px-5 py-3 text-purple-700 font-medium">
-                        {(record.otHours ?? 0) > 0 ? `${record.otHours.toFixed(2)}h` : '—'}
-                      </td>
+                   <td className="px-5 py-3 text-green-600 font-medium">
+  <button type="button" onClick={() => setDetailsModal({ type: 'ot', record })}
+    className="inline-flex items-center gap-1 hover:text-green-800">
+    PKR {(record.otAmount ?? 0).toLocaleString('en-PK', { minimumFractionDigits: 2 })} <Eye size={12} />
+  </button>
+</td>
+<td className="px-5 py-3 text-red-500 font-medium">
+  <button type="button" onClick={() => setDetailsModal({ type: 'deduction', record })}
+    className="inline-flex items-center gap-1 hover:text-red-700">
+    PKR {(record.deduction ?? 0).toLocaleString('en-PK', { minimumFractionDigits: 2 })} <Eye size={12} />
+  </button>
+</td>
                       <td className="px-5 py-3 font-semibold text-blue-600">
                         {/* FIX 3: finalDayEarning (not dailyEarning which doesn't exist) */}
                         PKR {(record.finalDayEarning ?? 0).toLocaleString('en-PK', { minimumFractionDigits: 2 })}
@@ -335,11 +342,18 @@ export default function AttendanceHistory() {
                     </span>
                   </div>
 
-                  {(record.otHours ?? 0) > 0 && (
-                    <p className="text-xs text-purple-600 mt-1.5 font-medium">
-                      OT: {record.otHours.toFixed(2)}h
-                    </p>
-                  )}
+                 <div className="flex gap-3 mt-1.5">
+  {(record.otAmount ?? 0) > 0 && (
+    <p className="text-xs text-green-600 font-medium">
+      OT: PKR {record.otAmount.toLocaleString('en-PK', { minimumFractionDigits: 2 })}
+    </p>
+  )}
+  {(record.deduction ?? 0) > 0 && (
+    <p className="text-xs text-red-500 font-medium">
+      Deduction: PKR {record.deduction.toLocaleString('en-PK', { minimumFractionDigits: 2 })}
+    </p>
+  )}
+</div>
 
                   {openMenuId === idx && (
                     <div className="mt-3 grid grid-cols-2 gap-2">
@@ -363,6 +377,38 @@ export default function AttendanceHistory() {
           </>
         )}
       </div>
+      {/* OT / Deduction detail popup */}
+{detailsModal && (
+  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+    <div className="bg-white rounded-xl shadow-2xl w-full max-w-md">
+      <div className="flex items-center justify-between px-5 py-3 border-b">
+        <h3 className="font-semibold text-gray-800">
+          {detailsModal.type === 'ot' ? 'OT Details' : 'Deduction Details'} — {detailsModal.record.date}
+        </h3>
+        <button onClick={() => setDetailsModal(null)} className="text-gray-400 hover:text-gray-600">
+          <X size={18} />
+        </button>
+      </div>
+      <div className="p-4 space-y-2 max-h-80 overflow-auto">
+        {(() => {
+          const entries = detailsModal.type === 'ot'
+            ? detailsModal.record.otDetails
+            : detailsModal.record.deductionDetails;
+          if (!entries?.length) return <p className="text-sm text-gray-500">No detail entries found.</p>;
+          return entries.map((entry, i) => (
+            <div key={i} className="border rounded-lg p-2 text-sm bg-gray-50">
+              {detailsModal.type === 'ot' ? (
+                <p>{entry.type === 'manual' ? `Amount: PKR ${entry.amount}` : `Hours: ${entry.hours} × ${entry.rate}x`} · {entry.reason}</p>
+              ) : (
+                <p>Amount: PKR {entry.amount} · {entry.reason}</p>
+              )}
+            </div>
+          ));
+        })()}
+      </div>
+    </div>
+  </div>
+)}
     </div>
   );
 }

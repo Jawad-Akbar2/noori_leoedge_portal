@@ -128,7 +128,7 @@ export default function EmployeeLinkDialog({ employee, inviteLink, onClose }) {
             <p className="text-xs font-semibold text-gray-700 mb-2">Link Details:</p>
             <div className="space-y-1 text-xs text-gray-600">
               <p><span className="font-medium">Email:</span> {employee.email}</p>
-              <p><span className="font-medium">Employee ID:</span> {employee.employeeNumber}</p>
+              <p><span className="font-medium">Employee Number:</span> {employee.employeeNumber}</p>
               <p><span className="font-medium">Department:</span> {employee.department}</p>
               <p><span className="font-medium">Status:</span> Inactive (awaiting activation)</p>
             </div>

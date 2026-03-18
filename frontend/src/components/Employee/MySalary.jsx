@@ -7,6 +7,8 @@ import {
   TrendingDown,
   DollarSign,
   Wallet,
+  Eye,
+  X
 } from "lucide-react";
 import toast from "react-hot-toast";
 
@@ -59,6 +61,7 @@ export default function MySalary() {
   const [summary, setSummary] = useState(null);
   const [dailyBreakdown, setDailyBreakdown] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [detailsModal, setDetailsModal] = useState(null);
 
 
   // FIX 1: correct route  → GET /api/payroll/my/summary  (employeeAuth, no :id)
@@ -306,9 +309,6 @@ export default function MySalary() {
                     </th>
                     {/* FIX 4: hoursWorked (not hoursPerDay) */}
                     <th className="px-4 py-3 text-right font-semibold">
-                      Hours
-                    </th>
-                    <th className="px-4 py-3 text-right font-semibold">
                       Base Pay
                     </th>
                     <th className="px-4 py-3 text-right font-semibold">OT</th>
@@ -351,23 +351,25 @@ export default function MySalary() {
                           <span className="text-gray-400">— / —</span>
                         )}
                       </td>
-                      <td className="px-4 py-3 text-right text-gray-700">
-                        {/* FIX 4: hoursWorked (not hoursPerDay) */}
-                        {(day.hoursWorked ?? 0).toFixed(2)}h
-                      </td>
                       <td className="px-4 py-3 text-right text-gray-800">
                         PKR {pkr(day.basePay)}
                       </td>
                       <td className="px-4 py-3 text-right text-green-600">
-                        {(day.otAmount ?? 0) > 0
-                          ? `PKR ${pkr(day.otAmount)}`
-                          : "—"}
-                      </td>
-                      <td className="px-4 py-3 text-right text-red-500">
-                        {(day.deduction ?? 0) > 0
-                          ? `PKR ${pkr(day.deduction)}`
-                          : "—"}
-                      </td>
+  {(day.otAmount ?? 0) > 0 ? (
+    <button type="button" onClick={() => setDetailsModal({ type: 'ot', day })}
+      className="inline-flex items-center gap-1 hover:text-green-800">
+      PKR {pkr(day.otAmount)} <Eye size={12} />
+    </button>
+  ) : "—"}
+</td>
+<td className="px-4 py-3 text-right text-red-500">
+  {(day.deduction ?? 0) > 0 ? (
+    <button type="button" onClick={() => setDetailsModal({ type: 'deduction', day })}
+      className="inline-flex items-center gap-1 hover:text-red-700">
+      PKR {pkr(day.deduction)} <Eye size={12} />
+    </button>
+  ) : "—"}
+</td>
                       <td className="px-4 py-3 text-right font-semibold text-blue-600">
                         {/* FIX 4: finalDayEarning (not dailyEarning) */}
                         PKR {pkr(day.finalDayEarning)}
@@ -378,7 +380,7 @@ export default function MySalary() {
                 <tfoot className="bg-gray-50 border-t-2 border-gray-200">
                   <tr>
                     <td
-                      colSpan="4"
+                      colSpan="3"
                       className="px-4 py-3 font-semibold text-gray-700"
                     >
                       Total
@@ -406,6 +408,43 @@ export default function MySalary() {
           No salary data found for the selected period.
         </div>
       )}
+      {/* OT / Deduction detail popup */}
+{detailsModal && (
+  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+    <div className="bg-white rounded-xl shadow-2xl w-full max-w-md">
+      <div className="flex items-center justify-between px-5 py-3 border-b">
+        <h3 className="font-semibold text-gray-800">
+          {detailsModal.type === 'ot' ? 'OT Details' : 'Deduction Details'} — {detailsModal.day.date}
+        </h3>
+        <button onClick={() => setDetailsModal(null)} className="text-gray-400 hover:text-gray-600">
+          <X size={18} />
+        </button>
+      </div>
+      <div className="p-4 space-y-2 max-h-80 overflow-auto">
+        {(() => {
+          const entries = detailsModal.type === 'ot'
+            ? detailsModal.day.otDetails
+            : detailsModal.day.deductionDetails;
+          if (!entries?.length) return <p className="text-sm text-gray-500">No detail entries found.</p>;
+          return entries.map((entry, i) => (
+            <div key={i} className="border rounded-lg p-2 text-sm bg-gray-50">
+              {detailsModal.type === 'ot' ? (
+                <p>
+                  {entry.type === 'manual'
+                    ? `Amount: PKR ${entry.amount}`
+                    : `Hours: ${entry.hours} × ${entry.rate}x`}
+                  {' · '}{entry.reason}
+                </p>
+              ) : (
+                <p>Amount: PKR {entry.amount} · {entry.reason}</p>
+              )}
+            </div>
+          ));
+        })()}
+      </div>
+    </div>
+  </div>
+)}
     </div>
   );
 }

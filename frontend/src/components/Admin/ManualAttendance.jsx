@@ -175,7 +175,7 @@ const removeDetail = async (key, index) => {
       if (isEdit) {
         const raw = record?.empId;
         if (!raw) {
-          toast.error('Cannot resolve employee ID — please reload and try again.');
+          toast.error('Cannot resolve employee Number — please reload and try again.');
           setSaving(false);
           return;
         }
@@ -626,7 +626,7 @@ export default function ManualAttendance() {
                 <thead className="bg-gray-100 border-b">
                   <tr>
                     <th className="px-4 py-3 text-left font-semibold">Date</th>
-                    <th className="px-4 py-3 text-left font-semibold">Employee ID</th>
+                    <th className="px-4 py-3 text-left font-semibold">Employee Number</th>
                     <th className="px-4 py-3 text-left font-semibold">Name</th>
                     <th className="px-4 py-3 text-left font-semibold">Department</th>
                     <th className="px-4 py-3 text-left font-semibold">Status</th>
