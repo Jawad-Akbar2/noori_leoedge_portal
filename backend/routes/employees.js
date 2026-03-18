@@ -293,12 +293,12 @@ router.post('/', adminAuth, async (req, res) => {
 router.put('/:id', adminAuth, async (req, res) => {
   try {
     // Block self-edit via this route — profile page uses /me
-    if (String(req.userId) === String(req.params.id)) {
-      return res.status(403).json({
-        success: false,
-        message: 'Use the profile page to edit your own account.',
-      });
-    }
+   if (String(req.userId) === String(req.params.id) && req.role !== 'superadmin') {
+  return res.status(403).json({
+    success: false,
+    message: 'Use the profile page to edit your own account.',
+  });
+}
 
     const employee = await Employee.findOne({
       _id:       req.params.id,
