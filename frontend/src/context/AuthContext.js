@@ -28,9 +28,11 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     async function restoreSession() {
       try {
-        const rawUser    = localStorage.getItem('user');
-        const storedRole = localStorage.getItem('role');
-        const token      = localStorage.getItem('token');
+  
+// localStorage = "remember me" session; sessionStorage = tab-only session
+const token      = localStorage.getItem('token')      || sessionStorage.getItem('token');
+const rawUser    = localStorage.getItem('user')       || sessionStorage.getItem('user');
+const storedRole = localStorage.getItem('role')       || sessionStorage.getItem('role');
 
         // Nothing stored → not logged in
         if (!token || !rawUser) {
@@ -78,22 +80,38 @@ export function AuthProvider({ children }) {
   }, []);
 
   // ── login — called after a successful POST /api/auth/login ───────────────
-  const login = useCallback((userData, token) => {
-    setUser(userData);
-    setRole(userData.role);
-    localStorage.setItem('token', token);
-    localStorage.setItem('user',  JSON.stringify(userData));
-    localStorage.setItem('role',  userData.role);
-  }, []);
 
-  // ── logout ────────────────────────────────────────────────────────────────
-  const logout = useCallback(() => {
-    setUser(null);
-    setRole(null);
+// AFTER
+const login = useCallback((userData, token, rememberMe = true) => {
+  setUser(userData);
+  setRole(userData.role);
+
+  const storage = rememberMe ? localStorage : sessionStorage;
+
+  // Clear the other storage to avoid stale tokens
+  if (rememberMe) {
+    sessionStorage.removeItem('token');
+    sessionStorage.removeItem('user');
+    sessionStorage.removeItem('role');
+  } else {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
     localStorage.removeItem('role');
-  }, []);
+  }
+
+  storage.setItem('token', token);
+  storage.setItem('user',  JSON.stringify(userData));
+  storage.setItem('role',  userData.role);
+}, []);
+  // ── logout ────────────────────────────────────────────────────────────────
+ const logout = useCallback(() => {
+  setUser(null);
+  setRole(null);
+  ['token', 'user', 'role'].forEach(key => {
+    localStorage.removeItem(key);
+    sessionStorage.removeItem(key);
+  });
+}, []);
 
   // ── isAuthenticated — reactive (depends on state, not just localStorage) ─
   const isAuthenticated = useCallback(() => {

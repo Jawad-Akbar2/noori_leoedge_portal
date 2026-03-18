@@ -14,10 +14,10 @@ export default function Login() {
   const [password,     setPassword]     = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading,      setLoading]      = useState(false);
-  const [rememberMe,   setRememberMe]   = useState(false);
+  const [rememberMe,   setRememberMe]   = useState(true);
 
   const navigate = useNavigate();
-  const { login: ctxLogin, user, role } = useAuth();
+  const { login: ctxLogin, user, role, rememberme } = useAuth();
 
   useEffect(() => {
     if (user && role) {

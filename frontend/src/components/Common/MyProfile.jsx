@@ -35,6 +35,11 @@ const ROLE_CONFIG = {
     canEditPersonal: true,   // shows name/dept as editable inputs
     canEditEmail:    true,
     canEditBank:     true,
+  canEditShift:      true,
+  canEditSalary:     true,
+  canEditStatus:     true,
+  canEditJoining:    true,
+  canEditDepartment: true,
   },
   admin: {
     label:     'Administrator',
@@ -45,7 +50,6 @@ const ROLE_CONFIG = {
     accentBg:  'bg-blue-50/30',
     btnBg:     'bg-blue-600 hover:bg-blue-700',
     pwBtnBg:   'bg-orange-50 text-orange-700 border-orange-200 hover:bg-orange-100',
-    canEditPersonal: false,  // name/dept/shift/salary are read-only
     canEditEmail:    true,
     canEditBank:     true,
   },
@@ -58,7 +62,6 @@ const ROLE_CONFIG = {
     accentBg:  'bg-green-50/30',
     btnBg:     'bg-green-600 hover:bg-green-700',
     pwBtnBg:   'bg-green-50 text-green-700 border-green-200 hover:bg-green-100',
-    canEditPersonal: false,
     canEditEmail:    true,
     canEditBank:     true,
   },
@@ -71,7 +74,6 @@ const ROLE_CONFIG = {
     accentBg:  'bg-purple-50/30',
     btnBg:     'bg-purple-600 hover:bg-purple-700',
     pwBtnBg:   'bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100',
-    canEditPersonal: false,
     canEditEmail:    true,
     canEditBank:     true,
   },
@@ -80,6 +82,16 @@ const ROLE_CONFIG = {
 // ═════════════════════════════════════════════════════════════════════════════
 // ─── SMALL RE-USABLE PRIMITIVES ───────────────────────────────────────────────
 // ═════════════════════════════════════════════════════════════════════════════
+
+  const calculateMonthlySalary = () => {
+    if (!formData.hourlyRate || !formData.shift.start || !formData.shift.end) return 0;
+    const [startH, startM] = formData.shift.start.split(':').map(Number);
+    const [endH, endM]     = formData.shift.end.split(':').map(Number);
+    let startMin = startH * 60 + startM;
+    let endMin   = endH * 60 + endM;
+    if (endMin <= startMin) endMin += 24 * 60;
+    return ((endMin - startMin) / 60 * 22 * parseFloat(formData.hourlyRate)).toFixed(2);
+  };
 
 const formatDateToDisplay = (dateStr) => {
   if (!dateStr) return '—';
@@ -151,11 +163,15 @@ export default function MyProfile() {
 
   // ── State ───────────────────────────────────────────────────────────────────
   const [employee, setEmployee] = useState(null);
-  const [form,     setForm]     = useState({
-    firstName: '', lastName: '', email: '',
-    department: '',
-    bankName: '', accountName: '', accountNumber: '',
-  });
+ const [form, setForm] = useState({
+  firstName: '', lastName: '', email: '',
+  department: '',
+  bankName: '', accountName: '', accountNumber: '',
+  shiftStart: '', shiftEnd: '',
+  salaryType: 'hourly', hourlyRate: '', monthlySalary: '',
+  status: 'Active',
+  joiningDate: '',
+});
   const [loading, setLoading] = useState(true);
   const [saving,  setSaving]  = useState(false);
 
@@ -177,15 +193,25 @@ export default function MyProfile() {
       if (data.success) {
         const emp = data.employee;
         setEmployee(emp);
-        setForm({
-          firstName:     emp.firstName               || '',
-          lastName:      emp.lastName                || '',
-          email:         emp.email                   || '',
-          department:    emp.department              || '',
-          bankName:      emp.bank?.bankName          || '',
-          accountName:   emp.bank?.accountName       || '',
-          accountNumber: emp.bank?.accountNumber     || '',
-        });
+       setForm({
+  firstName:     emp.firstName           || '',
+  lastName:      emp.lastName            || '',
+  email:         emp.email               || '',
+  department:    emp.department          || '',
+  bankName:      emp.bank?.bankName      || '',
+  accountName:   emp.bank?.accountName   || '',
+  accountNumber: emp.bank?.accountNumber || '',
+  shiftStart:    emp.shift?.start        || '',
+  shiftEnd:      emp.shift?.end          || '',
+  salaryType:    emp.salaryType          || 'hourly',
+  hourlyRate:    emp.hourlyRate          || '',
+  monthlySalary: emp.monthlySalary       || '',
+  status:        emp.status              || 'Active',
+  joiningDate:   emp.joiningDate
+    ? new Date(emp.joiningDate).toISOString().split('T')[0]
+    : '',
+});
+
       } else {
         toast.error('Failed to load profile');
       }
@@ -202,37 +228,70 @@ export default function MyProfile() {
   };
 
   // ── Save profile ────────────────────────────────────────────────────────────
-  // Backend PUT /api/employees/me only accepts email + bank for all roles.
-  // That's intentional — admins/superadmins edit other fields via the employees panel.
-  const handleSave = async () => {
-    if (!form.email?.trim()) return toast.error('Email is required');
-    const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim());
-    if (!emailOk)            return toast.error('Please enter a valid email address');
+// REPLACE the entire handleSave function
+const handleSave = async () => {
+  if (!form.email?.trim()) return toast.error('Email is required');
+  const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim());
+  if (!emailOk) return toast.error('Please enter a valid email address');
 
-    setSaving(true);
-    try {
-      const token = localStorage.getItem('token');
-      const { data } = await axios.put('/api/employees/me', {
-        email: form.email.toLowerCase().trim(),
-        bank: {
-          bankName:      form.bankName.trim(),
-          accountName:   form.accountName.trim(),
-          accountNumber: form.accountNumber.trim(),
+  setSaving(true);
+  try {
+    const token = localStorage.getItem('token');
+
+    // Superadmin uses PUT /api/employees/:id (full edit),
+    // everyone else uses PUT /api/employees/me (email + bank only)
+    let data;
+    if (role === 'superadmin') {
+      const res = await axios.put(
+        `/api/employees/${employee._id}`,
+        {
+          firstName:     form.firstName.trim(),
+          lastName:      form.lastName.trim(),
+          email:         form.email.toLowerCase().trim(),
+          department:    form.department,
+          shift:         { start: form.shiftStart, end: form.shiftEnd },
+          salaryType:    form.salaryType,
+          hourlyRate:    parseFloat(form.hourlyRate) || 0,
+          monthlySalary: form.salaryType === 'monthly' ? parseFloat(form.monthlySalary) || null : null,
+          status:        form.status,
+          joiningDate:   form.joiningDate,
+          bank: {
+            bankName:      form.bankName.trim(),
+            accountName:   form.accountName.trim(),
+            accountNumber: form.accountNumber.trim(),
+          },
         },
-      }, { headers: { Authorization: `Bearer ${token}` } });
-
-      if (data.success) {
-        setEmployee(data.employee);
-        toast.success('Profile updated successfully');
-      } else {
-        toast.error('Failed to update profile');
-      }
-    } catch (err) {
-      toast.error(err.response?.data?.message || 'Failed to update profile');
-    } finally {
-      setSaving(false);
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      data = res.data;
+    } else {
+      const res = await axios.put(
+        '/api/employees/me',
+        {
+          email: form.email.toLowerCase().trim(),
+          bank: {
+            bankName:      form.bankName.trim(),
+            accountName:   form.accountName.trim(),
+            accountNumber: form.accountNumber.trim(),
+          },
+        },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      data = res.data;
     }
-  };
+
+    if (data.success) {
+      setEmployee(data.employee);
+      toast.success('Profile updated successfully');
+    } else {
+      toast.error('Failed to update profile');
+    }
+  } catch (err) {
+    toast.error(err.response?.data?.message || 'Failed to update profile');
+  } finally {
+    setSaving(false);
+  }
+};
 
   // ── Change password ─────────────────────────────────────────────────────────
   const handleChangePassword = async (e) => {
@@ -319,89 +378,135 @@ export default function MyProfile() {
         >
           <div className="space-y-4">
 
-            {/* Name row */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {canEditPersonal ? (
-                <>
-                  <EditBox label="First Name" name="firstName" value={form.firstName}
-                    onChange={handleChange} accentRing={accentRing} accentBorder={accentBorder} accentBg={accentBg} />
-                  <EditBox label="Last Name"  name="lastName"  value={form.lastName}
-                    onChange={handleChange} accentRing={accentRing} accentBorder={accentBorder} accentBg={accentBg} />
-                </>
-              ) : (
-                <>
-                  <InfoBox label="First Name" value={employee?.firstName} />
-                  <InfoBox label="Last Name"  value={employee?.lastName} />
-                </>
-              )}
-            </div>
+  {/* Name */}
+  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+    {canEditPersonal ? (
+      <>
+        <EditBox label="First Name" name="firstName" value={form.firstName}
+          onChange={handleChange} accentRing={accentRing} accentBorder={accentBorder} accentBg={accentBg} />
+        <EditBox label="Last Name"  name="lastName"  value={form.lastName}
+          onChange={handleChange} accentRing={accentRing} accentBorder={accentBorder} accentBg={accentBg} />
+      </>
+    ) : (
+      <>
+        <InfoBox label="First Name" value={employee?.firstName} />
+        <InfoBox label="Last Name"  value={employee?.lastName} />
+      </>
+    )}
+  </div>
 
-            {/* Email — editable for all roles */}
-            <EditBox
-              label="Email"
-              name="email"
-              value={form.email}
-              onChange={handleChange}
-              type="email"
-              placeholder="your@email.com"
-              accentRing={accentRing}
-              accentBorder={accentBorder}
-              accentBg={accentBg}
-              badge="(editable)"
-            />
+  {/* Email */}
+  <EditBox
+    label="Email" name="email" value={form.email}
+    onChange={handleChange} type="email" placeholder="your@email.com"
+    accentRing={accentRing} accentBorder={accentBorder} accentBg={accentBg}
+    badge="(editable)"
+  />
 
-            {/* Employee ID + Department */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <InfoBox label="Employee ID" value={employee?.employeeNumber} />
-              {canEditPersonal ? (
-                <div>
-                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Department</p>
-                  <select
-                    name="department"
-                    value={form.department}
-                    onChange={handleChange}
-                    className={`w-full px-4 py-2.5 border ${accentBorder} ${accentBg} rounded-lg focus:outline-none ${accentRing} focus:ring-2 text-sm transition`}
-                  >
-                    {['IT','Customer Support','Manager','Marketing','HR','Finance'].map(d => (
-                      <option key={d} value={d}>{d}</option>
-                    ))}
-                  </select>
-                </div>
-              ) : (
-                <InfoBox label="Department" value={employee?.department} />
-              )}
-            </div>
+  {/* Employee ID + Department */}
+  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+    <InfoBox label="Employee ID" value={employee?.employeeNumber} />
+    {config.canEditDepartment ? (
+      <div>
+        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Department</p>
+        <select name="department" value={form.department} onChange={handleChange}
+          className={`w-full px-4 py-2.5 border ${accentBorder} ${accentBg} rounded-lg focus:outline-none ${accentRing} focus:ring-2 text-sm transition`}>
+          {['IT','Customer Support','Manager','Marketing','HR','Finance'].map(d => (
+            <option key={d} value={d}>{d}</option>
+          ))}
+        </select>
+      </div>
+    ) : (
+      <InfoBox label="Department" value={employee?.department} />
+    )}
+  </div>
 
-            {/* Joining Date + Status */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Joining Date</p>
-                <div className="flex items-center gap-2 px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-700 min-h-[42px]">
-                  <Calendar size={14} className="text-gray-400 shrink-0" />
-                  <span>
-                    {employee?.joiningDate
-                      ? formatDateToDisplay(employee.joiningDate)
-                      : <span className="text-gray-400">—</span>}
-                  </span>
-                </div>
-              </div>
-              <InfoBox label="Status" value={employee?.status} />
-            </div>
+  {/* Joining Date + Status */}
+  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+    {config.canEditJoining ? (
+      <EditBox label="Joining Date" name="joiningDate" value={form.joiningDate}
+        onChange={handleChange} type="date"
+        accentRing={accentRing} accentBorder={accentBorder} accentBg={accentBg} />
+    ) : (
+      <div>
+        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Joining Date</p>
+        <div className="flex items-center gap-2 px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-700 min-h-[42px]">
+          <Calendar size={14} className="text-gray-400 shrink-0" />
+          <span>{employee?.joiningDate ? formatDateToDisplay(employee.joiningDate) : <span className="text-gray-400">—</span>}</span>
+        </div>
+      </div>
+    )}
+    {config.canEditStatus ? (
+      <div>
+        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Status</p>
+        <select name="status" value={form.status} onChange={handleChange}
+          className={`w-full px-4 py-2.5 border ${accentBorder} ${accentBg} rounded-lg focus:outline-none ${accentRing} focus:ring-2 text-sm transition`}>
+          {['Active','Inactive','Frozen'].map(s => <option key={s} value={s}>{s}</option>)}
+        </select>
+      </div>
+    ) : (
+      <InfoBox label="Status" value={employee?.status} />
+    )}
+  </div>
 
-            {/* Shift */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <InfoBox label="Shift Start" value={employee?.shift?.start} />
-              <InfoBox label="Shift End"   value={employee?.shift?.end} />
-            </div>
+  {/* Shift */}
+  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+    {config.canEditShift ? (
+      <>
+        <EditBox label="Shift Start" name="shiftStart" value={form.shiftStart}
+          onChange={handleChange} placeholder="09:00"
+          accentRing={accentRing} accentBorder={accentBorder} accentBg={accentBg} />
+        <EditBox label="Shift End" name="shiftEnd" value={form.shiftEnd}
+          onChange={handleChange} placeholder="18:00"
+          accentRing={accentRing} accentBorder={accentBorder} accentBg={accentBg} />
+      </>
+    ) : (
+      <>
+        <InfoBox label="Shift Start" value={employee?.shift?.start} />
+        <InfoBox label="Shift End"   value={employee?.shift?.end} />
+      </>
+    )}
+  </div>
 
-            {/* Salary (read-only for everyone — changed by superadmin via employee panel) */}
-            {employee?.salaryType && (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <SalaryRows />
-              </div>
-            )}
+  {/* Salary */}
+  {employee?.salaryType && (
+    config.canEditSalary ? (
+      <div className="space-y-4">
+        <div>
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Salary Type</p>
+          <select name="salaryType" value={form.salaryType} onChange={handleChange}
+            className={`w-full px-4 py-2.5 border ${accentBorder} ${accentBg} rounded-lg focus:outline-none ${accentRing} focus:ring-2 text-sm transition`}>
+            <option value="hourly">Hourly</option>
+            <option value="monthly">Monthly</option>
+          </select>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+         <div>
+  <EditBox label="Hourly Rate (PKR)" name="hourlyRate" value={form.hourlyRate}
+    onChange={handleChange} type="number" placeholder="0"
+    accentRing={accentRing} accentBorder={accentBorder} accentBg={accentBg} />
+  {calcEstimatedMonthly() && (
+    <p className="text-xs text-red-500 mt-1.5">
+      ≈ PKR {calcEstimatedMonthly()} / month &nbsp;·&nbsp;
+      ({form.shiftStart}–{form.shiftEnd} × PKR {form.hourlyRate}/hr × 22 days)
+    </p>
+  )}
+</div>
+          {form.salaryType === 'monthly' && (
+            <EditBox label="Monthly Salary (PKR)" name="monthlySalary" value={form.monthlySalary}
+              onChange={handleChange} type="number" placeholder="0"
+              accentRing={accentRing} accentBorder={accentBorder} accentBg={accentBg} />
+          )}
+        </div>
+      </div>
+    ) : (
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <SalaryRows />
+      </div>
+    )
+  )}
 
-          </div>
+</div>
         </Card>
 
         {/* ── Bank Details ─────────────────────────────────────────────────── */}
