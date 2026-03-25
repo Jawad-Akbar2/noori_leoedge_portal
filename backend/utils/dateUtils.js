@@ -20,28 +20,41 @@ export function parseDDMMYYYY(dateStr) {
 
   const s = String(dateStr).trim();
 
-  // ── dd/mm/yyyy ────────────────────────────────────────────────────────────
   if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(s)) {
     const [d, m, y] = s.split('/').map(Number);
-    const month = m - 1;  // 0-based
+    const month = m - 1;
+
     if (y < 1900 || y > 2100) return null;
-    const date = new Date(y, month, d, 0, 0, 0, 0);
-    // Validate: guards against 31/02/2024 etc.
-    if (date.getFullYear() !== y || date.getMonth() !== month || date.getDate() !== d) {
+
+    const date = new Date(Date.UTC(y, month, d));
+
+    if (
+      date.getUTCFullYear() !== y ||
+      date.getUTCMonth() !== month ||
+      date.getUTCDate() !== d
+    ) {
       return null;
     }
+
     return date;
   }
 
-  // ── YYYY-MM-DD  or  YYYY-MM-DDTHH:mm… ────────────────────────────────────
   if (/^\d{4}-\d{2}-\d{2}/.test(s)) {
     const [y, m, d] = s.slice(0, 10).split('-').map(Number);
     const month = m - 1;
+
     if (y < 1900 || y > 2100) return null;
-    const date = new Date(y, month, d, 0, 0, 0, 0);
-    if (date.getFullYear() !== y || date.getMonth() !== month || date.getDate() !== d) {
+
+    const date = new Date(Date.UTC(y, month, d));
+
+    if (
+      date.getUTCFullYear() !== y ||
+      date.getUTCMonth() !== month ||
+      date.getUTCDate() !== d
+    ) {
       return null;
     }
+
     return date;
   }
 
