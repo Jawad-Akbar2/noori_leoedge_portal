@@ -56,10 +56,6 @@ const toMin = (t) => {
 };
 
 // ─── Night-shift checkout date resolver ──────────────────────────────────────
-// When we have ONLY a checkout (no check-in), decide which shift-date it
-// belongs to.
-//   out >= shiftStart  →  same-day shift (e.g. 23:00 on a 22:00–07:00 shift)
-//   out <  shiftStart  →  next-morning checkout → shift date = csvDate − 1
 function resolveNightShiftCheckoutDate(outTime, csvDate, shift) {
   const isNightShift = toMin(shift.end) < toMin(shift.start);
   if (!isNightShift) {
@@ -212,11 +208,9 @@ function buildFinancials({
     hoursWorked = calcHours(inTime, outTime, outNextDay);
     basePay     = hoursWorked * hourlyRate;
   } else if ((inTime && !outTime) || (!inTime && outTime)) {
-    // Incomplete punch → 50% of scheduled hours
     hoursWorked = scheduledHrs;
     basePay     = hoursWorked * hourlyRate * 0.5;
   }
-  // Absent → hoursWorked = 0, basePay = 0
 
   let deductionDetails  = [];
   let totalDeduction    = 0;
@@ -384,27 +378,6 @@ router.post(
           ));
         }
 
-        // ═══════════════════════════════════════════════════════════════════
-        // ── MIXED SAME-DATE GROUP SPLIT ────────────────────────────────────
-        //
-        // Problem: a night-shift CSV can have BOTH a next-morning checkout
-        // AND a same-evening check-in on the same calendar date, e.g.:
-        //
-        //   EMP001|John|Doe|23/02/2026|10:19|1   ← checkout from 22nd's shift
-        //   EMP001|John|Doe|23/02/2026|22:19|0   ← check-in for 23rd's shift
-        //
-        // mergeTimes returns inTime=22:19, outTime=10:19, outNextDay=true.
-        // Without this block, 10:19 would be saved as the checkout for 23/02
-        // which is wrong — it belongs to 22/02.
-        //
-        // Detection: night shift + outNextDay=true + outTime < shiftStart
-        //   (outTime numerically before shift start means it's a next-morning
-        //   checkout, not a same-night early logout)
-        //
-        // Action:
-        //   1. Save the outTime to the PREVIOUS day's record (create or merge)
-        //   2. Strip outTime from the current group so today only gets check-in
-        // ═══════════════════════════════════════════════════════════════════
         const isNightShiftEmp = toMin(employee.shift.end) < toMin(employee.shift.start);
 
         if (isNightShiftEmp && inTime && outTime && outNextDay) {
@@ -412,7 +385,6 @@ router.post(
           const shiftStartMin = toMin(employee.shift.start);
 
           if (outMin < shiftStartMin) {
-            // outTime is a next-morning checkout — send it to the previous shift date
             const prevDay = new Date(date);
             prevDay.setDate(prevDay.getDate() - 1);
             prevDay.setHours(0, 0, 0, 0);
@@ -470,7 +442,6 @@ router.post(
                 log.push({ type: "SUCCESS", message: `  ✓ Prev shift (${formatDate(prevDay)}) updated with out=${outTime}` });
 
               } else {
-                // No record for previous day — create one with just the checkout
                 const prevFinancials = buildFinancials({
                   status:     "Present",
                   inTime:     null,
@@ -510,15 +481,11 @@ router.post(
               log.push({ type: "ERROR", message: `  ✗ Prev shift save failed: ${splitErr.message}` });
             }
 
-            // Strip the checkout — today's record only keeps the check-in
             outTime    = null;
             outNextDay = false;
           }
         }
-        // ── END MIXED SAME-DATE GROUP SPLIT ───────────────────────────────
 
-        // ── Resolve attendance date for checkout-only groups ───────────────
-        // (handles the case where only a checkout arrived, on a separate date)
         let attendanceDate = date;
         if (!inTime && outTime) {
           const resolved = resolveNightShiftCheckoutDate(outTime, date, employee.shift);
@@ -943,7 +910,6 @@ router.post("/save-row", adminAuth, async (req, res) => {
     let resolvedInTime  = inTime  || null;
     let resolvedOutTime = outTime || null;
 
-    // ── Sanitise OT details ───────────────────────────────────────────────────
     const cleanOtDetails = (Array.isArray(otDetails) ? otDetails : [])
       .map((e) => ({
         type:   e?.type === "calc" ? "calc" : "manual",
@@ -954,7 +920,6 @@ router.post("/save-row", adminAuth, async (req, res) => {
       }))
       .filter((e) => e.reason && (e.type === "calc" ? e.hours > 0 : e.amount > 0));
 
-    // ── Sanitise manual deduction overrides ───────────────────────────────────
     const hasManualDeductions  = Array.isArray(manualDeductionDetails);
     const cleanDeductionDetails = hasManualDeductions
       ? manualDeductionDetails
@@ -1034,6 +999,62 @@ router.post("/save-row", adminAuth, async (req, res) => {
       record,
       lastModified: formatDateTimeForDisplay(new Date()),
     });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
+// ─── DELETE /api/attendance/:id ──────────────────────────────────────────────
+// ═════════════════════════════════════════════════════════════════════════════
+
+router.delete("/:id", adminAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!id || id.length !== 24) {
+      return res.status(400).json({ success: false, message: "Invalid record ID" });
+    }
+
+    // Role-based access: admins can only delete employee records, superadmins can delete any (except superadmin)
+    const record = await AttendanceLog.findOne({ _id: id, isDeleted: { $ne: true } })
+      .populate({ path: "empId", select: "role", match: { role: { $nin: ["superadmin"] } } })
+      .lean();
+
+    if (!record) {
+      return res.status(404).json({ success: false, message: "Record not found" });
+    }
+
+    // If empId didn't pass populate match (superadmin employee), block deletion
+    if (!record.empId) {
+      return res.status(403).json({
+        success: false,
+        message: "You do not have permission to delete this record",
+      });
+    }
+
+    // Admins cannot delete records for other privileged roles
+    if (req.userRole === "admin" && record.empId?.role !== "employee") {
+      return res.status(403).json({
+        success: false,
+        message: "Admins can only delete attendance records for employee-role accounts",
+      });
+    }
+
+    // Soft delete — preserves data integrity for payroll history
+    await AttendanceLog.updateOne(
+      { _id: id },
+      {
+        $set: {
+          isDeleted:                 true,
+          "metadata.deletedBy":      req.userId,
+          "metadata.deletedAt":      new Date(),
+          "metadata.lastModifiedAt": new Date(),
+        },
+      },
+    );
+
+    return res.json({ success: true, message: "Attendance record deleted successfully" });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
