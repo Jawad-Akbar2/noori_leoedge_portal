@@ -3,14 +3,24 @@ import axios from 'axios';
 import {
   Plus, Download, Upload, AlertCircle, RefreshCw, X, Save, Pencil,
   Calendar, Eye, Trash2, ChevronLeft, ChevronRight, Search, CheckCircle2,
-  Circle, Loader2
+  Circle, Loader2, RotateCcw,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import CSVImportModal from './CSVImportModal.jsx';
 import { getDateMinusDays, getTodayDate, parseDate } from '../../utils/dateFormatter.js';
 
+// ─── Constants ────────────────────────────────────────────────────────────────
 const PRIVILEGED_ROLES = ['admin', 'superadmin'];
+const STATUS_OPTIONS   = ['Present', 'Late', 'Absent', 'Leave'];
+const STATUS_STYLES    = {
+  Present: 'bg-green-100  text-green-800  border-green-200',
+  Late:    'bg-yellow-100 text-yellow-800 border-yellow-200',
+  Leave:   'bg-blue-100   text-blue-800   border-blue-200',
+  Absent:  'bg-red-100    text-red-800    border-red-200',
+  '':      'bg-gray-100   text-gray-500   border-gray-200',
+};
 
+// ─── Auth helpers ─────────────────────────────────────────────────────────────
 function getCurrentUserRole() {
   try {
     const user = JSON.parse(localStorage.getItem('user') || '{}');
@@ -19,41 +29,53 @@ function getCurrentUserRole() {
     return localStorage.getItem('role') || '';
   }
 }
+const authHeader = () => ({
+  Authorization: `Bearer ${localStorage.getItem('token')}`,
+  'Content-Type': 'application/json',
+});
 
+// ─── Pure helpers ─────────────────────────────────────────────────────────────
+const safeTime    = (v) => (v && v !== '--') ? v : '--';
+const emptyTime   = (v) => (v && v !== '--') ? v : '';
+const pkr         = (v) => `PKR ${Number(v || 0).toFixed(2)}`;
 const displayTime = (val) => (val && val !== '--') ? val : '--';
 
-// ─── Shared DateNavigator ─────────────────────────────────────────────────────
+function resolveEmpId(raw) {
+  if (!raw) return '';
+  return typeof raw === 'object' ? (raw._id?.toString?.() || String(raw)) : String(raw);
+}
+
+async function saveRowApi({ empId, date, status, inTime, outTime, outNextDay }) {
+  const res = await axios.post('/api/attendance/save-row', {
+    empId, date, status,
+    inTime:     inTime  || null,
+    outTime:    outTime || null,
+    outNextDay: Boolean(outNextDay),
+  }, { headers: authHeader() });
+  return res.data;
+}
+
+// ─── DateNavigator (single date) ─────────────────────────────────────────────
 function DateNavigator({ value, onChange, label, showTodayBadge = false }) {
   const hiddenRef = useRef(null);
-  const isToday = value === getTodayDate();
+  const isToday   = value === getTodayDate();
 
-  const shiftDate = (dir) => {
+  const shift = (dir) => {
     if (!value) return;
     const [d, m, y] = value.split('/').map(Number);
     if (!d || !m || !y) return;
     const dt = new Date(y, m - 1, d);
     dt.setDate(dt.getDate() + dir);
-    const nd = String(dt.getDate()).padStart(2, '0');
-    const nm = String(dt.getMonth() + 1).padStart(2, '0');
-    onChange(`${nd}/${nm}/${dt.getFullYear()}`);
-  };
-
-  const handleHiddenChange = (e) => {
-    const val = e.target.value;
-    if (!val) return;
-    const [y, m, d] = val.split('-');
-    onChange(`${d}/${m}/${y}`);
-  };
-
-  const openPicker = () => {
-    try { hiddenRef.current?.showPicker(); } catch { hiddenRef.current?.focus(); }
+    onChange(
+      `${String(dt.getDate()).padStart(2, '0')}/${String(dt.getMonth() + 1).padStart(2, '0')}/${dt.getFullYear()}`
+    );
   };
 
   return (
     <div>
       {label && <label className="block text-xs font-medium text-gray-700 mb-1">{label}</label>}
       <div className="flex items-center gap-1">
-        <button type="button" onClick={() => shiftDate(-1)}
+        <button type="button" onClick={() => shift(-1)}
           className="p-2 rounded-lg border border-gray-300 hover:bg-gray-100 transition text-gray-600 flex-shrink-0">
           <ChevronLeft size={15} />
         </button>
@@ -62,13 +84,17 @@ function DateNavigator({ value, onChange, label, showTodayBadge = false }) {
             placeholder="dd/mm/yyyy"
             className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 pr-8 text-center" />
           <input type="date" ref={hiddenRef} className="absolute opacity-0 pointer-events-none w-0 h-0"
-            onChange={handleHiddenChange} />
-          <button type="button" onClick={openPicker}
+            onChange={e => {
+              const [y, m, d] = e.target.value.split('-');
+              onChange(`${d}/${m}/${y}`);
+            }} />
+          <button type="button"
+            onClick={() => { try { hiddenRef.current?.showPicker(); } catch { hiddenRef.current?.focus(); } }}
             className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-blue-500">
             <Calendar size={14} />
           </button>
         </div>
-        <button type="button" onClick={() => shiftDate(1)}
+        <button type="button" onClick={() => shift(1)}
           className="p-2 rounded-lg border border-gray-300 hover:bg-gray-100 transition text-gray-600 flex-shrink-0">
           <ChevronRight size={15} />
         </button>
@@ -76,6 +102,32 @@ function DateNavigator({ value, onChange, label, showTodayBadge = false }) {
           <span className="px-2 py-1 text-xs font-medium bg-blue-100 text-blue-700 rounded-full flex-shrink-0">Today</span>
         )}
       </div>
+    </div>
+  );
+}
+
+// ─── DateRangePicker ──────────────────────────────────────────────────────────
+function DateRangePicker({ fromDate, setFromDate, toDate, setToDate, rangeEnabled, setRangeEnabled, label1, label2 }) {
+  const toggleRange = (checked) => {
+    setRangeEnabled(checked);
+    if (!checked) setToDate(fromDate);
+  };
+
+  return (
+    <div className="flex flex-wrap items-end gap-4">
+      <DateNavigator value={fromDate} onChange={setFromDate} label={label1 || 'Date (dd/mm/yyyy)'} />
+      <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer select-none pb-0.5">
+        <input
+          type="checkbox"
+          checked={rangeEnabled}
+          onChange={e => toggleRange(e.target.checked)}
+          className="w-4 h-4 rounded border-gray-300"
+        />
+        Date range
+      </label>
+      {rangeEnabled && (
+        <DateNavigator value={toDate} onChange={setToDate} label={label2 || 'To Date (dd/mm/yyyy)'} />
+      )}
     </div>
   );
 }
@@ -102,17 +154,219 @@ function filterRecords(records, query) {
   if (!query.trim()) return records;
   const q = query.toLowerCase();
   return records.filter(r =>
-    (r.empName     || '').toLowerCase().includes(q) ||
-    (r.empNumber   || '').toLowerCase().includes(q) ||
-    (r.department  || '').toLowerCase().includes(q) ||
-    (r.status      || '').toLowerCase().includes(q) ||
+    (r.empName       || '').toLowerCase().includes(q) ||
+    (r.empNumber     || '').toLowerCase().includes(q) ||
+    (r.department    || '').toLowerCase().includes(q) ||
+    (r.status        || '').toLowerCase().includes(q) ||
     (r.dateFormatted || '').includes(q)
   );
 }
 
-// ─── Attendance Form Modal (Add & Edit) ──────────────────────────────────────
+// ─── StatusSelect ─────────────────────────────────────────────────────────────
+function StatusSelect({ value, onChange, disabled, readOnly }) {
+  if (readOnly) {
+    return (
+      <span className={`text-xs font-semibold px-2 py-1 rounded-full border ${STATUS_STYLES[value] || STATUS_STYLES['']}`}>
+        {value || '—'}
+      </span>
+    );
+  }
+  return (
+    <select value={value || ''} onChange={e => onChange(e.target.value)} disabled={disabled}
+      className={`text-xs font-semibold rounded-md border px-2 py-1 focus:ring-2 focus:ring-blue-400 focus:outline-none disabled:opacity-60 cursor-pointer transition ${STATUS_STYLES[value] || STATUS_STYLES['']}`}>
+      {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
+    </select>
+  );
+}
+
+function TimeInput({ value, onChange, placeholder, disabled, readOnly }) {
+  if (readOnly) return <span className="text-xs text-gray-500">{safeTime(value)}</span>;
+  return (
+    <input type="text" value={value || ''} onChange={e => onChange(e.target.value)}
+      placeholder={placeholder || 'HH:mm'} disabled={disabled}
+      className="w-[72px] border border-gray-300 rounded-md px-2 py-1 text-xs focus:ring-2 focus:ring-blue-400 focus:outline-none disabled:opacity-60 placeholder:text-gray-300" />
+  );
+}
+
+function StatusDot({ isDirty, isSaved, isSaving, isVirtual }) {
+  if (isSaving)  return <Loader2 size={14} className="text-blue-500 animate-spin" />;
+  if (isSaved)   return <CheckCircle2 size={14} className="text-green-500" />;
+  if (isDirty)   return <Circle size={14} className="text-amber-500 fill-amber-400" />;
+  if (isVirtual) return <Circle size={14} className="text-gray-300" />;
+  return <CheckCircle2 size={14} className="text-gray-300" />;
+}
+
+// ─── OT & Deduction Edit Modal ────────────────────────────────────────────────
+function OTDeductionEditModal({ record, type, currentUserRole, onClose, onSuccess }) {
+  const isHybrid = currentUserRole === 'hybrid';
+  const empId    = resolveEmpId(record?.empId);
+  const date     = record?.dateFormatted;
+
+  const [otDetails,        setOtDetails]        = useState(record?.financials?.otDetails        || []);
+  const [deductionDetails, setDeductionDetails] = useState(record?.financials?.deductionDetails || []);
+  const [otDraft,          setOtDraft]          = useState({ type: 'calc', amount: '', hours: '', rate: '1.5', reason: '' });
+  const [deductionDraft,   setDeductionDraft]   = useState({ amount: '', reason: '' });
+  const [saving,           setSaving]           = useState(false);
+
+  const persist = async (ot = otDetails, ded = deductionDetails) => {
+    setSaving(true);
+    try {
+      await axios.post('/api/attendance/save-row', {
+        empId, date,
+        status:           record.status,
+        inTime:           emptyTime(record.inTime)  || null,
+        outTime:          emptyTime(record.outTime) || null,
+        outNextDay:       record.outNextDay || false,
+        otDetails:        ot,
+        deductionDetails: ded,
+      }, { headers: authHeader() });
+      toast.success('Saved');
+      onSuccess();
+      onClose();
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Save failed');
+    } finally { setSaving(false); }
+  };
+
+  const addDeduction = () => {
+    const amount = parseFloat(deductionDraft.amount);
+    if (!amount || amount < 0) return toast.error('Enter a valid deduction amount');
+    if (!deductionDraft.reason.trim()) return toast.error('Deduction reason is required');
+    setDeductionDetails(prev => [...prev, { amount, reason: deductionDraft.reason.trim() }]);
+    setDeductionDraft({ amount: '', reason: '' });
+  };
+
+  const addOT = () => {
+    if (!otDraft.reason.trim()) return toast.error('OT reason is required');
+    if (otDraft.type === 'manual') {
+      const amount = parseFloat(otDraft.amount);
+      if (!amount || amount < 0) return toast.error('Enter a valid OT amount');
+      setOtDetails(prev => [...prev, { type: 'manual', amount, reason: otDraft.reason.trim() }]);
+    } else {
+      const hours = parseFloat(otDraft.hours);
+      const rate  = parseFloat(otDraft.rate) || 1;
+      if (!hours || hours <= 0) return toast.error('Enter valid OT hours');
+      setOtDetails(prev => [...prev, { type: 'calc', hours, rate, reason: otDraft.reason.trim() }]);
+    }
+    setOtDraft({ type: 'calc', amount: '', hours: '', rate: '1.5', reason: '' });
+  };
+
+  const removeDeduction = async (i) => {
+    const updated = deductionDetails.filter((_, x) => x !== i);
+    setDeductionDetails(updated);
+    await persist(otDetails, updated);
+  };
+
+  const removeOT = async (i) => {
+    const updated = otDetails.filter((_, x) => x !== i);
+    setOtDetails(updated);
+    await persist(updated, deductionDetails);
+  };
+
+  const title = type === 'ot' ? 'Overtime (OT)' : 'Deductions';
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col">
+        <div className="flex items-center justify-between px-6 py-4 border-b">
+          <h2 className="text-lg font-bold text-gray-800">{title}</h2>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={20} /></button>
+        </div>
+        <div className="px-6 pt-4">
+          <div className="bg-blue-50 rounded-lg px-4 py-3 mb-4">
+            <p className="text-sm font-semibold text-blue-800">{record?.empName}</p>
+            <p className="text-xs text-blue-600">ID: {record?.empNumber} · {record?.department} · {date}</p>
+          </div>
+        </div>
+        <div className="px-6 pb-5 space-y-4 overflow-auto flex-1">
+          {type === 'ot' && !isHybrid && (
+            <div className="border rounded-lg p-3 bg-gray-50 space-y-2">
+              <p className="text-sm font-semibold text-gray-700">Overtime (OT)</p>
+              <div className="grid grid-cols-2 gap-2">
+                <select value={otDraft.type} onChange={e => setOtDraft(prev => ({ ...prev, type: e.target.value }))}
+                  className="border border-gray-300 rounded-lg px-3 py-2 text-sm">
+                  <option value="calc">Calculated</option>
+                  <option value="manual">Manual Amount</option>
+                </select>
+                <input type="text" placeholder="Reason" value={otDraft.reason}
+                  onChange={e => setOtDraft(prev => ({ ...prev, reason: e.target.value }))}
+                  className="border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+                {otDraft.type === 'manual' ? (
+                  <input type="number" min="0" placeholder="Amount" value={otDraft.amount}
+                    onChange={e => setOtDraft(prev => ({ ...prev, amount: e.target.value }))}
+                    className="border border-gray-300 rounded-lg px-3 py-2 text-sm col-span-2" />
+                ) : (
+                  <>
+                    <input type="number" min="0" step="0.5" placeholder="Hours" value={otDraft.hours}
+                      onChange={e => setOtDraft(prev => ({ ...prev, hours: e.target.value }))}
+                      className="border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+                    <select value={otDraft.rate} onChange={e => setOtDraft(prev => ({ ...prev, rate: e.target.value }))}
+                      className="border border-gray-300 rounded-lg px-3 py-2 text-sm">
+                      <option value="1">1.0x</option>
+                      <option value="1.5">1.5x</option>
+                      <option value="2">2.0x</option>
+                    </select>
+                  </>
+                )}
+              </div>
+              <button type="button" onClick={addOT}
+                className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-blue-700 bg-blue-50 border border-blue-200 rounded-lg">
+                <Plus size={12} /> Add OT
+              </button>
+              <div className="space-y-1">
+                {otDetails.map((entry, idx) => (
+                  <div key={`ot-${idx}`} className="flex justify-between text-xs bg-white border rounded px-2 py-1">
+                    <span>{entry.type === 'manual' ? `PKR ${entry.amount}` : `${entry.hours}h × ${entry.rate}x`} — {entry.reason}</span>
+                    <button type="button" onClick={() => removeOT(idx)} className="text-red-600 hover:text-red-800">Remove</button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          {type === 'deduction' && !isHybrid && (
+            <div className="border rounded-lg p-3 bg-gray-50 space-y-2">
+              <p className="text-sm font-semibold text-gray-700">Deductions</p>
+              <div className="grid grid-cols-2 gap-2">
+                <input type="number" min="0" placeholder="Amount" value={deductionDraft.amount}
+                  onChange={e => setDeductionDraft(prev => ({ ...prev, amount: e.target.value }))}
+                  className="border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+                <input type="text" placeholder="Reason" value={deductionDraft.reason}
+                  onChange={e => setDeductionDraft(prev => ({ ...prev, reason: e.target.value }))}
+                  className="border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+              </div>
+              <button type="button" onClick={addDeduction}
+                className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-red-700 bg-red-50 border border-red-200 rounded-lg">
+                <Plus size={12} /> Add Deduction
+              </button>
+              <div className="space-y-1">
+                {deductionDetails.map((entry, idx) => (
+                  <div key={`d-${idx}`} className="flex justify-between text-xs bg-white border rounded px-2 py-1">
+                    <span>PKR {entry.amount} — {entry.reason}</span>
+                    <button type="button" onClick={() => removeDeduction(idx)} className="text-red-600 hover:text-red-800">Remove</button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+        <div className="flex justify-end gap-3 px-6 py-4 border-t bg-gray-50 rounded-b-2xl">
+          <button onClick={onClose} disabled={saving}
+            className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition disabled:opacity-50">
+            Cancel
+          </button>
+          <button onClick={() => persist()} disabled={saving}
+            className="flex items-center gap-2 px-5 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition disabled:opacity-50">
+            <Save size={15} /> {saving ? 'Saving...' : 'Save'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Attendance Form Modal ────────────────────────────────────────────────────
 function AttendanceFormModal({ mode = 'add', record = null, onClose, onSuccess, currentUserRole }) {
-  const isEdit = mode === 'edit';
+  const isEdit    = mode === 'edit';
   const parseTime = (val) => (val && val !== '--') ? val : '';
 
   const [form, setForm] = useState({
@@ -126,23 +380,22 @@ function AttendanceFormModal({ mode = 'add', record = null, onClose, onSuccess, 
     otDetails:        isEdit ? (record?.financials?.otDetails        || []) : [],
   });
   const [deductionDraft, setDeductionDraft] = useState({ amount: '', reason: '' });
-  const [otDraft, setOtDraft] = useState({ type: 'calc', amount: '', hours: '', rate: '1.5', reason: '' });
-  const [employees, setEmployees] = useState([]);
-  const [loadingEmployees, setLoadingEmployees] = useState(false);
-  const [saving, setSaving] = useState(false);
+  const [otDraft,        setOtDraft]        = useState({ type: 'calc', amount: '', hours: '', rate: '1.5', reason: '' });
+  const [employees,      setEmployees]      = useState([]);
+  const [loadingEmp,     setLoadingEmp]     = useState(false);
+  const [saving,         setSaving]         = useState(false);
 
   useEffect(() => {
     if (!isEdit) {
-      setLoadingEmployees(true);
-      const token = localStorage.getItem('token');
-      axios.get('/api/employees?status=Active', { headers: { Authorization: `Bearer ${token}` } })
+      setLoadingEmp(true);
+      axios.get('/api/employees?status=Active', { headers: authHeader() })
         .then(res => {
           let list = res.data?.employees || [];
           if (currentUserRole === 'admin') list = list.filter(emp => !PRIVILEGED_ROLES.includes(emp.role));
           setEmployees(list);
         })
         .catch(() => toast.error('Failed to load employees'))
-        .finally(() => setLoadingEmployees(false));
+        .finally(() => setLoadingEmp(false));
     }
   }, [isEdit, currentUserRole]);
 
@@ -179,14 +432,13 @@ function AttendanceFormModal({ mode = 'add', record = null, onClose, onSuccess, 
     setForm(prev => ({ ...prev, [key]: updated }));
     if (!isEdit) return;
     try {
-      const raw = record?.empId;
-      const resolvedEmpId = typeof raw === 'object' && raw !== null ? (raw._id?.toString?.() || String(raw)) : String(raw);
+      const resolvedEmpId = resolveEmpId(record?.empId);
       await axios.post('/api/attendance/save-row', {
         empId: resolvedEmpId, date: form.date, status: form.status,
         inTime: form.inTime || null, outTime: form.outTime || null, outNextDay: form.outNextDay || false,
         deductionDetails: key === 'deductionDetails' ? updated : form.deductionDetails,
         otDetails:        key === 'otDetails'        ? updated : form.otDetails,
-      }, { headers: { Authorization: `Bearer ${localStorage.getItem('token')}`, 'Content-Type': 'application/json' } });
+      }, { headers: authHeader() });
       toast.success('Removed and saved'); onSuccess();
     } catch (err) { toast.error(err.response?.data?.message || 'Failed to save after removal'); }
   };
@@ -197,19 +449,18 @@ function AttendanceFormModal({ mode = 'add', record = null, onClose, onSuccess, 
     if (!form.status) return toast.error('Please select a status');
     setSaving(true);
     try {
-      const token = localStorage.getItem('token');
       let resolvedEmpId;
       if (isEdit) {
         const raw = record?.empId;
         if (!raw) { toast.error('Cannot resolve employee — please reload.'); setSaving(false); return; }
-        resolvedEmpId = typeof raw === 'object' && raw !== null ? (raw._id?.toString?.() || String(raw)) : String(raw);
+        resolvedEmpId = resolveEmpId(raw);
       } else { resolvedEmpId = form.empId; }
       await axios.post('/api/attendance/save-row', {
         empId: resolvedEmpId, date: form.date, status: form.status,
         inTime: form.inTime || null, outTime: form.outTime || null, outNextDay: form.outNextDay || false,
         otDetails: form.otDetails,
         ...(isEdit || form.deductionDetails.length > 0 ? { deductionDetails: form.deductionDetails } : {}),
-      }, { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } });
+      }, { headers: authHeader() });
       toast.success(isEdit ? 'Attendance updated' : 'Attendance added');
       onSuccess(); onClose();
     } catch (err) { toast.error(err.response?.data?.message || 'Failed to save attendance'); }
@@ -229,7 +480,7 @@ function AttendanceFormModal({ mode = 'add', record = null, onClose, onSuccess, 
           {!isEdit && (
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Employee *</label>
-              {loadingEmployees ? <p className="text-sm text-gray-400">Loading employees...</p> : (
+              {loadingEmp ? <p className="text-sm text-gray-400">Loading employees...</p> : (
                 <select name="empId" value={form.empId} onChange={handleChange}
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500">
                   <option value="">-- Select Employee --</option>
@@ -398,164 +649,31 @@ function DeleteConfirmModal({ record, onClose, onConfirm, deleting }) {
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
-// ─── MARK TAB — Inline Worksheet ─────────────────────────────────────────────
+// ─── MARK TAB ─────────────────────────────────────────────────────────────────
 // ═════════════════════════════════════════════════════════════════════════════
 
-const STATUS_COLORS = {
-  Present: 'bg-green-100 text-green-800 border-green-200',
-  Late:    'bg-yellow-100 text-yellow-800 border-yellow-200',
-  Leave:   'bg-blue-100 text-blue-800 border-blue-200',
-  Absent:  'bg-red-100 text-red-800 border-red-200',
-  '':      'bg-gray-100 text-gray-500 border-gray-200',
-};
-
-function WorksheetRow({ row, isAdmin, isHybrid, canEdit, onRowChange, onSaveRow, savingRowId }) {
-  const isSaving  = savingRowId === row.empId;
-  const isDirty   = row.__dirty;
-  const isSaved   = row.__saved;
-  const showTimes = ['Present', 'Late'].includes(row.status);
-
-  const handleStatusChange = (val) => {
-    const clearTimes = !['Present', 'Late'].includes(val);
-    onRowChange(row.empId, {
-      status: val,
-      ...(clearTimes ? { inTime: '', outTime: '', outNextDay: false } : {}),
-    });
-  };
-
-  return (
-    <tr className={`border-b transition-colors ${
-      isDirty         ? 'bg-amber-50'     :
-      isSaved         ? 'bg-green-50'     :
-      row.__isVirtual ? 'bg-gray-50/40'   : 'bg-white'
-    } hover:bg-blue-50/20`}>
-
-      {/* Status dot */}
-      <td className="pl-3 pr-1 py-2 w-6">
-        {isSaving ? (
-          <Loader2 size={14} className="text-blue-500 animate-spin" />
-        ) : isSaved ? (
-          <CheckCircle2 size={14} className="text-green-500" />
-        ) : isDirty ? (
-          <Circle size={14} className="text-amber-500 fill-amber-400" />
-        ) : row.__isVirtual ? (
-          <Circle size={14} className="text-gray-300" />
-        ) : (
-          <CheckCircle2 size={14} className="text-gray-300" />
-        )}
-      </td>
-
-      <td className="px-3 py-2 text-xs font-mono text-gray-600 whitespace-nowrap">{row.empNumber}</td>
-      <td className="px-3 py-2 text-sm font-medium text-gray-900 whitespace-nowrap">{row.empName}</td>
-      <td className="px-3 py-2 text-xs text-gray-500 whitespace-nowrap">{row.department}</td>
-
-      {/* Status dropdown */}
-      <td className="px-2 py-2">
-        {canEdit ? (
-          <select value={row.status} onChange={e => handleStatusChange(e.target.value)} disabled={isSaving}
-            className={`text-xs font-semibold rounded-md border px-2 py-1 focus:ring-2 focus:ring-blue-400 focus:outline-none disabled:opacity-60 cursor-pointer ${STATUS_COLORS[row.status] || STATUS_COLORS['']}`}>
-            <option value="Absent">Absent</option>
-            <option value="Present">Present</option>
-            <option value="Late">Late</option>
-            <option value="Leave">Leave</option>
-          </select>
-        ) : (
-          <span className={`text-xs font-semibold px-2 py-1 rounded-full border ${STATUS_COLORS[row.status] || STATUS_COLORS['']}`}>
-            {row.status || '—'}
-          </span>
-        )}
-      </td>
-
-      {/* In Time */}
-      <td className="px-2 py-2">
-        {canEdit && showTimes ? (
-          <input type="text" value={row.inTime || ''} onChange={e => onRowChange(row.empId, { inTime: e.target.value })}
-            placeholder="09:00" disabled={isSaving}
-            className="w-20 border border-gray-300 rounded-md px-2 py-1 text-xs focus:ring-2 focus:ring-blue-400 focus:outline-none disabled:opacity-60" />
-        ) : (
-          <span className="text-xs text-gray-400">{showTimes ? displayTime(row.inTime) : '—'}</span>
-        )}
-      </td>
-
-      {/* Out Time + Next Day */}
-      <td className="px-2 py-2">
-        {canEdit && showTimes ? (
-          <div className="flex items-center gap-1">
-            <input type="text" value={row.outTime || ''} onChange={e => onRowChange(row.empId, { outTime: e.target.value })}
-              placeholder="17:00" disabled={isSaving}
-              className="w-20 border border-gray-300 rounded-md px-2 py-1 text-xs focus:ring-2 focus:ring-blue-400 focus:outline-none disabled:opacity-60" />
-            <label className="flex items-center gap-0.5 cursor-pointer select-none group" title="Out next calendar day (night shift)">
-              <input type="checkbox" checked={row.outNextDay || false} onChange={e => onRowChange(row.empId, { outNextDay: e.target.checked })}
-                disabled={isSaving} className="w-3.5 h-3.5 rounded border-gray-300" />
-              <span className="text-xs text-gray-400 group-hover:text-orange-500">+1</span>
-            </label>
-          </div>
-        ) : (
-          <span className="text-xs text-gray-400">
-            {showTimes ? (
-              <>
-                {displayTime(row.outTime)}
-                {row.outNextDay && row.outTime && <span className="ml-1 text-orange-500">(+1)</span>}
-              </>
-            ) : '—'}
-          </span>
-        )}
-      </td>
-
-      {/* Earning */}
-      {!isHybrid && (
-        <td className="px-3 py-2 text-right text-xs font-semibold text-gray-700 whitespace-nowrap">
-          {row.__isVirtual && !isDirty
-            ? <span className="text-gray-300">—</span>
-            : `PKR ${(row.financials?.finalDayEarning || 0).toFixed(2)}`
-          }
-        </td>
-      )}
-
-      {/* Modified */}
-      <td className="px-3 py-2 text-xs text-gray-400 whitespace-nowrap">
-        {row.__isVirtual && !isSaved ? '—' : (row.lastModified || '—')}
-      </td>
-
-      {/* Save button */}
-      {isAdmin && (
-        <td className="px-2 py-2 text-center">
-          {canEdit && (
-            <button onClick={() => onSaveRow(row.empId)}
-              disabled={isSaving || !isDirty}
-              title={!isDirty ? 'No changes to save' : 'Save this row'}
-              className={`inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-lg transition ${
-                isDirty
-                  ? 'text-white bg-blue-600 border border-blue-600 hover:bg-blue-700'
-                  : 'text-gray-300 bg-gray-50 border border-gray-200 cursor-not-allowed'
-              } disabled:opacity-50`}>
-              {isSaving ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />}
-              Save
-            </button>
-          )}
-        </td>
-      )}
-    </tr>
-  );
-}
-
 function MarkTab({ userRole, isSuperAdmin, isAdmin, isHybrid }) {
-  const [markDate,    setMarkDate]    = useState(getTodayDate());
-  const [rows,        setRows]        = useState([]);
-  const [loading,     setLoading]     = useState(false);
-  const [savingRowId, setSavingRowId] = useState(null);
-  const [savingAll,   setSavingAll]   = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [editModal,   setEditModal]   = useState(null);
+  // Single date only — no range in Mark tab
+  const [markDate,     setMarkDate]     = useState(getTodayDate());
+  const [rows,         setRows]         = useState([]);
+  const [origRows,     setOrigRows]     = useState([]);
+  const [loading,      setLoading]      = useState(false);
+  const [savingId,     setSavingId]     = useState(null);
+  const [savingAll,    setSavingAll]    = useState(false);
+  const [searchQuery,  setSearchQuery]  = useState('');
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [showImport,   setShowImport]   = useState(false);
+  const [otDedModal,   setOtDedModal]   = useState(null);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deleting,     setDeleting]     = useState(false);
 
-  // ── Load: merge all-employees list with existing saved records ──────────────
+  // ── Load worksheet ──────────────────────────────────────────────────────────
   const loadWorksheet = useCallback(async (date) => {
     setLoading(true);
     try {
-      const token = localStorage.getItem('token');
       const [empRes, attRes] = await Promise.all([
-        axios.get('/api/employees?status=Active', { headers: { Authorization: `Bearer ${token}` } }),
-        axios.get(`/api/attendance/range?fromDate=${date}&toDate=${date}`, { headers: { Authorization: `Bearer ${token}` } }),
+        axios.get('/api/employees?status=Active', { headers: authHeader() }),
+        axios.get(`/api/attendance/range?fromDate=${date}&toDate=${date}`, { headers: authHeader() }),
       ]);
 
       let employees = empRes.data?.employees || [];
@@ -566,202 +684,415 @@ function MarkTab({ userRole, isSuperAdmin, isAdmin, isHybrid }) {
         saved     = saved.filter(r => !PRIVILEGED_ROLES.includes(r.empRole));
       }
 
-      // Build lookup of saved records keyed by empId string
       const savedMap = {};
-      for (const rec of saved) {
-        const key = rec.empId?._id?.toString?.() || rec.empId?.toString?.() || String(rec.empId);
-        savedMap[key] = rec;
-      }
+      for (const rec of saved) savedMap[resolveEmpId(rec.empId)] = rec;
 
       const worksheet = employees.map(emp => {
-        const key      = emp._id?.toString?.() || String(emp._id);
-        const existing = savedMap[key];
-
-        if (existing) {
+        const key = emp._id?.toString?.() || String(emp._id);
+        const ex  = savedMap[key];
+        if (ex) {
           return {
-            ...existing,
+            ...ex,
             empId:       key,
-            inTime:      existing.inOut?.in  || '',
-            outTime:     existing.inOut?.out || '',
-            outNextDay:  existing.inOut?.outNextDay || false,
-            __isVirtual: false,
-            __dirty:     false,
-            __saved:     false,
+            shiftStart:  emp.shift?.start || null,
+            shiftEnd:    emp.shift?.end   || null,
+            inTime:      emptyTime(ex.inOut?.in),
+            outTime:     emptyTime(ex.inOut?.out),
+            outNextDay:  ex.inOut?.outNextDay || false,
+            __isVirtual: false, __dirty: false, __saved: false,
           };
         }
-
-        // Virtual row — not yet saved, defaults to Absent
         return {
-          empId:       key,
-          empNumber:   emp.employeeNumber,
-          empName:     `${emp.firstName} ${emp.lastName}`,
-          department:  emp.department,
-          empRole:     emp.role,
-          status:      'Absent',
-          inTime:      '',
-          outTime:     '',
-          outNextDay:  false,
-          financials:  { finalDayEarning: 0 },
+          empId:        key,
+          empNumber:    emp.employeeNumber,
+          empName:      `${emp.firstName} ${emp.lastName}`,
+          department:   emp.department,
+          empRole:      emp.role,
+          shiftStart:   emp.shift?.start || null,
+          shiftEnd:     emp.shift?.end   || null,
+          status:       'Absent',
+          inTime:       '', outTime: '', outNextDay: false,
+          financials:   { finalDayEarning: 0, hoursWorked: 0, otAmount: 0, deduction: 0, otDetails: [], deductionDetails: [] },
           lastModified: null,
-          __isVirtual: true,
-          __dirty:     false,
-          __saved:     false,
+          __isVirtual:  true, __dirty: false, __saved: false,
         };
       });
 
       setRows(worksheet);
+      setOrigRows(JSON.parse(JSON.stringify(worksheet)));
     } catch {
       toast.error('Failed to load worksheet');
       setRows([]);
-    } finally {
-      setLoading(false);
-    }
+    } finally { setLoading(false); }
   }, [userRole]);
 
   useEffect(() => { loadWorksheet(markDate); }, [markDate, loadWorksheet]);
 
-  // ── Inline field change → marks row dirty ──────────────────────────────────
-  const handleRowChange = useCallback((empId, changes) => {
-    setRows(prev => prev.map(r =>
-      r.empId === empId ? { ...r, ...changes, __dirty: true, __saved: false } : r
-    ));
+  const handleChange = useCallback((empId, changes) => {
+    setRows(prev => prev.map(r => r.empId === empId ? { ...r, ...changes, __dirty: true, __saved: false } : r));
   }, []);
 
-  // ── Save single row ────────────────────────────────────────────────────────
+  const handleStatusChange = useCallback((empId, val) => {
+    const clearTimes = !['Present', 'Late'].includes(val);
+    handleChange(empId, { status: val, ...(clearTimes ? { inTime: '', outTime: '', outNextDay: false } : {}) });
+  }, [handleChange]);
+
+  const handleDiscard = useCallback((empId) => {
+    const orig = origRows.find(r => r.empId === empId);
+    if (orig) setRows(prev => prev.map(r => r.empId === empId ? { ...orig, __dirty: false, __saved: false } : r));
+  }, [origRows]);
+
   const handleSaveRow = useCallback(async (empId) => {
     const row = rows.find(r => r.empId === empId);
-    if (!row) return;
-    if (!row.status) return toast.error(`${row.empName}: please set a status before saving`);
-
-    setSavingRowId(empId);
+    if (!row || !row.status) return toast.error(`${row?.empName || ''}: set a status first`);
+    setSavingId(empId);
     try {
-      const token = localStorage.getItem('token');
-      await axios.post('/api/attendance/save-row', {
-        empId:      row.empId,
-        date:       markDate,
-        status:     row.status,
-        inTime:     row.inTime  || null,
-        outTime:    row.outTime || null,
-        outNextDay: row.outNextDay || false,
-      }, { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } });
-
-      setRows(prev => prev.map(r =>
-        r.empId === empId
-          ? { ...r, __dirty: false, __saved: true, __isVirtual: false, lastModified: 'just now' }
-          : r
-      ));
+      await saveRowApi({ empId: row.empId, date: row.dateFormatted || markDate, status: row.status, inTime: row.inTime, outTime: row.outTime, outNextDay: row.outNextDay });
       toast.success(`${row.empName} saved`);
-    } catch (err) {
-      toast.error(err.response?.data?.message || `Failed to save ${row.empName}`);
-    } finally { setSavingRowId(null); }
-  }, [rows, markDate]);
+      loadWorksheet(markDate);
+    } catch (err) { toast.error(err.response?.data?.message || `Failed to save ${row.empName}`); }
+    finally { setSavingId(null); }
+  }, [rows, markDate, loadWorksheet]);
 
-  // ── Save All dirty rows only ────────────────────────────────────────────────
   const handleSaveAll = async () => {
-    // Only rows that are dirty (user changed something)
-    const dirtyRows = rows.filter(r => r.__dirty);
-    if (!dirtyRows.length) {
-      toast('Nothing to save — no unsaved changes');
-      return;
-    }
-
-    const invalid = dirtyRows.filter(r => !r.status);
-    if (invalid.length) {
-      return toast.error(`${invalid.length} row(s) have no status. Please set a status before saving.`);
-    }
-
+    const dirty = rows.filter(r => r.__dirty);
+    if (!dirty.length) { toast('Nothing to save'); return; }
+    const invalid = dirty.filter(r => !r.status);
+    if (invalid.length) return toast.error(`${invalid.length} rows missing status`);
     setSavingAll(true);
-    const token = localStorage.getItem('token');
-    let saved = 0, failed = 0;
-
-    // Batches of 50
+    let ok = 0, fail = 0;
     const BATCH = 50;
-    for (let i = 0; i < dirtyRows.length; i += BATCH) {
-      const batch = dirtyRows.slice(i, i + BATCH);
-      await Promise.allSettled(
-        batch.map(async (row) => {
-          try {
-            await axios.post('/api/attendance/save-row', {
-              empId:      row.empId,
-              date:       markDate,
-              status:     row.status,
-              inTime:     row.inTime  || null,
-              outTime:    row.outTime || null,
-              outNextDay: row.outNextDay || false,
-            }, { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } });
-
-            setRows(prev => prev.map(r =>
-              r.empId === row.empId
-                ? { ...r, __dirty: false, __saved: true, __isVirtual: false, lastModified: 'just now' }
-                : r
-            ));
-            saved++;
-          } catch { failed++; }
-        })
-      );
+    for (let i = 0; i < dirty.length; i += BATCH) {
+      await Promise.allSettled(dirty.slice(i, i + BATCH).map(async row => {
+        try {
+          await saveRowApi({ empId: row.empId, date: row.dateFormatted || markDate, status: row.status, inTime: row.inTime, outTime: row.outTime, outNextDay: row.outNextDay });
+          setRows(prev => prev.map(r => r.empId === row.empId ? { ...r, __dirty: false, __saved: true, __isVirtual: false, lastModified: 'just now' } : r));
+          ok++;
+        } catch { fail++; }
+      }));
     }
-
     setSavingAll(false);
-    if (failed === 0) toast.success(`${saved} record${saved !== 1 ? 's' : ''} saved successfully`);
-    else              toast.error(`${saved} saved, ${failed} failed`);
+    fail === 0 ? toast.success(`${ok} records saved`) : toast.error(`${ok} saved, ${fail} failed`);
+    loadWorksheet(markDate);
   };
 
-  const canEditRecord = (row) => {
-    if (isSuperAdmin) return true;
-    if (userRole === 'admin') return !PRIVILEGED_ROLES.includes(row.empRole);
-    return false;
+  const handleDelete = async () => {
+    if (!deleteTarget?._id) return;
+    setDeleting(true);
+    try {
+      await axios.delete(`/api/attendance/${deleteTarget._id}`, { headers: authHeader() });
+      toast.success('Record deleted');
+      setDeleteTarget(null);
+      loadWorksheet(markDate);
+    } catch (err) { toast.error(err.response?.data?.message || 'Delete failed'); }
+    finally { setDeleting(false); }
   };
 
+  const handleExport = () => {
+    if (!rows.length) return toast.error('No data to export');
+    const nonVirtual = rows.filter(r => !r.__isVirtual);
+    if (!nonVirtual.length) return toast.error('No saved records to export');
+    const hdr   = ['Date', 'Emp #', 'Name', 'Department', 'Status', 'In', 'Out', 'Hours', 'OT', 'Deduction', 'Earning', 'Modified'];
+    const lines = nonVirtual.map(r => [
+      `"${r.dateFormatted || markDate}"`, `"${r.empNumber || ''}"`,
+      `"${(r.empName || '').replace(/"/g, '""')}"`, `"${r.department || ''}"`,
+      `"${r.status || ''}"`, `"${r.inTime || ''}"`, `"${r.outTime || ''}"`,
+      (r.financials?.hoursWorked || 0).toFixed(2),
+      (r.financials?.otAmount    || 0).toFixed(2),
+      (r.financials?.deduction   || 0).toFixed(2),
+      (r.financials?.finalDayEarning || 0).toFixed(2),
+      `"${r.lastModified || ''}"`,
+    ].join(','));
+    const blob = new Blob([[hdr.join(','), ...lines].join('\n')], { type: 'text/csv;charset=utf-8;' });
+    const a    = document.createElement('a');
+    a.href     = URL.createObjectURL(blob);
+    a.download = `attendance-mark-${markDate}.csv`;
+    a.click(); URL.revokeObjectURL(a.href);
+    toast.success('Exported');
+  };
+
+  const canEdit    = (row) => isSuperAdmin || (userRole === 'admin' && !PRIVILEGED_ROLES.includes(row.empRole));
   const dirtyCount = rows.filter(r => r.__dirty).length;
   const savedCount = rows.filter(r => !r.__isVirtual && !r.__dirty).length;
-  const filtered   = filterRecords(rows, searchQuery);
+  const filt       = filterRecords(rows, searchQuery);
+  const colCount   = 8 + (isHybrid ? 0 : 4) + (isAdmin ? 1 : 0);
+
+  // ── Desktop row ─────────────────────────────────────────────────────────────
+  const renderDesktopRow = (row) => {
+    const editable  = canEdit(row);
+    const isSaving  = savingId === row.empId;
+    const showTimes = ['Present', 'Late'].includes(row.status);
+    const inPh      = row.shiftStart || '09:00';
+    const outPh     = row.shiftEnd   || '17:00';
+    const rowBg     = row.__dirty ? 'bg-amber-50' : row.__saved ? 'bg-green-50' : row.__isVirtual ? 'bg-gray-50/50' : 'bg-white';
+
+    return (
+      <tr key={row.empId} className={`border-b transition-colors ${rowBg} hover:bg-blue-50/20`}>
+        <td className="pl-3 pr-1 py-2 w-6">
+          <StatusDot isDirty={row.__dirty} isSaved={row.__saved} isSaving={isSaving} isVirtual={row.__isVirtual} />
+        </td>
+        <td className="px-3 py-2 text-xs font-mono text-gray-600 whitespace-nowrap">{row.empNumber}</td>
+        <td className="px-3 py-2 text-sm font-medium text-gray-900 whitespace-nowrap">{row.empName}</td>
+        <td className="px-3 py-2 text-xs text-gray-500 whitespace-nowrap">{row.department}</td>
+        <td className="px-2 py-2">
+          <StatusSelect value={row.status} readOnly={!editable} disabled={isSaving}
+            onChange={v => handleStatusChange(row.empId, v)} />
+        </td>
+        <td className="px-2 py-2">
+          {showTimes
+            ? <TimeInput value={row.inTime} placeholder={inPh} disabled={isSaving} readOnly={!editable}
+                onChange={v => handleChange(row.empId, { inTime: v })} />
+            : <span className="text-xs text-gray-300">—</span>
+          }
+        </td>
+        <td className="px-2 py-2">
+          {showTimes ? (
+            editable
+              ? <div className="flex items-center gap-1">
+                  <TimeInput value={row.outTime} placeholder={outPh} disabled={isSaving} readOnly={false}
+                    onChange={v => handleChange(row.empId, { outTime: v })} />
+                  <label className="flex items-center gap-0.5 cursor-pointer select-none" title="Out next day">
+                    <input type="checkbox" checked={row.outNextDay || false} disabled={isSaving}
+                      onChange={e => handleChange(row.empId, { outNextDay: e.target.checked })}
+                      className="w-3.5 h-3.5 rounded border-gray-300" />
+                    <span className="text-xs text-gray-400">+1</span>
+                  </label>
+                </div>
+              : <span className="text-xs text-gray-500">
+                  {safeTime(row.outTime)}{row.outNextDay && row.outTime && <span className="ml-1 text-orange-500">(+1)</span>}
+                </span>
+          ) : <span className="text-xs text-gray-300">—</span>}
+        </td>
+        {!isHybrid && (
+          <td className="px-3 py-2 text-right text-xs text-gray-600 whitespace-nowrap">
+            {(row.__isVirtual && !row.__dirty) ? '—' : (row.financials?.hoursWorked || 0).toFixed(2)}
+          </td>
+        )}
+        {!isHybrid && (
+          <td className="px-3 py-2 text-right text-xs whitespace-nowrap">
+            {(row.__isVirtual && !row.__saved)
+              ? <span className="text-gray-300">—</span>
+              : <div className="flex items-center justify-end gap-1">
+                  <span className="text-blue-700">{(row.financials?.otAmount || 0).toFixed(2)}</span>
+                  {editable && isAdmin && (
+                    <button
+                      onClick={() => setOtDedModal({ record: { ...row, dateFormatted: markDate }, type: 'ot' })}
+                      title="Edit OT"
+                      className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-xs text-indigo-600 bg-indigo-50 border border-indigo-200 rounded hover:bg-indigo-100 transition">
+                      <Pencil size={10} />
+                    </button>
+                  )}
+                </div>
+            }
+          </td>
+        )}
+        {!isHybrid && (
+          <td className="px-3 py-2 text-right text-xs whitespace-nowrap">
+            {(row.__isVirtual && !row.__saved)
+              ? <span className="text-gray-300">—</span>
+              : <div className="flex items-center justify-end gap-1">
+                  <span className="text-red-700">{(row.financials?.deduction || 0).toFixed(2)}</span>
+                  {editable && isAdmin && (
+                    <button
+                      onClick={() => setOtDedModal({ record: { ...row, dateFormatted: markDate }, type: 'deduction' })}
+                      title="Edit Deductions"
+                      className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-xs text-indigo-600 bg-indigo-50 border border-indigo-200 rounded hover:bg-indigo-100 transition">
+                      <Pencil size={10} />
+                    </button>
+                  )}
+                </div>
+            }
+          </td>
+        )}
+        {!isHybrid && (
+          <td className="px-3 py-2 text-right text-xs font-semibold text-gray-700 whitespace-nowrap">
+            {(row.__isVirtual && !row.__dirty) ? <span className="text-gray-300">—</span> : pkr(row.financials?.finalDayEarning)}
+          </td>
+        )}
+        <td className="px-3 py-2 text-xs text-gray-400 whitespace-nowrap">
+          {(row.__isVirtual && !row.__saved) ? '—' : (row.lastModified || '—')}
+        </td>
+        {isAdmin && (
+          <td className="px-2 py-2">
+            {editable && (
+              <div className="flex items-center justify-center gap-1 flex-nowrap">
+                <button onClick={() => handleSaveRow(row.empId)}
+                  disabled={isSaving || !row.__dirty}
+                  title={row.__dirty ? 'Save row' : 'No changes'}
+                  className={`inline-flex items-center gap-1 px-2 py-1.5 text-xs font-medium rounded-lg transition ${
+                    row.__dirty
+                      ? 'text-white bg-blue-600 hover:bg-blue-700 border border-blue-600'
+                      : 'text-gray-300 bg-gray-50 border border-gray-200 cursor-not-allowed'
+                  } disabled:opacity-50`}>
+                  {isSaving ? <Loader2 size={11} className="animate-spin" /> : <Save size={11} />} Save
+                </button>
+                {row.__dirty && (
+                  <button onClick={() => handleDiscard(row.empId)} title="Discard changes"
+                    className="p-1.5 text-gray-400 hover:text-gray-600 bg-gray-50 border border-gray-200 rounded-lg transition">
+                    <RotateCcw size={11} />
+                  </button>
+                )}
+                {!row.__isVirtual && (
+                  <button onClick={() => setDeleteTarget({ ...row, dateFormatted: markDate })} title="Delete record"
+                    className="p-1.5 text-red-500 hover:text-red-700 bg-red-50 border border-red-200 rounded-lg transition">
+                    <Trash2 size={12} />
+                  </button>
+                )}
+              </div>
+            )}
+          </td>
+        )}
+      </tr>
+    );
+  };
+
+  // ── Mobile card ─────────────────────────────────────────────────────────────
+  const renderMobileCard = (row) => {
+    const editable  = canEdit(row);
+    const isSaving  = savingId === row.empId;
+    const showTimes = ['Present', 'Late'].includes(row.status);
+    const inPh      = row.shiftStart || '09:00';
+    const outPh     = row.shiftEnd   || '17:00';
+
+    return (
+      <div key={row.empId} className={`border rounded-xl p-3 transition-colors ${
+        row.__dirty ? 'border-amber-300 bg-amber-50' : row.__saved ? 'border-green-300 bg-green-50' : row.__isVirtual ? 'border-gray-200 bg-gray-50' : 'border-gray-200 bg-white'
+      }`}>
+        <div className="flex justify-between items-start mb-2">
+          <div>
+            <p className="font-semibold text-gray-900 text-sm">{row.empName}</p>
+            <p className="text-xs text-gray-500">#{row.empNumber} · {row.department}</p>
+            {row.shiftStart && <p className="text-xs text-gray-400">Shift {row.shiftStart}–{row.shiftEnd}</p>}
+          </div>
+          <div className="flex items-center gap-1.5">
+            {isAdmin && editable && !row.__isVirtual && (
+              <button onClick={() => setDeleteTarget({ ...row, dateFormatted: markDate })} className="p-1 text-red-400 hover:text-red-600 rounded">
+                <Trash2 size={13} />
+              </button>
+            )}
+            <StatusDot isDirty={row.__dirty} isSaved={row.__saved} isSaving={isSaving} isVirtual={row.__isVirtual} />
+          </div>
+        </div>
+        {editable ? (
+          <div className="space-y-2">
+            <StatusSelect value={row.status} readOnly={false} disabled={isSaving}
+              onChange={v => handleStatusChange(row.empId, v)} />
+            {showTimes && (
+              <div className="flex gap-2 items-center">
+                <input type="text" value={row.inTime || ''} placeholder={inPh} disabled={isSaving}
+                  onChange={e => handleChange(row.empId, { inTime: e.target.value })}
+                  className="flex-1 border border-gray-300 rounded-lg px-2 py-1.5 text-xs focus:ring-2 focus:ring-blue-400 placeholder:text-gray-300" />
+                <input type="text" value={row.outTime || ''} placeholder={outPh} disabled={isSaving}
+                  onChange={e => handleChange(row.empId, { outTime: e.target.value })}
+                  className="flex-1 border border-gray-300 rounded-lg px-2 py-1.5 text-xs focus:ring-2 focus:ring-blue-400 placeholder:text-gray-300" />
+                <label className="flex items-center gap-0.5 text-xs text-gray-500 cursor-pointer select-none">
+                  <input type="checkbox" checked={row.outNextDay || false} disabled={isSaving}
+                    onChange={e => handleChange(row.empId, { outNextDay: e.target.checked })} className="w-3.5 h-3.5" /> +1
+                </label>
+              </div>
+            )}
+            {!isHybrid && !row.__isVirtual && (
+              <div className="flex items-center justify-between text-xs text-gray-500 bg-white border rounded-lg px-2 py-1.5">
+                <span>{(row.financials?.hoursWorked || 0).toFixed(2)}h · <strong>{pkr(row.financials?.finalDayEarning)}</strong></span>
+                {isAdmin && editable && (
+                  <div className="flex gap-1">
+                    <button onClick={() => setOtDedModal({ record: { ...row, dateFormatted: markDate }, type: 'ot' })}
+                      className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-xs text-blue-600 bg-blue-50 border border-blue-200 rounded hover:bg-blue-100">
+                      <Pencil size={9} /> OT
+                    </button>
+                    <button onClick={() => setOtDedModal({ record: { ...row, dateFormatted: markDate }, type: 'deduction' })}
+                      className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-xs text-red-600 bg-red-50 border border-red-200 rounded hover:bg-red-100">
+                      <Pencil size={9} /> Ded
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+            {isAdmin && (
+              <div className="flex gap-2">
+                <button onClick={() => handleSaveRow(row.empId)} disabled={isSaving || !row.__dirty}
+                  className={`flex-1 flex items-center justify-center gap-1 py-1.5 rounded-lg text-xs font-medium ${row.__dirty ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-400 cursor-not-allowed'} disabled:opacity-50`}>
+                  {isSaving ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />} Save
+                </button>
+                {row.__dirty && (
+                  <button onClick={() => handleDiscard(row.empId)} className="px-3 py-1.5 bg-gray-100 text-gray-600 rounded-lg text-xs border border-gray-200">
+                    <RotateCcw size={12} />
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="mt-1 space-y-0.5">
+            <span className={`inline-block px-2 py-0.5 rounded-full font-semibold border text-xs ${STATUS_STYLES[row.status] || STATUS_STYLES['']}`}>{row.status || '—'}</span>
+            {row.inTime && <p className="text-xs text-gray-500">In: {row.inTime} · Out: {safeTime(row.outTime)}{row.outNextDay && row.outTime && <span className="ml-1 text-orange-500">(+1)</span>}</p>}
+            {!isHybrid && <p className="text-xs text-gray-500">Earning: {pkr(row.financials?.finalDayEarning)}</p>}
+          </div>
+        )}
+      </div>
+    );
+  };
 
   return (
     <div>
-      {/* Date navigator */}
+      <div className="flex gap-2 flex-wrap mb-4">
+        {isAdmin && (
+          <>
+            <button onClick={() => setShowAddModal(true)} disabled={loading}
+              className="flex items-center gap-2 px-3 md:px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition disabled:opacity-50 text-sm">
+              <Plus size={18} /><span className="hidden sm:inline">Add Record</span>
+            </button>
+            <button onClick={() => setShowImport(true)} disabled={loading}
+              className="flex items-center gap-2 px-3 md:px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition disabled:opacity-50 text-sm">
+              <Download size={18} /><span className="hidden sm:inline">Import CSV</span>
+            </button>
+          </>
+        )}
+        <button onClick={handleExport} disabled={loading || !rows.some(r => !r.__isVirtual)}
+          className="flex items-center gap-2 px-3 md:px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition disabled:opacity-50 text-sm">
+          <Upload size={18} /><span className="hidden sm:inline">Export</span>
+        </button>
+        <button onClick={() => loadWorksheet(markDate)} disabled={loading || savingAll}
+          className="flex items-center gap-2 px-3 md:px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition disabled:opacity-50 text-sm">
+          <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />
+        </button>
+      </div>
+
+      {/* Date navigator — single date */}
       <div className="bg-white rounded-lg shadow p-4 mb-4">
         <div className="flex flex-wrap items-end gap-4">
-          <DateNavigator value={markDate} onChange={setMarkDate} label="Date (dd/mm/yyyy)" showTodayBadge />
+          <DateNavigator
+            value={markDate}
+            onChange={setMarkDate}
+            label="Date (dd/mm/yyyy)"
+            showTodayBadge
+          />
           <div className="flex items-center gap-3 text-xs pb-1">
-            <span className="text-gray-500">{rows.length} employee{rows.length !== 1 ? 's' : ''}</span>
+            <span className="text-gray-500">{rows.length} employees</span>
             <span className="text-green-600 font-medium">{savedCount} saved</span>
-            {dirtyCount > 0 && <span className="text-amber-600 font-medium">{dirtyCount} unsaved change{dirtyCount !== 1 ? 's' : ''}</span>}
+            {dirtyCount > 0 && <span className="text-amber-600 font-medium">{dirtyCount} unsaved</span>}
           </div>
         </div>
       </div>
 
-      {/* Toolbar */}
       <div className="flex flex-wrap items-center gap-3 mb-4">
         <div className="flex-1 min-w-[200px] max-w-sm">
-          <SearchBar value={searchQuery} onChange={setSearchQuery} placeholder="Search name, ID, department, status..." />
+          <SearchBar value={searchQuery} onChange={setSearchQuery} placeholder="Search name, ID, dept, status…" />
         </div>
-
         <div className="flex items-center gap-2 ml-auto">
-          {/* Legend */}
           <div className="hidden lg:flex items-center gap-3 text-xs text-gray-400 mr-1">
             <span className="flex items-center gap-1"><Circle size={10} className="text-amber-400 fill-amber-400" /> Unsaved</span>
             <span className="flex items-center gap-1"><CheckCircle2 size={10} className="text-green-500" /> Saved</span>
-            <span className="flex items-center gap-1"><Circle size={10} className="text-gray-300" /> Not changed</span>
           </div>
-
-          <button onClick={() => loadWorksheet(markDate)} disabled={loading || savingAll}
-            className="flex items-center gap-2 px-3 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition disabled:opacity-50 text-sm">
-            <RefreshCw size={15} className={loading ? 'animate-spin' : ''} />
-          </button>
-
           {isAdmin && (
             <button onClick={handleSaveAll} disabled={savingAll || loading || dirtyCount === 0}
               className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition disabled:opacity-50 text-sm font-medium">
-              {savingAll
-                ? <><Loader2 size={15} className="animate-spin" /> Saving…</>
-                : <><Save size={15} /> Save All{dirtyCount > 0 ? ` (${dirtyCount})` : ''}</>
-              }
+              {savingAll ? <><Loader2 size={15} className="animate-spin" /> Saving…</> : <><Save size={15} /> Save All{dirtyCount > 0 ? ` (${dirtyCount})` : ''}</>}
             </button>
           )}
         </div>
       </div>
 
-      {/* Worksheet table */}
       <div className="bg-white rounded-lg shadow overflow-hidden">
         {loading ? (
           <div className="p-12 text-center">
@@ -775,146 +1106,79 @@ function MarkTab({ userRole, isSuperAdmin, isAdmin, isHybrid }) {
           </div>
         ) : (
           <>
-            {/* Desktop */}
             <div className="hidden md:block overflow-x-auto">
               <table className="w-full text-sm">
                 <thead className="bg-gray-100 border-b">
                   <tr>
                     <th className="pl-3 pr-1 py-3 w-6" />
-                    <th className="px-3 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Emp #</th>
-                    <th className="px-3 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Name</th>
-                    <th className="px-3 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Department</th>
-                    <th className="px-2 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Status</th>
-                    <th className="px-2 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">In Time</th>
-                    <th className="px-2 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Out Time</th>
-                    {!isHybrid && <th className="px-3 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wide">Earning</th>}
-                    <th className="px-3 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Modified</th>
-                    {isAdmin && <th className="px-2 py-3 text-center text-xs font-semibold text-gray-500 uppercase tracking-wide">Action</th>}
+                    {['Emp #', 'Name', 'Department', 'Status', 'In Time', 'Out Time'].map(h => (
+                      <th key={h} className="px-3 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">{h}</th>
+                    ))}
+                    {!isHybrid && ['Hours', 'OT', 'Deduction', 'Earning'].map(h => (
+                      <th key={h} className="px-3 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">{h}</th>
+                    ))}
+                    <th className="px-3 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">Modified</th>
+                    {isAdmin && <th className="px-2 py-3 text-center text-xs font-semibold text-gray-500 uppercase tracking-wide">Actions</th>}
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.length === 0 ? (
-                    <tr><td colSpan={10} className="px-4 py-10 text-center text-gray-400 text-sm">No employees match your search</td></tr>
-                  ) : filtered.map(row => (
-                    <WorksheetRow key={row.empId} row={row} isAdmin={isAdmin} isHybrid={isHybrid}
-                      canEdit={canEditRecord(row)} onRowChange={handleRowChange}
-                      onSaveRow={handleSaveRow} savingRowId={savingRowId} />
-                  ))}
+                  {filt.length === 0
+                    ? <tr><td colSpan={colCount} className="px-4 py-10 text-center text-gray-400 text-sm">No employees match your search</td></tr>
+                    : filt.map(renderDesktopRow)
+                  }
                 </tbody>
               </table>
             </div>
-
-            {/* Mobile card list */}
             <div className="md:hidden space-y-2 p-3">
-              {filtered.length === 0 ? (
-                <p className="text-center text-sm text-gray-400 py-6">No employees match your search</p>
-              ) : filtered.map(row => {
-                const canEdit   = canEditRecord(row);
-                const isSaving  = savingRowId === row.empId;
-                const showTimes = ['Present', 'Late'].includes(row.status);
-
-                return (
-                  <div key={row.empId} className={`border rounded-xl p-3 transition-colors ${
-                    row.__dirty   ? 'border-amber-300 bg-amber-50'  :
-                    row.__saved   ? 'border-green-300 bg-green-50'  :
-                    row.__isVirtual ? 'border-gray-200 bg-gray-50'  : 'border-gray-200 bg-white'
-                  }`}>
-                    <div className="flex justify-between items-start mb-2">
-                      <div>
-                        <p className="font-semibold text-gray-900 text-sm">{row.empName}</p>
-                        <p className="text-xs text-gray-500">#{row.empNumber} · {row.department}</p>
-                      </div>
-                      <div className="flex items-center gap-1.5">
-                        {isSaving   ? <Loader2 size={14} className="text-blue-500 animate-spin" /> :
-                         row.__saved ? <CheckCircle2 size={14} className="text-green-500" /> :
-                         row.__dirty ? <Circle size={14} className="text-amber-400 fill-amber-400" /> : null}
-                      </div>
-                    </div>
-
-                    {canEdit ? (
-                      <div className="space-y-2">
-                        <select value={row.status}
-                          onChange={e => {
-                            const val = e.target.value;
-                            handleRowChange(row.empId, {
-                              status: val,
-                              ...(!['Present', 'Late'].includes(val) ? { inTime: '', outTime: '', outNextDay: false } : {}),
-                            });
-                          }}
-                          disabled={isSaving}
-                          className={`w-full text-sm font-semibold rounded-lg border px-2 py-1.5 cursor-pointer ${STATUS_COLORS[row.status] || STATUS_COLORS['']}`}>
-                          <option value="Absent">Absent</option>
-                          <option value="Present">Present</option>
-                          <option value="Late">Late</option>
-                          <option value="Leave">Leave</option>
-                        </select>
-
-                        {showTimes && (
-                          <div className="flex gap-2 items-center">
-                            <input type="text" value={row.inTime || ''} placeholder="In 09:00"
-                              onChange={e => handleRowChange(row.empId, { inTime: e.target.value })}
-                              disabled={isSaving}
-                              className="flex-1 border border-gray-300 rounded-lg px-2 py-1.5 text-xs focus:ring-2 focus:ring-blue-400" />
-                            <input type="text" value={row.outTime || ''} placeholder="Out 17:00"
-                              onChange={e => handleRowChange(row.empId, { outTime: e.target.value })}
-                              disabled={isSaving}
-                              className="flex-1 border border-gray-300 rounded-lg px-2 py-1.5 text-xs focus:ring-2 focus:ring-blue-400" />
-                            <label className="flex items-center gap-1 text-xs text-gray-500 cursor-pointer select-none">
-                              <input type="checkbox" checked={row.outNextDay || false}
-                                onChange={e => handleRowChange(row.empId, { outNextDay: e.target.checked })}
-                                disabled={isSaving} className="w-3.5 h-3.5" />
-                              +1
-                            </label>
-                          </div>
-                        )}
-
-                        {isAdmin && (
-                          <button onClick={() => handleSaveRow(row.empId)}
-                            disabled={isSaving || !row.__dirty}
-                            className={`w-full flex items-center justify-center gap-2 py-1.5 rounded-lg text-xs font-medium transition ${
-                              row.__dirty
-                                ? 'bg-blue-600 text-white hover:bg-blue-700'
-                                : 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                            } disabled:opacity-50`}>
-                            {isSaving ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />}
-                            Save
-                          </button>
-                        )}
-                      </div>
-                    ) : (
-                      <div className="mt-1">
-                        <span className={`inline-block px-2 py-0.5 rounded-full font-semibold border text-xs ${STATUS_COLORS[row.status] || STATUS_COLORS['']}`}>
-                          {row.status || '—'}
-                        </span>
-                        {row.inTime && <p className="text-xs text-gray-500 mt-1">In: {row.inTime} · Out: {displayTime(row.outTime)}</p>}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
+              {filt.length === 0
+                ? <p className="text-center text-sm text-gray-400 py-6">No employees match your search</p>
+                : filt.map(renderMobileCard)
+              }
             </div>
           </>
         )}
       </div>
 
-      {/* Advanced edit modal for OT / deductions */}
-      {editModal && (
-        <AttendanceFormModal mode="edit" record={editModal} currentUserRole={userRole}
-          onClose={() => setEditModal(null)} onSuccess={() => loadWorksheet(markDate)} />
+      {showAddModal && (
+        <AttendanceFormModal mode="add" currentUserRole={userRole}
+          onClose={() => setShowAddModal(false)}
+          onSuccess={() => loadWorksheet(markDate)} />
+      )}
+      {showImport && (
+        <CSVImportModal onClose={() => setShowImport(false)}
+          onSuccess={() => { setTimeout(() => loadWorksheet(markDate), 1500); }} />
+      )}
+      {otDedModal && (
+        <OTDeductionEditModal
+          record={otDedModal.record}
+          type={otDedModal.type}
+          currentUserRole={userRole}
+          onClose={() => setOtDedModal(null)}
+          onSuccess={() => loadWorksheet(markDate)}
+        />
+      )}
+      {deleteTarget && (
+        <DeleteConfirmModal
+          record={deleteTarget}
+          onClose={() => setDeleteTarget(null)}
+          onConfirm={handleDelete}
+          deleting={deleting}
+        />
       )}
     </div>
   );
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
-// ─── VIEW TAB ─────────────────────────────────────────────────────────────────
+// ─── MANAGE TAB ───────────────────────────────────────────────────────────────
 // ═════════════════════════════════════════════════════════════════════════════
 
-function ViewTab({ userRole, isSuperAdmin, isAdmin, isHybrid }) {
+function ManageTab({ userRole, isSuperAdmin, isAdmin, isHybrid }) {
   const [attendance,      setAttendance]      = useState([]);
   const [loading,         setLoading]         = useState(false);
   const [fromDate,        setFromDate]        = useState(getDateMinusDays(30));
   const [toDate,          setToDate]          = useState(getTodayDate());
+  const [rangeEnabled,    setRangeEnabled]    = useState(true);
   const [showImportModal, setShowImportModal] = useState(false);
   const [refreshing,      setRefreshing]      = useState(false);
   const [showAddModal,    setShowAddModal]    = useState(false);
@@ -929,8 +1193,10 @@ function ViewTab({ userRole, isSuperAdmin, isAdmin, isHybrid }) {
     try {
       const token = localStorage.getItem('token');
       if (!token) { toast.error('Authentication required'); return; }
+      // When range is disabled, use fromDate as both start and end
+      const effectiveToDate = rangeEnabled ? toDate : fromDate;
       const response = await axios.get(
-        `/api/attendance/range?fromDate=${fromDate}&toDate=${toDate}`,
+        `/api/attendance/range?fromDate=${fromDate}&toDate=${effectiveToDate}`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
       let records = response.data?.attendance || [];
@@ -942,15 +1208,15 @@ function ViewTab({ userRole, isSuperAdmin, isAdmin, isHybrid }) {
       else                                     toast.error('Failed to load attendance data');
       setAttendance([]);
     } finally { setLoading(false); }
-  }, [fromDate, toDate, userRole]);
+  }, [fromDate, toDate, rangeEnabled, userRole]);
 
   useEffect(() => { fetchAttendance(); }, [fetchAttendance]);
 
   const handleDateRangeChange = () => {
-    const from = parseDate(fromDate);
-    const to   = parseDate(toDate);
-    if (!from || !to) { toast.error('Invalid date format. Use dd/mm/yyyy'); return; }
-    if (from > to)    { toast.error('From date cannot be after to date'); return; }
+    const from        = parseDate(fromDate);
+    const effectiveTo = rangeEnabled ? parseDate(toDate) : from;
+    if (!from || !effectiveTo) { toast.error('Invalid date format. Use dd/mm/yyyy'); return; }
+    if (from > effectiveTo)    { toast.error('From date cannot be after to date'); return; }
     fetchAttendance();
   };
 
@@ -976,23 +1242,24 @@ function ViewTab({ userRole, isSuperAdmin, isAdmin, isHybrid }) {
 
   const handleExport = () => {
     if (!attendance.length) { toast.error('No attendance data to export'); return; }
-    const csv = [['Date','Employee ID','Name','Department','Status','In Time','Out Time','Hours Worked','OT Amount','Total Deduction','Daily Earning','Last Modified'].join(',')];
+    const effectiveToDate = rangeEnabled ? toDate : fromDate;
+    const csv = [['Date', 'Employee ID', 'Name', 'Department', 'Status', 'In Time', 'Out Time', 'Hours Worked', 'OT Amount', 'Total Deduction', 'Daily Earning', 'Last Modified'].join(',')];
     attendance.forEach(record => {
       csv.push([
-        `"${record.dateFormatted||'--'}"`,`"${record.empNumber||'--'}"`,
-        `"${(record.empName||'--').replace(/"/g,'""')}"`,`"${record.department||'--'}"`,
-        `"${record.status||'--'}"`,`"${record.inTime??'--'}"`,`"${record.outTime??'--'}"`,
-        `"${(record.financials?.hoursWorked?.toFixed(2))||'0.00'}"`,
-        `"${(record.financials?.otAmount?.toFixed(2))||'0.00'}"`,
-        `"${(record.financials?.deduction?.toFixed(2))||'0.00'}"`,
-        `"${(record.financials?.finalDayEarning?.toFixed(2))||'0.00'}"`,
-        `"${record.lastModified||'--'}"`,
+        `"${record.dateFormatted || '--'}"`, `"${record.empNumber || '--'}"`,
+        `"${(record.empName || '--').replace(/"/g, '""')}"`, `"${record.department || '--'}"`,
+        `"${record.status || '--'}"`, `"${record.inTime ?? '--'}"`, `"${record.outTime ?? '--'}"`,
+        `"${(record.financials?.hoursWorked?.toFixed(2)) || '0.00'}"`,
+        `"${(record.financials?.otAmount?.toFixed(2))    || '0.00'}"`,
+        `"${(record.financials?.deduction?.toFixed(2))   || '0.00'}"`,
+        `"${(record.financials?.finalDayEarning?.toFixed(2)) || '0.00'}"`,
+        `"${record.lastModified || '--'}"`,
       ].join(','));
     });
     const blob = new Blob([csv.join('\n')], { type: 'text/csv;charset=utf-8;' });
     const url  = window.URL.createObjectURL(blob);
     const a    = document.createElement('a');
-    a.href = url; a.download = `attendance-${fromDate}-to-${toDate}.csv`; a.click();
+    a.href = url; a.download = `attendance-${fromDate}-to-${effectiveToDate}.csv`; a.click();
     window.URL.revokeObjectURL(url);
     toast.success('Attendance exported');
   };
@@ -1036,19 +1303,19 @@ function ViewTab({ userRole, isSuperAdmin, isAdmin, isHybrid }) {
       </div>
 
       <div className="bg-white rounded-lg shadow p-4 md:p-6 mb-6">
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-3 md:gap-4">
-          <div><DateNavigator value={fromDate} onChange={setFromDate} label="From Date (dd/mm/yyyy)" /></div>
-          <div><DateNavigator value={toDate}   onChange={setToDate}   label="To Date (dd/mm/yyyy)" /></div>
-          <div className="flex items-end">
-            <button onClick={handleDateRangeChange} disabled={loading}
-              className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition disabled:opacity-50 text-sm font-medium">
-              {loading ? 'Loading...' : 'Apply'}
-            </button>
-          </div>
-          <div className="flex items-end md:col-span-2">
-            <div className="w-full text-xs text-gray-600 p-2 bg-gray-50 rounded">
-              Total: {attendance.length}{searchQuery && ` · Showing: ${filtered.length}`}
-            </div>
+        <div className="flex flex-wrap items-end gap-4">
+          <DateRangePicker
+            fromDate={fromDate} setFromDate={setFromDate}
+            toDate={toDate}     setToDate={setToDate}
+            rangeEnabled={rangeEnabled} setRangeEnabled={setRangeEnabled}
+            label1="From Date (dd/mm/yyyy)" label2="To Date (dd/mm/yyyy)"
+          />
+          <button onClick={handleDateRangeChange} disabled={loading}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition disabled:opacity-50 text-sm font-medium">
+            {loading ? 'Loading...' : 'Apply'}
+          </button>
+          <div className="text-xs text-gray-600 p-2 bg-gray-50 rounded">
+            Total: {attendance.length}{searchQuery && ` · Showing: ${filtered.length}`}
           </div>
         </div>
       </div>
@@ -1235,7 +1502,7 @@ function ViewTab({ userRole, isSuperAdmin, isAdmin, isHybrid }) {
   );
 }
 
-// ─── Main ─────────────────────────────────────────────────────────────────────
+// ─── Root ─────────────────────────────────────────────────────────────────────
 export default function ManualAttendance() {
   const [activeTab, setActiveTab] = useState('manage');
   const userRole     = getCurrentUserRole();
@@ -1259,7 +1526,7 @@ export default function ManualAttendance() {
           Mark
         </button>
       </div>
-      {activeTab === 'manage' ? <ViewTab {...tabProps} /> : <MarkTab {...tabProps} />}
+      {activeTab === 'manage' ? <ManageTab {...tabProps} /> : <MarkTab {...tabProps} />}
     </div>
   );
 }

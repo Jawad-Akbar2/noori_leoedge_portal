@@ -59,11 +59,15 @@ router.get('/me', auth, async (req, res) => {
 });
 
 // ─── PUT /api/employees/me ────────────────────────────────────────────────────
-// Any authenticated user can update their own email and bank details.
-// All other fields are intentionally locked here — admins/superadmins
-// edit name/shift/salary for others via PUT /api/employees/:id.
+// Any authenticated user can update their own:
+//   • email
+//   • bank details
+//   • emergencyContact
+//   • address
+//   • idCard  (pass the URL returned by your upload middleware)
 //
-// Roles allowed: employee, admin, superadmin (all via `auth` middleware).
+// All other fields (name, shift, salary, role, status…) are locked here.
+// Admins/superadmins edit those via PUT /api/employees/:id.
 
 router.put('/me', auth, async (req, res) => {
   try {
@@ -83,13 +87,11 @@ router.put('/me', auth, async (req, res) => {
         return res.status(400).json({ success: false, message: 'Email cannot be empty', field: 'email' });
       }
 
-      // Basic email format check
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       if (!emailRegex.test(trimmed)) {
         return res.status(400).json({ success: false, message: 'Invalid email format', field: 'email' });
       }
 
-      // Uniqueness check — exclude self
       const conflict = await Employee.findOne({
         email:     trimmed,
         _id:       { $ne: req.userId },
@@ -104,7 +106,6 @@ router.put('/me', auth, async (req, res) => {
 
     // ── Bank update ───────────────────────────────────────────────────────────
     // Merge patch — only overwrite keys that were explicitly sent.
-    // Sending { bankName: 'HBL' } won't clear accountNumber.
     if (req.body.bank !== undefined) {
       const incoming = req.body.bank;
       employee.bank = {
@@ -112,6 +113,68 @@ router.put('/me', auth, async (req, res) => {
         accountName:   incoming.accountName   !== undefined ? String(incoming.accountName   || '').trim() : (employee.bank?.accountName   || ''),
         accountNumber: incoming.accountNumber !== undefined ? String(incoming.accountNumber || '').trim() : (employee.bank?.accountNumber || ''),
       };
+    }
+
+    // ── Emergency contact update ──────────────────────────────────────────────
+    // Merge patch — sending { name: 'Ali' } won't clear phone or relationship.
+    if (req.body.emergencyContact !== undefined) {
+      const inc = req.body.emergencyContact;
+
+      if (typeof inc !== 'object' || Array.isArray(inc)) {
+        return res.status(400).json({ success: false, message: 'emergencyContact must be an object', field: 'emergencyContact' });
+      }
+
+      employee.emergencyContact = {
+        name:         inc.name         !== undefined ? String(inc.name         || '').trim() : (employee.emergencyContact?.name         || ''),
+        relationship: inc.relationship !== undefined ? String(inc.relationship || '').trim() : (employee.emergencyContact?.relationship || ''),
+        phone:        inc.phone        !== undefined ? String(inc.phone        || '').trim() : (employee.emergencyContact?.phone        || ''),
+      };
+    }
+
+    // ── Address update ────────────────────────────────────────────────────────
+    // Merge patch — partial updates are safe.
+    if (req.body.address !== undefined) {
+      const inc = req.body.address;
+
+      if (typeof inc !== 'object' || Array.isArray(inc)) {
+        return res.status(400).json({ success: false, message: 'address must be an object', field: 'address' });
+      }
+
+      employee.address = {
+        street:  inc.street  !== undefined ? String(inc.street  || '').trim() : (employee.address?.street  || ''),
+        city:    inc.city    !== undefined ? String(inc.city    || '').trim() : (employee.address?.city    || ''),
+        state:   inc.state   !== undefined ? String(inc.state   || '').trim() : (employee.address?.state   || ''),
+        zip:     inc.zip     !== undefined ? String(inc.zip     || '').trim() : (employee.address?.zip     || ''),
+        country: inc.country !== undefined ? String(inc.country || '').trim() : (employee.address?.country || ''),
+      };
+    }
+
+    // ── ID card update ────────────────────────────────────────────────────────
+    // Expects { url, fileName } — the URL is whatever your upload middleware
+    // (Multer → S3, Cloudinary, etc.) returns after storing the file.
+    // Sending null for url clears the stored card.
+    if (req.body.idCard !== undefined) {
+      const inc = req.body.idCard;
+
+      if (typeof inc !== 'object' || Array.isArray(inc)) {
+        return res.status(400).json({ success: false, message: 'idCard must be an object', field: 'idCard' });
+      }
+
+      // If url is explicitly null, treat as a removal request.
+      if (inc.url === null) {
+        employee.idCard = { url: null, fileName: null, uploadedAt: null };
+      } else if (inc.url !== undefined) {
+        const trimmedUrl = String(inc.url).trim();
+        if (!trimmedUrl) {
+          return res.status(400).json({ success: false, message: 'idCard.url cannot be empty', field: 'idCard.url' });
+        }
+        employee.idCard = {
+          url:        trimmedUrl,
+          fileName:   inc.fileName ? String(inc.fileName).trim() : (employee.idCard?.fileName || null),
+          uploadedAt: new Date(),
+        };
+      }
+      // If inc has neither url nor null — nothing to update; skip silently.
     }
 
     await employee.save();
@@ -122,7 +185,6 @@ router.put('/me', auth, async (req, res) => {
       employee: publicEmployee(employee),
     });
   } catch (err) {
-    // Mongoose validation errors (e.g. duplicate key race condition)
     if (err.code === 11000) {
       return res.status(409).json({ success: false, message: 'Email already in use', field: 'email' });
     }
@@ -271,6 +333,7 @@ router.post('/', adminAuth, async (req, res) => {
       inviteToken,
       inviteTokenExpires: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
       bank:               bank || {},
+      // emergencyContact, address, idCard — left as schema defaults (empty strings / null)
     });
 
     await employee.save();
@@ -292,13 +355,12 @@ router.post('/', adminAuth, async (req, res) => {
 
 router.put('/:id', adminAuth, async (req, res) => {
   try {
-    // Block self-edit via this route — profile page uses /me
-   if (String(req.userId) === String(req.params.id) && req.role !== 'superadmin') {
-  return res.status(403).json({
-    success: false,
-    message: 'Use the profile page to edit your own account.',
-  });
-}
+    if (String(req.userId) === String(req.params.id) && req.role !== 'superadmin') {
+      return res.status(403).json({
+        success: false,
+        message: 'Use the profile page to edit your own account.',
+      });
+    }
 
     const employee = await Employee.findOne({
       _id:       req.params.id,

@@ -102,6 +102,35 @@ const employeeSchema = new mongoose.Schema({
     accountNumber: String
   },
 
+  // ── Emergency contact ──────────────────────────────────────────────────────
+  // Self-reported by the employee via PUT /me.
+  emergencyContact: {
+    name:         { type: String, default: '' },
+    relationship: { type: String, default: '' },  // e.g. "Spouse", "Parent", "Sibling"
+    phone:        { type: String, default: '' },
+  },
+
+  // ── Residential address ───────────────────────────────────────────────────
+  // Self-reported by the employee via PUT /me.
+  address: {
+    street:  { type: String, default: '' },
+    city:    { type: String, default: '' },
+    state:   { type: String, default: '' },
+    zip:     { type: String, default: '' },
+    country: { type: String, default: '' },
+  },
+
+  // ── ID card ───────────────────────────────────────────────────────────────
+  // Stores the URL / storage path returned by your upload middleware
+  // (Multer → S3, Cloudinary, local disk, etc.).
+  // The actual file upload is handled outside this model — the route receives
+  // the resolved URL and persists it here.
+  idCard: {
+    url:        { type: String, default: null },  // publicly accessible URL or storage key
+    fileName:   { type: String, default: null },  // original file name for display
+    uploadedAt: { type: Date,   default: null },
+  },
+
   isDeleted: { type: Boolean, default: false }
 
 }, { timestamps: true });
@@ -163,7 +192,7 @@ employeeSchema.pre('save', async function (next) {
     if (this.isModified('password') && this.password) {
       const salt = await bcryptjs.genSalt(10);
       this.password = await bcryptjs.hash(this.password, salt);
-      this.passwordChangedAt = new Date(); // ← ADD THIS
+      this.passwordChangedAt = new Date();
     }
     if (this.isModified('tempPassword') && this.tempPassword) {
       const salt = await bcryptjs.genSalt(10);
