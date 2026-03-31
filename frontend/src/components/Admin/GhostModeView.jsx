@@ -6,7 +6,6 @@ import {
   Eye, EyeOff, AlertCircle
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { useEscapeKey } from '../../hooks/useEscapeKey';
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
@@ -111,8 +110,6 @@ export default function GhostModeView({ employee, onClose }) {
 
   const [fromDate, setFromDate] = useState(defaultFromDate);
   const [toDate,   setToDate]   = useState(() => new Date().toISOString().split('T')[0]);
-
-  useEscapeKey(onClose, { enabled: true });
 
   const fetchData = useCallback(async () => {
     if (!employee?._id) return;

@@ -91,7 +91,7 @@ const InfoBox = ({ label, value }) => (
   </div>
 );
 
-const EditBox = ({ label, name, value, onChange, type = 'text', placeholder = '', accentRing, accentBorder, accentBg, badge }) => (
+const EditBox = ({ label, name, value, onChange, type = 'text', placeholder = '', accentRing, accentBorder, accentBg, badge, disabled }) => (
   <div>
     <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-1.5">
       {label}
@@ -99,17 +99,21 @@ const EditBox = ({ label, name, value, onChange, type = 'text', placeholder = ''
     </p>
     <input
       type={type} name={name} value={value || ''} onChange={onChange} placeholder={placeholder}
-      className={`w-full px-4 py-2.5 border ${accentBorder} ${accentBg} rounded-lg focus:outline-none ${accentRing} focus:ring-2 focus:border-transparent text-sm transition`}
+      disabled={disabled}
+      className={`w-full px-4 py-2.5 border ${accentBorder} ${accentBg} rounded-lg focus:outline-none ${accentRing} focus:ring-2 focus:border-transparent text-sm transition
+        ${disabled ? 'opacity-50 cursor-not-allowed bg-gray-100' : ''}`}
     />
   </div>
 );
 
-const TextareaBox = ({ label, name, value, onChange, rows = 3, placeholder = '', accentRing, accentBorder, accentBg }) => (
+const TextareaBox = ({ label, name, value, onChange, rows = 3, placeholder = '', accentRing, accentBorder, accentBg, disabled }) => (
   <div>
     <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">{label}</p>
     <textarea
       name={name} value={value || ''} onChange={onChange} rows={rows} placeholder={placeholder}
-      className={`w-full px-4 py-2.5 border ${accentBorder} ${accentBg} rounded-lg focus:outline-none ${accentRing} focus:ring-2 focus:border-transparent text-sm transition resize-y`}
+      disabled={disabled}
+      className={`w-full px-4 py-2.5 border ${accentBorder} ${accentBg} rounded-lg focus:outline-none ${accentRing} focus:ring-2 focus:border-transparent text-sm transition resize-y
+        ${disabled ? 'opacity-50 cursor-not-allowed bg-gray-100' : ''}`}
     />
   </div>
 );
@@ -128,9 +132,18 @@ const Card = ({ icon: Icon, iconBg = 'bg-blue-50', iconColor = 'text-blue-600', 
   </div>
 );
 
+// Reusable inline spinner
+const Spinner = ({ size = 16, color = 'border-white' }) => (
+  <div
+    className={`border-2 ${color} border-t-transparent rounded-full animate-spin shrink-0`}
+    style={{ width: size, height: size }}
+  />
+);
+
 // ─── Single ID card side uploader ─────────────────────────────────────────────
-const IdCardSide = ({ label, side, currentFile, onUpload, onDelete, accentBorder, accentRing, isLoading }) => {
+const IdCardSide = ({ label, side, currentFile, onUpload, onDelete, accentBorder, accentRing, isLoading, globalBusy }) => {
   const fileInputRef = useRef(null);
+  const isBusy = isLoading || globalBusy;
 
   const handleFileSelect = (e) => {
     const file = e.target.files[0];
@@ -142,10 +155,11 @@ const IdCardSide = ({ label, side, currentFile, onUpload, onDelete, accentBorder
     reader.onload = (ev) => onUpload(side, { url: ev.target.result, fileName: file.name });
     reader.onerror = () => toast.error('Failed to read file');
     reader.readAsDataURL(file);
+    // Reset so same file can be re-selected
+    e.target.value = '';
   };
 
-  const isImage = currentFile?.url?.startsWith('data:image') || (currentFile?.url && !currentFile?.url?.startsWith('data:'));
-  const isPDF   = currentFile?.url?.startsWith('data:application/pdf');
+  const isPDF = currentFile?.url?.startsWith('data:application/pdf');
 
   return (
     <div className="flex-1 min-w-0">
@@ -156,14 +170,21 @@ const IdCardSide = ({ label, side, currentFile, onUpload, onDelete, accentBorder
         </span>
       </p>
       <div
-        onClick={() => !isLoading && fileInputRef.current.click()}
+        onClick={() => !isBusy && fileInputRef.current.click()}
         className={`relative cursor-pointer rounded-xl border-2 border-dashed transition group
           ${currentFile?.url
             ? 'border-green-300 bg-green-50/30 hover:border-green-400'
             : `${accentBorder} bg-gray-50/50 hover:bg-gray-100/60`
-          } ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
+          } ${isBusy ? 'opacity-50 cursor-not-allowed' : ''}`}
         style={{ minHeight: 140 }}
       >
+        {/* Per-side upload/delete spinner overlay */}
+        {isLoading && (
+          <div className="absolute inset-0 flex items-center justify-center bg-white/70 rounded-[10px] z-20">
+            <Spinner size={28} color="border-gray-400" />
+          </div>
+        )}
+
         {currentFile?.url ? (
           <>
             {isPDF ? (
@@ -172,24 +193,22 @@ const IdCardSide = ({ label, side, currentFile, onUpload, onDelete, accentBorder
                 <span className="text-xs text-gray-500 text-center px-2 break-all">{currentFile.fileName || 'document.pdf'}</span>
               </div>
             ) : (
-              <img
-                src={currentFile.url}
-                alt={label}
-                className="w-full h-36 object-cover rounded-[10px]"
-              />
+              <img src={currentFile.url} alt={label} className="w-full h-36 object-cover rounded-[10px]" />
             )}
-            {/* Hover overlay */}
-            <div className="absolute inset-0 rounded-[10px] bg-black/0 group-hover:bg-black/20 transition flex items-center justify-center">
-              <div className="opacity-0 group-hover:opacity-100 transition flex items-center gap-1.5 bg-white/90 px-3 py-1.5 rounded-full shadow text-xs font-medium text-gray-700">
-                <Camera size={13} /> Change
+            {/* Hover overlay — hidden while busy */}
+            {!isBusy && (
+              <div className="absolute inset-0 rounded-[10px] bg-black/0 group-hover:bg-black/20 transition flex items-center justify-center">
+                <div className="opacity-0 group-hover:opacity-100 transition flex items-center gap-1.5 bg-white/90 px-3 py-1.5 rounded-full shadow text-xs font-medium text-gray-700">
+                  <Camera size={13} /> Change
+                </div>
               </div>
-            </div>
+            )}
             {/* Delete button */}
             <button
               type="button"
               onClick={(e) => { e.stopPropagation(); onDelete(side); }}
-              disabled={isLoading}
-              className="absolute top-2 right-2 p-1.5 bg-red-500 text-white rounded-full hover:bg-red-600 transition shadow disabled:opacity-50 z-10"
+              disabled={isBusy}
+              className="absolute top-2 right-2 p-1.5 bg-red-500 text-white rounded-full hover:bg-red-600 transition shadow disabled:opacity-50 disabled:cursor-not-allowed z-10"
             >
               <Trash2 size={11} />
             </button>
@@ -202,7 +221,14 @@ const IdCardSide = ({ label, side, currentFile, onUpload, onDelete, accentBorder
           </div>
         )}
       </div>
-      <input ref={fileInputRef} type="file" accept="image/jpeg,image/jpg,image/png,image/gif,image/webp,application/pdf" onChange={handleFileSelect} className="hidden" />
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/jpeg,image/jpg,image/png,image/gif,image/webp,application/pdf"
+        onChange={handleFileSelect}
+        disabled={isBusy}
+        className="hidden"
+      />
     </div>
   );
 };
@@ -233,16 +259,23 @@ export default function MyProfile() {
   const [loading, setLoading]             = useState(true);
   const [saving, setSaving]               = useState(false);
   const [uploadingPic, setUploadingPic]   = useState(false);
-  const [uploadingId, setUploadingId]     = useState(false);
+  // Granular ID upload state: null | 'front' | 'back' | 'delete-front' | 'delete-back'
+  const [uploadingIdSide, setUploadingIdSide] = useState(null);
 
   // Password
-  const [pwForm, setPwForm]   = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
-  const [showPw, setShowPw]   = useState({ current: false, new: false, confirm: false });
-  const [pwOpen, setPwOpen]   = useState(false);
+  const [pwForm, setPwForm]     = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
+  const [showPw, setShowPw]     = useState({ current: false, new: false, confirm: false });
+  const [pwOpen, setPwOpen]     = useState(false);
   const [pwSaving, setPwSaving] = useState(false);
 
-  // Profile picture file input
   const picInputRef = useRef(null);
+
+  // ── Master "anything is in flight" guard ────────────────────────────────────
+  // Used to disable all form inputs and the Save button whenever ANY async op runs.
+  // ID card uploads are excluded from disabling the main Save button — they have
+  // their own local overlay and don't touch form fields.
+  const anyBusy      = loading || saving || uploadingPic || !!uploadingIdSide || pwSaving;
+  const formInputBusy = loading || saving || uploadingPic || pwSaving; // don't lock form for ID uploads
 
   // ── Fetch ────────────────────────────────────────────────────────────────────
   useEffect(() => { fetchProfile(); }, []);
@@ -282,31 +315,22 @@ export default function MyProfile() {
     }
   };
 
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    setForm(prev => ({ ...prev, [name]: value }));
-  };
-  const handleECChange = (e) => {
-    const { name, value } = e.target;
-    setForm(prev => ({ ...prev, emergencyContact: { ...prev.emergencyContact, [name]: value } }));
-  };
-  const handleAddrChange = (e) => {
-    const { name, value } = e.target;
-    setForm(prev => ({ ...prev, address: { ...prev.address, [name]: value } }));
-  };
+  const handleChange    = (e) => { const { name, value } = e.target; setForm(prev => ({ ...prev, [name]: value })); };
+  const handleECChange  = (e) => { const { name, value } = e.target; setForm(prev => ({ ...prev, emergencyContact: { ...prev.emergencyContact, [name]: value } })); };
+  const handleAddrChange = (e) => { const { name, value } = e.target; setForm(prev => ({ ...prev, address: { ...prev.address, [name]: value } })); };
 
   // ── Profile picture ──────────────────────────────────────────────────────────
   const handlePicFileSelect = (e) => {
+    if (anyBusy) return;
     const file = e.target.files[0];
     if (!file) return;
     const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
     if (!validTypes.includes(file.type)) { toast.error('Please select a valid image (JPEG, PNG, GIF, or WebP)'); return; }
-    if (file.size > 2 * 1024 * 1024) { toast.error('Image must be under 2MB'); return; }
+    if (file.size > 500 * 1024) { toast.error('Image must be under 500 KB — resize it first'); return; }
     const reader = new FileReader();
     reader.onload = (ev) => uploadProfilePicture(ev.target.result);
     reader.onerror = () => toast.error('Failed to read image');
     reader.readAsDataURL(file);
-    // Reset input so same file can be re-selected
     e.target.value = '';
   };
 
@@ -319,8 +343,12 @@ export default function MyProfile() {
         { profilePicture: base64Image },
         { headers: { Authorization: `Bearer ${token}` } }
       );
-      if (data.success) { setProfilePicture(base64Image); toast.success('Profile picture updated'); }
-      else toast.error(data.message || 'Failed to update profile picture');
+      if (data.success) {
+        setProfilePicture(base64Image);
+        // Notify Header so it updates immediately without a page reload
+        window.dispatchEvent(new CustomEvent('profile-pic-updated', { detail: base64Image }));
+        toast.success('Profile picture updated');
+      } else toast.error(data.message || 'Failed to update profile picture');
     } catch (err) {
       toast.error(err.response?.data?.message || 'Failed to update profile picture');
     } finally {
@@ -329,12 +357,17 @@ export default function MyProfile() {
   };
 
   const deleteProfilePicture = async () => {
+    if (anyBusy) return;
     setUploadingPic(true);
     try {
       const token = localStorage.getItem('token');
       const { data } = await axios.delete('/api/employees/me/profile-picture', { headers: { Authorization: `Bearer ${token}` } });
-      if (data.success) { setProfilePicture(null); toast.success('Profile picture removed'); }
-      else toast.error(data.message);
+      if (data.success) {
+        setProfilePicture(null);
+        // Notify Header to revert to initials immediately
+        window.dispatchEvent(new CustomEvent('profile-pic-updated', { detail: null }));
+        toast.success('Profile picture removed');
+      } else toast.error(data.message);
     } catch (err) {
       toast.error(err.response?.data?.message || 'Failed to remove profile picture');
     } finally {
@@ -344,7 +377,8 @@ export default function MyProfile() {
 
   // ── ID card ──────────────────────────────────────────────────────────────────
   const handleIdCardUpload = async (side, fileData) => {
-    setUploadingId(true);
+    if (anyBusy) return;
+    setUploadingIdSide(side);
     try {
       const token = localStorage.getItem('token');
       const { data } = await axios.put(
@@ -359,12 +393,13 @@ export default function MyProfile() {
     } catch (err) {
       toast.error(err.response?.data?.message || 'Upload failed');
     } finally {
-      setUploadingId(false);
+      setUploadingIdSide(null);
     }
   };
 
   const handleIdCardDelete = async (side) => {
-    setUploadingId(true);
+    if (anyBusy) return;
+    setUploadingIdSide(`delete-${side}`);
     try {
       const token = localStorage.getItem('token');
       const { data } = await axios.put(
@@ -379,12 +414,13 @@ export default function MyProfile() {
     } catch (err) {
       toast.error(err.response?.data?.message || 'Remove failed');
     } finally {
-      setUploadingId(false);
+      setUploadingIdSide(null);
     }
   };
 
   // ── Save ─────────────────────────────────────────────────────────────────────
   const handleSave = async () => {
+    if (anyBusy) return;
     if (!form.email?.trim()) return toast.error('Email is required');
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) return toast.error('Please enter a valid email address');
 
@@ -432,6 +468,7 @@ export default function MyProfile() {
   // ── Change password ──────────────────────────────────────────────────────────
   const handleChangePassword = async (e) => {
     e.preventDefault();
+    if (anyBusy) return;
     if (!pwForm.currentPassword) return toast.error('Enter your current password');
     if (pwForm.newPassword !== pwForm.confirmPassword) return toast.error('Passwords do not match');
     if (pwForm.newPassword.length < 8) return toast.error('Password must be at least 8 characters');
@@ -473,7 +510,7 @@ export default function MyProfile() {
     );
   };
 
-  // ── Loading ──────────────────────────────────────────────────────────────────
+  // ── Loading screen ───────────────────────────────────────────────────────────
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gray-50">
@@ -487,13 +524,29 @@ export default function MyProfile() {
 
   const fullName = employee ? `${employee.firstName} ${employee.lastName}` : '';
 
+  // Determine save button label based on what's busy
+  const saveLabel = () => {
+    if (saving)          return <><Spinner size={16} /> Saving…</>;
+    if (uploadingPic)    return <><Spinner size={16} /> Uploading picture…</>;
+    if (uploadingIdSide) return <><Spinner size={16} /> Uploading ID…</>;
+    return <><Save size={16} /> Save Changes</>;
+  };
+
   // ── Render ───────────────────────────────────────────────────────────────────
   return (
     <div className="bg-gray-50 min-h-screen">
 
-      {/* ════════════════════════════════════════════════════════
-          PROFILE HEADER  — full width, gradient bg
-      ════════════════════════════════════════════════════════ */}
+      {/* ── Global save overlay (soft dimming, doesn't block ID/pic uploads) ── */}
+      {saving && (
+        <div className="fixed inset-0 bg-black/10 backdrop-blur-[1px] z-50 flex items-center justify-center">
+          <div className="bg-white rounded-xl shadow-lg px-6 py-4 flex items-center gap-3 pointer-events-none">
+            <Spinner size={20} color="border-gray-500" />
+            <span className="text-sm font-medium text-gray-700">Saving profile…</span>
+          </div>
+        </div>
+      )}
+
+      {/* ════ PROFILE HEADER ════ */}
       <div className={`w-full bg-gradient-to-br ${ac.headerGrad} text-white`}>
         <div className="max-w-5xl mx-auto px-4 md:px-8 py-8 flex flex-col sm:flex-row items-center sm:items-end gap-6">
 
@@ -523,7 +576,7 @@ export default function MyProfile() {
             </div>
           </div>
 
-          {/* Right: avatar — click to upload/change */}
+          {/* Right: avatar */}
           <div className="order-1 sm:order-2 shrink-0">
             <div className="relative group">
               <input
@@ -531,38 +584,48 @@ export default function MyProfile() {
                 type="file"
                 accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
                 onChange={handlePicFileSelect}
+                disabled={anyBusy}
                 className="hidden"
               />
               <div
-                onClick={() => !uploadingPic && picInputRef.current.click()}
-                className={`w-28 h-28 rounded-full ring-4 ${ac.avatarRing} ring-offset-2 ring-offset-transparent
-                  cursor-pointer overflow-hidden bg-white/20 backdrop-blur-sm
+                onClick={() => !anyBusy && picInputRef.current.click()}
+                className={`w-28 h-28 rounded-full ring-4 ${ac.avatarRing} ring-offset-2
+                  overflow-hidden bg-white/20 backdrop-blur-sm
                   flex items-center justify-center transition relative
-                  ${uploadingPic ? 'opacity-60 cursor-not-allowed' : 'hover:ring-white'}`}
+                  ${anyBusy ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer hover:ring-white'}`}
               >
-                {uploadingPic ? (
-                  <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                ) : profilePicture ? (
+                {/* Spinner overlay while uploading */}
+                {uploadingPic && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/40 rounded-full z-10">
+                    <Spinner size={28} color="border-white" />
+                  </div>
+                )}
+
+                {profilePicture ? (
                   <>
                     <img src={profilePicture} alt="Profile" className="w-full h-full object-cover" />
-                    {/* hover overlay */}
-                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition flex items-center justify-center">
-                      <Camera size={20} className="text-white opacity-0 group-hover:opacity-100 transition" />
-                    </div>
+                    {!anyBusy && (
+                      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition flex items-center justify-center">
+                        <Camera size={20} className="text-white opacity-0 group-hover:opacity-100 transition" />
+                      </div>
+                    )}
                   </>
-                ) : (
+                ) : !uploadingPic ? (
                   <>
                     <User size={40} className="text-white/70" />
-                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition flex items-center justify-center">
-                      <Camera size={20} className="text-white opacity-0 group-hover:opacity-100 transition" />
-                    </div>
+                    {!anyBusy && (
+                      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition flex items-center justify-center">
+                        <Camera size={20} className="text-white opacity-0 group-hover:opacity-100 transition" />
+                      </div>
+                    )}
                   </>
-                )}
+                ) : null}
               </div>
 
-              {/* Remove pic button — only if picture exists */}
-              {profilePicture && !uploadingPic && (
+              {/* Remove pic — hidden entirely while anything is busy */}
+              {profilePicture && !anyBusy && (
                 <button
+                  type="button"
                   onClick={(e) => { e.stopPropagation(); deleteProfilePicture(); }}
                   className="absolute -bottom-1 -right-1 p-1.5 bg-red-500 hover:bg-red-600 text-white rounded-full shadow-lg transition"
                   title="Remove picture"
@@ -571,27 +634,27 @@ export default function MyProfile() {
                 </button>
               )}
             </div>
-            <p className="text-center text-[11px] text-white/50 mt-2">Click to {profilePicture ? 'change' : 'upload'}</p>
+            <p className="text-center text-[11px] text-white/50 mt-2">
+              {uploadingPic ? 'Uploading…' : `Click to ${profilePicture ? 'change' : 'upload'} · max 500 KB`}
+            </p>
           </div>
 
         </div>
       </div>
 
-      {/* ════════════════════════════════════════════════════════
-          CONTENT
-      ════════════════════════════════════════════════════════ */}
+      {/* ════ CONTENT ════ */}
       <div className="max-w-6xl mx-auto px-4 md:px-6 py-6 space-y-5">
 
-        {/* ── Personal Information ──────────────────────────────────────────── */}
+        {/* ── Personal Information ── */}
         <Card icon={User} iconBg="bg-blue-50" iconColor="text-blue-600" title="Personal Information" badge={canEditPersonal ? null : 'Read-only'}>
           <div className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {canEditPersonal ? (
                 <>
                   <EditBox label="First Name" name="firstName" value={form.firstName} onChange={handleChange}
-                    accentRing={ac.ring} accentBorder={ac.border} accentBg={ac.bg} />
+                    disabled={formInputBusy} accentRing={ac.ring} accentBorder={ac.border} accentBg={ac.bg} />
                   <EditBox label="Last Name" name="lastName" value={form.lastName} onChange={handleChange}
-                    accentRing={ac.ring} accentBorder={ac.border} accentBg={ac.bg} />
+                    disabled={formInputBusy} accentRing={ac.ring} accentBorder={ac.border} accentBg={ac.bg} />
                 </>
               ) : (
                 <><InfoBox label="First Name" value={employee?.firstName} /><InfoBox label="Last Name" value={employee?.lastName} /></>
@@ -600,12 +663,12 @@ export default function MyProfile() {
 
             <EditBox label="Email" name="email" value={form.email} onChange={handleChange}
               type="email" placeholder="your@email.com" badge="(editable)"
-              accentRing={ac.ring} accentBorder={ac.border} accentBg={ac.bg} />
+              disabled={formInputBusy} accentRing={ac.ring} accentBorder={ac.border} accentBg={ac.bg} />
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {config.canEditPersonal ? (
                 <EditBox label="Employee Number" name="employeeNumber" value={form.employeeNumber} onChange={handleChange}
-                  accentRing={ac.ring} accentBorder={ac.border} accentBg={ac.bg} />
+                  disabled={formInputBusy} accentRing={ac.ring} accentBorder={ac.border} accentBg={ac.bg} />
               ) : (
                 <InfoBox label="Employee Number" value={employee?.employeeNumber} />
               )}
@@ -613,7 +676,9 @@ export default function MyProfile() {
                 <div>
                   <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Department</p>
                   <select name="department" value={form.department} onChange={handleChange}
-                    className={`w-full px-4 py-2.5 border ${ac.border} ${ac.bg} rounded-lg focus:outline-none ${ac.ring} focus:ring-2 text-sm transition`}>
+                    disabled={formInputBusy}
+                    className={`w-full px-4 py-2.5 border ${ac.border} ${ac.bg} rounded-lg focus:outline-none ${ac.ring} focus:ring-2 text-sm transition
+                      ${formInputBusy ? 'opacity-50 cursor-not-allowed' : ''}`}>
                     {['IT','Customer Support','Manager','Marketing','HR','Finance'].map(d => <option key={d} value={d}>{d}</option>)}
                   </select>
                 </div>
@@ -623,7 +688,7 @@ export default function MyProfile() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {config.canEditJoining ? (
                 <EditBox label="Joining Date" name="joiningDate" value={form.joiningDate} onChange={handleChange} type="date"
-                  accentRing={ac.ring} accentBorder={ac.border} accentBg={ac.bg} />
+                  disabled={formInputBusy} accentRing={ac.ring} accentBorder={ac.border} accentBg={ac.bg} />
               ) : (
                 <div>
                   <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Joining Date</p>
@@ -637,7 +702,9 @@ export default function MyProfile() {
                 <div>
                   <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Status</p>
                   <select name="status" value={form.status} onChange={handleChange}
-                    className={`w-full px-4 py-2.5 border ${ac.border} ${ac.bg} rounded-lg focus:outline-none ${ac.ring} focus:ring-2 text-sm transition`}>
+                    disabled={formInputBusy}
+                    className={`w-full px-4 py-2.5 border ${ac.border} ${ac.bg} rounded-lg focus:outline-none ${ac.ring} focus:ring-2 text-sm transition
+                      ${formInputBusy ? 'opacity-50 cursor-not-allowed' : ''}`}>
                     {['Active','Inactive','Frozen'].map(s => <option key={s} value={s}>{s}</option>)}
                   </select>
                 </div>
@@ -648,9 +715,9 @@ export default function MyProfile() {
               {config.canEditShift ? (
                 <>
                   <EditBox label="Shift Start" name="shiftStart" value={form.shiftStart} onChange={handleChange} placeholder="09:00"
-                    accentRing={ac.ring} accentBorder={ac.border} accentBg={ac.bg} />
+                    disabled={formInputBusy} accentRing={ac.ring} accentBorder={ac.border} accentBg={ac.bg} />
                   <EditBox label="Shift End" name="shiftEnd" value={form.shiftEnd} onChange={handleChange} placeholder="18:00"
-                    accentRing={ac.ring} accentBorder={ac.border} accentBg={ac.bg} />
+                    disabled={formInputBusy} accentRing={ac.ring} accentBorder={ac.border} accentBg={ac.bg} />
                 </>
               ) : (
                 <><InfoBox label="Shift Start" value={employee?.shift?.start} /><InfoBox label="Shift End" value={employee?.shift?.end} /></>
@@ -663,7 +730,9 @@ export default function MyProfile() {
                   <div>
                     <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Salary Type</p>
                     <select name="salaryType" value={form.salaryType} onChange={handleChange}
-                      className={`w-full px-4 py-2.5 border ${ac.border} ${ac.bg} rounded-lg focus:outline-none ${ac.ring} focus:ring-2 text-sm transition`}>
+                      disabled={formInputBusy}
+                      className={`w-full px-4 py-2.5 border ${ac.border} ${ac.bg} rounded-lg focus:outline-none ${ac.ring} focus:ring-2 text-sm transition
+                        ${formInputBusy ? 'opacity-50 cursor-not-allowed' : ''}`}>
                       <option value="hourly">Hourly</option>
                       <option value="monthly">Monthly</option>
                     </select>
@@ -671,7 +740,8 @@ export default function MyProfile() {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <EditBox label="Hourly Rate (PKR)" name="hourlyRate" value={form.hourlyRate} onChange={handleChange}
-                        type="number" placeholder="0" accentRing={ac.ring} accentBorder={ac.border} accentBg={ac.bg} />
+                        type="number" placeholder="0" disabled={formInputBusy}
+                        accentRing={ac.ring} accentBorder={ac.border} accentBg={ac.bg} />
                       {calculateMonthlySalary() && (
                         <p className="text-xs text-green-600 mt-1.5">
                           ≈ PKR {calculateMonthlySalary()} / month ({form.shiftStart}–{form.shiftEnd} × PKR {form.hourlyRate}/hr × 22 days)
@@ -680,7 +750,8 @@ export default function MyProfile() {
                     </div>
                     {form.salaryType === 'monthly' && (
                       <EditBox label="Monthly Salary (PKR)" name="monthlySalary" value={form.monthlySalary} onChange={handleChange}
-                        type="number" placeholder="0" accentRing={ac.ring} accentBorder={ac.border} accentBg={ac.bg} />
+                        type="number" placeholder="0" disabled={formInputBusy}
+                        accentRing={ac.ring} accentBorder={ac.border} accentBg={ac.bg} />
                     )}
                   </div>
                 </div>
@@ -691,45 +762,45 @@ export default function MyProfile() {
           </div>
         </Card>
 
-        {/* ── Emergency Contact (optional) ──────────────────────────────────── */}
+        {/* ── Emergency Contact ── */}
         <Card icon={Phone} iconBg="bg-red-50" iconColor="text-red-600" title="Emergency Contact" optional>
           <div className="space-y-4">
             <EditBox label="Contact Name" name="name" value={form.emergencyContact.name}
               onChange={handleECChange} placeholder="Full name of emergency contact"
-              accentRing={ac.ring} accentBorder={ac.border} accentBg={ac.bg} />
+              disabled={formInputBusy} accentRing={ac.ring} accentBorder={ac.border} accentBg={ac.bg} />
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <EditBox label="Relationship" name="relationship" value={form.emergencyContact.relationship}
                 onChange={handleECChange} placeholder="e.g. Spouse, Parent, Sibling"
-                accentRing={ac.ring} accentBorder={ac.border} accentBg={ac.bg} />
+                disabled={formInputBusy} accentRing={ac.ring} accentBorder={ac.border} accentBg={ac.bg} />
               <EditBox label="Phone Number" name="phone" value={form.emergencyContact.phone}
                 onChange={handleECChange} placeholder="+92 XXX XXXXXXX"
-                accentRing={ac.ring} accentBorder={ac.border} accentBg={ac.bg} />
+                disabled={formInputBusy} accentRing={ac.ring} accentBorder={ac.border} accentBg={ac.bg} />
             </div>
           </div>
         </Card>
 
-        {/* ── Residential Address (optional) ────────────────────────────────── */}
+        {/* ── Residential Address ── */}
         <Card icon={Home} iconBg="bg-yellow-50" iconColor="text-yellow-600" title="Residential Address" optional>
           <div className="space-y-4">
             <TextareaBox label="Street Address" name="street" value={form.address.street}
               onChange={handleAddrChange} rows={2} placeholder="House/Flat No., Street, Area"
-              accentRing={ac.ring} accentBorder={ac.border} accentBg={ac.bg} />
+              disabled={formInputBusy} accentRing={ac.ring} accentBorder={ac.border} accentBg={ac.bg} />
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <EditBox label="City" name="city" value={form.address.city} onChange={handleAddrChange} placeholder="City"
-                accentRing={ac.ring} accentBorder={ac.border} accentBg={ac.bg} />
+                disabled={formInputBusy} accentRing={ac.ring} accentBorder={ac.border} accentBg={ac.bg} />
               <EditBox label="State / Province" name="state" value={form.address.state} onChange={handleAddrChange} placeholder="State/Province"
-                accentRing={ac.ring} accentBorder={ac.border} accentBg={ac.bg} />
+                disabled={formInputBusy} accentRing={ac.ring} accentBorder={ac.border} accentBg={ac.bg} />
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <EditBox label="ZIP / Postal Code" name="zip" value={form.address.zip} onChange={handleAddrChange} placeholder="ZIP/Postal Code"
-                accentRing={ac.ring} accentBorder={ac.border} accentBg={ac.bg} />
+                disabled={formInputBusy} accentRing={ac.ring} accentBorder={ac.border} accentBg={ac.bg} />
               <EditBox label="Country" name="country" value={form.address.country} onChange={handleAddrChange} placeholder="Country"
-                accentRing={ac.ring} accentBorder={ac.border} accentBg={ac.bg} />
+                disabled={formInputBusy} accentRing={ac.ring} accentBorder={ac.border} accentBg={ac.bg} />
             </div>
           </div>
         </Card>
 
-        {/* ── ID Card (front + back) ─────────────────────────────────────────── */}
+        {/* ── ID Card ── */}
         <Card icon={FileText} iconBg="bg-purple-50" iconColor="text-purple-600" title="ID Card">
           <p className="text-xs text-gray-500 mb-4">
             Upload both sides of your government-issued ID card. Both front and back are required.
@@ -741,7 +812,8 @@ export default function MyProfile() {
               onUpload={handleIdCardUpload}
               onDelete={handleIdCardDelete}
               accentBorder={ac.border} accentRing={ac.ring}
-              isLoading={uploadingId}
+              isLoading={uploadingIdSide === 'front' || uploadingIdSide === 'delete-front'}
+              globalBusy={saving || uploadingPic || pwSaving}
             />
             <IdCardSide
               label="Back Side" side="back"
@@ -749,35 +821,47 @@ export default function MyProfile() {
               onUpload={handleIdCardUpload}
               onDelete={handleIdCardDelete}
               accentBorder={ac.border} accentRing={ac.ring}
-              isLoading={uploadingId}
+              isLoading={uploadingIdSide === 'back' || uploadingIdSide === 'delete-back'}
+              globalBusy={saving || uploadingPic || pwSaving}
             />
           </div>
           {/* Status row */}
-          <div className="mt-4 flex items-center gap-2">
-            {idCard.front?.url && idCard.back?.url ? (
-              <span className="inline-flex items-center gap-1.5 text-xs text-green-700 bg-green-50 border border-green-200 px-3 py-1 rounded-full">
-                <Check size={12} /> Both sides uploaded
+          <div className="mt-4 flex items-center gap-2 flex-wrap">
+            {uploadingIdSide && (
+              <span className="inline-flex items-center gap-1.5 text-xs text-blue-700 bg-blue-50 border border-blue-200 px-3 py-1 rounded-full">
+                <Spinner size={10} color="border-blue-500" />
+                {uploadingIdSide.startsWith('delete') ? 'Removing…' : 'Uploading…'}
               </span>
-            ) : (
-              <span className="inline-flex items-center gap-1.5 text-xs text-amber-700 bg-amber-50 border border-amber-200 px-3 py-1 rounded-full">
-                {!idCard.front?.url && !idCard.back?.url ? 'Neither side uploaded yet' :
-                 !idCard.front?.url ? 'Front side missing' : 'Back side missing'}
-              </span>
+            )}
+            {!uploadingIdSide && (
+              idCard.front?.url && idCard.back?.url ? (
+                <span className="inline-flex items-center gap-1.5 text-xs text-green-700 bg-green-50 border border-green-200 px-3 py-1 rounded-full">
+                  <Check size={12} /> Both sides uploaded
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1.5 text-xs text-amber-700 bg-amber-50 border border-amber-200 px-3 py-1 rounded-full">
+                  {!idCard.front?.url && !idCard.back?.url ? 'Neither side uploaded yet' :
+                   !idCard.front?.url ? 'Front side missing' : 'Back side missing'}
+                </span>
+              )
             )}
           </div>
         </Card>
 
-        {/* ── Bank Details ──────────────────────────────────────────────────── */}
+        {/* ── Bank Details ── */}
         <Card icon={CreditCard} iconBg="bg-green-50" iconColor="text-green-600" title="Bank Details" badge={canEditBank ? null : 'Read-only'}>
           <div className="space-y-4">
             {canEditBank ? (
               <>
                 <EditBox label="Bank Name" name="bankName" value={form.bankName} onChange={handleChange}
-                  placeholder="e.g. HBL, Meezan Bank" accentRing={ac.ring} accentBorder={ac.border} accentBg={ac.bg} />
+                  placeholder="e.g. HBL, Meezan Bank" disabled={formInputBusy}
+                  accentRing={ac.ring} accentBorder={ac.border} accentBg={ac.bg} />
                 <EditBox label="Account Name" name="accountName" value={form.accountName} onChange={handleChange}
-                  placeholder="Account holder name" accentRing={ac.ring} accentBorder={ac.border} accentBg={ac.bg} />
+                  placeholder="Account holder name" disabled={formInputBusy}
+                  accentRing={ac.ring} accentBorder={ac.border} accentBg={ac.bg} />
                 <EditBox label="IBAN / Account Number" name="accountNumber" value={form.accountNumber} onChange={handleChange}
-                  placeholder="PK00XXXX0000000000000000" accentRing={ac.ring} accentBorder={ac.border} accentBg={ac.bg} />
+                  placeholder="PK00XXXX0000000000000000" disabled={formInputBusy}
+                  accentRing={ac.ring} accentBorder={ac.border} accentBg={ac.bg} />
               </>
             ) : (
               <>
@@ -789,22 +873,27 @@ export default function MyProfile() {
           </div>
         </Card>
 
-        {/* ── Save ─────────────────────────────────────────────────────────── */}
+        {/* ── Save button ── */}
         <div className="flex justify-end">
-          <button onClick={handleSave} disabled={saving}
-            className={`flex items-center gap-2 px-6 py-2.5 text-white rounded-lg transition font-semibold text-sm disabled:opacity-60 disabled:cursor-not-allowed shadow-sm ${btnBg}`}>
-            {saving
-              ? <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />Saving…</>
-              : <><Save size={16} /> Save Changes</>
-            }
+          <button
+            onClick={handleSave}
+            disabled={anyBusy}
+            className={`flex items-center gap-2 px-6 py-2.5 text-white rounded-lg transition font-semibold text-sm
+              disabled:opacity-60 disabled:cursor-not-allowed shadow-sm ${btnBg}`}
+          >
+            {saveLabel()}
           </button>
         </div>
 
-        {/* ── Change Password ───────────────────────────────────────────────── */}
+        {/* ── Change Password ── */}
         <Card icon={Lock} iconBg="bg-orange-50" iconColor="text-orange-600" title="Change Password">
           {!pwOpen ? (
-            <button onClick={() => setPwOpen(true)}
-              className={`flex items-center gap-2 px-4 py-2 border rounded-lg transition text-sm font-medium ${pwBtnBg}`}>
+            <button
+              onClick={() => !anyBusy && setPwOpen(true)}
+              disabled={anyBusy}
+              className={`flex items-center gap-2 px-4 py-2 border rounded-lg transition text-sm font-medium
+                disabled:opacity-50 disabled:cursor-not-allowed ${pwBtnBg}`}
+            >
               <Pencil size={14} /> Change Password
             </button>
           ) : (
@@ -823,12 +912,18 @@ export default function MyProfile() {
                       type={showPw[field] ? 'text' : 'password'}
                       value={pwForm[key]}
                       onChange={e => setPwForm(prev => ({ ...prev, [key]: e.target.value }))}
-                      required placeholder={placeholder}
-                      className="w-full px-4 py-2.5 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none text-sm transition"
+                      required
+                      disabled={pwSaving}
+                      placeholder={placeholder}
+                      className={`w-full px-4 py-2.5 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none text-sm transition
+                        ${pwSaving ? 'opacity-50 cursor-not-allowed bg-gray-100' : ''}`}
                     />
-                    <button type="button"
+                    <button
+                      type="button"
                       onClick={() => setShowPw(p => ({ ...p, [field]: !p[field] }))}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                      disabled={pwSaving}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
                       {showPw[field] ? <EyeOff size={16} /> : <Eye size={16} />}
                     </button>
                   </div>
@@ -836,12 +931,24 @@ export default function MyProfile() {
                 </div>
               ))}
               <div className="flex gap-3 pt-1">
-                <button type="submit" disabled={pwSaving}
-                  className={`flex items-center gap-2 px-5 py-2 text-white rounded-lg transition font-semibold text-sm disabled:opacity-60 ${btnBg}`}>
-                  {pwSaving ? 'Saving…' : <><Check size={14} /> Update Password</>}
+                <button
+                  type="submit"
+                  disabled={pwSaving}
+                  className={`flex items-center gap-2 px-5 py-2 text-white rounded-lg transition font-semibold text-sm
+                    disabled:opacity-60 disabled:cursor-not-allowed ${btnBg}`}
+                >
+                  {pwSaving ? <><Spinner size={14} /> Updating…</> : <><Check size={14} /> Update Password</>}
                 </button>
-                <button type="button" onClick={() => { setPwOpen(false); setPwForm({ currentPassword: '', newPassword: '', confirmPassword: '' }); }}
-                  className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 transition text-sm">
+                <button
+                  type="button"
+                  disabled={pwSaving}
+                  onClick={() => {
+                    if (pwSaving) return;
+                    setPwOpen(false);
+                    setPwForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
+                  }}
+                  className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 transition text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                >
                   <X size={14} /> Cancel
                 </button>
               </div>

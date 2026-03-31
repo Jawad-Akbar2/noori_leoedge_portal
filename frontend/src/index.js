@@ -1,15 +1,18 @@
-import React from 'react';
-import ReactDOM from 'react-dom/client';
-import './index.css';
-import App from './App';
+import React from "react";
+import ReactDOM from "react-dom/client";
+import "./index.css";
+import App from "./App";
+import { EscapeStackProvider } from "./context/EscapeStack";
 
-import ErrorBoundary from './components/Common/ErrorBoundary';
+import ErrorBoundary from "./components/Common/ErrorBoundary";
 
-const root = ReactDOM.createRoot(document.getElementById('root'));
+const root = ReactDOM.createRoot(document.getElementById("root"));
 root.render(
   <React.StrictMode>
     <ErrorBoundary>
-      <App />
+      <EscapeStackProvider>
+        <App />
+      </EscapeStackProvider>
     </ErrorBoundary>
-  </React.StrictMode>
+  </React.StrictMode>,
 );

@@ -2,9 +2,12 @@ import React, { useRef, useState, useEffect } from 'react';
 import { Upload, X, AlertCircle, Download, Loader } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { uploadCSVFile } from '../../services/csvService.js';
+import { useEscape } from "../../context/EscapeStack";
 import { downloadCSVTemplate } from '../../utils/csvHelpers.js';
 
 export default function CSVImportModal({ onClose, onSuccess }) {
+   useEscape(onClose);
+   
   const fileInputRef = useRef(null);
   const logEndRef = useRef(null);
   const [selectedFile, setSelectedFile] = useState(null);
