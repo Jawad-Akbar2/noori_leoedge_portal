@@ -107,6 +107,8 @@ export default function GhostModeView({ employee, onClose }) {
   const [fullEmpData,    setFullEmpData]    = useState(null);
   const [loading,        setLoading]        = useState(false);
   const [showSalary,     setShowSalary]     = useState(true);
+  const fromRef = useRef(null);
+const toRef   = useRef(null);
 
   const [fromDate, setFromDate] = useState(defaultFromDate);
   const [toDate,   setToDate]   = useState(() => new Date().toISOString().split('T')[0]);
@@ -231,6 +233,43 @@ export default function GhostModeView({ employee, onClose }) {
             )}
           </div>
 
+          {/* Date range — always visible in header */}
+<div className="px-6 py-3 border-t border-white/10 flex flex-wrap items-end gap-3">
+  <div className="relative">
+    <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1">From</label>
+    <div
+      onClick={() => fromRef.current?.showPicker()}
+      className="flex items-center gap-2 px-3 py-1.5 border border-white/20 rounded-lg cursor-pointer hover:border-white/40 bg-white/10 text-white text-xs min-w-[120px]"
+    >
+      <Calendar size={12} className="text-slate-300" />
+      <span>{isoToDisplay(fromDate)}</span>
+    </div>
+    <input ref={fromRef} type="date" value={fromDate}
+      onChange={e => setFromDate(e.target.value)}
+      className="absolute opacity-0 pointer-events-none inset-0 w-full" />
+  </div>
+  <div className="relative">
+    <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1">To</label>
+    <div
+      onClick={() => toRef.current?.showPicker()}
+      className="flex items-center gap-2 px-3 py-1.5 border border-white/20 rounded-lg cursor-pointer hover:border-white/40 bg-white/10 text-white text-xs min-w-[120px]"
+    >
+      <Calendar size={12} className="text-slate-300" />
+      <span>{isoToDisplay(toDate)}</span>
+    </div>
+    <input ref={toRef} type="date" value={toDate} min={fromDate}
+      onChange={e => setToDate(e.target.value)}
+      className="absolute opacity-0 pointer-events-none inset-0 w-full" />
+  </div>
+  <button onClick={fetchData} disabled={loading}
+    className="px-3 py-1.5 bg-blue-500 hover:bg-blue-600 text-white text-xs font-semibold rounded-lg transition disabled:opacity-50">
+    {loading ? 'Loading…' : 'Apply'}
+  </button>
+  <span className="text-[10px] text-slate-400 self-end pb-1.5">
+    Data shown for selected period
+  </span>
+</div>
+
           {/* Tab nav */}
           <div className="flex px-4 overflow-x-auto">
             {TABS.map(tab => (
@@ -339,11 +378,11 @@ export default function GhostModeView({ employee, onClose }) {
           {/* ── ATTENDANCE ────────────────────────────────────────────────── */}
           {activeSection === 'attendance' && (
             <div className="p-5">
-              <DateRangePicker
+              {/* <DateRangePicker
                 fromDate={fromDate} setFromDate={setFromDate}
                 toDate={toDate}     setToDate={setToDate}
                 onApply={fetchData} loading={loading}
-              />
+              /> */}
 
               {summaryData && (
                 <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4">
@@ -384,7 +423,7 @@ export default function GhostModeView({ employee, onClose }) {
                             </span>
                           </td>
                           <td className="px-4 py-2.5 text-gray-600 font-mono text-xs">
-                            {day.inTime && day.outTime ? `${day.inTime} / ${day.outTime}` : <span className="text-gray-300">— / —</span>}
+                            {day.inTime || day.outTime ? `${day.inTime} / ${day.outTime}` : <span className="text-gray-300">— / —</span>}
                           </td>
                           <td className="px-4 py-2.5 text-gray-700">{(day.hoursWorked ?? 0).toFixed(2)}</td>
                           <td className="px-4 py-2.5 text-green-600">{(day.otAmount ?? 0) > 0 ? `PKR ${fmt(day.otAmount)}` : '—'}</td>
@@ -402,11 +441,11 @@ export default function GhostModeView({ employee, onClose }) {
           {/* ── SALARY ────────────────────────────────────────────────────── */}
           {activeSection === 'salary' && (
             <div className="p-5">
-              <DateRangePicker
+              {/* <DateRangePicker
                 fromDate={fromDate} setFromDate={setFromDate}
                 toDate={toDate}     setToDate={setToDate}
                 onApply={fetchData} loading={loading}
-              />
+              /> */}
 
               {summaryData ? (
                 <>

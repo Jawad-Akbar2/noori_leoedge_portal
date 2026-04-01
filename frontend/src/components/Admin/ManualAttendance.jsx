@@ -92,9 +92,24 @@ async function saveRowApi({
 }
 
 // ─── DateNavigator (single date) ─────────────────────────────────────────────
-function DateNavigator({ value, onChange, label, showTodayBadge = false }) {
+function DateNavigator({
+  value,
+  onChange,
+  label,
+  showTodayBadge = false,
+  maxDate = null,
+}) {
   const hiddenRef = useRef(null);
   const isToday = value === getTodayDate();
+  // helper to compare dd/mm/yyyy strings
+  const isAfterMax = (dateStr) => {
+    if (!maxDate || !dateStr) return false;
+    const [d, m, y] = dateStr.split("/").map(Number);
+    const [md, mm, my] = maxDate.split("/").map(Number);
+    const a = new Date(y, m - 1, d);
+    const b = new Date(my, mm - 1, md);
+    return a > b;
+  };
 
   const shift = (dir) => {
     if (!value) return;
@@ -102,9 +117,21 @@ function DateNavigator({ value, onChange, label, showTodayBadge = false }) {
     if (!d || !m || !y) return;
     const dt = new Date(y, m - 1, d);
     dt.setDate(dt.getDate() + dir);
-    onChange(
-      `${String(dt.getDate()).padStart(2, "0")}/${String(dt.getMonth() + 1).padStart(2, "0")}/${dt.getFullYear()}`,
-    );
+    const next = `${String(dt.getDate()).padStart(2, "0")}/${String(dt.getMonth() + 1).padStart(2, "0")}/${dt.getFullYear()}`;
+    if (isAfterMax(next)) return; // block forward navigation past maxDate
+    onChange(next);
+  };
+
+  const handleTextChange = (val) => {
+    if (isAfterMax(val)) return; // block manual typing past maxDate
+    onChange(val);
+  };
+
+  const handlePickerChange = (e) => {
+    const [y, m, d] = e.target.value.split("-");
+    const formatted = `${d}/${m}/${y}`;
+    if (isAfterMax(formatted)) return;
+    onChange(formatted);
   };
 
   return (
@@ -126,7 +153,7 @@ function DateNavigator({ value, onChange, label, showTodayBadge = false }) {
           <input
             type="text"
             value={value}
-            onChange={(e) => onChange(e.target.value)}
+            onChange={(e) => handleTextChange(e.target.value)}
             placeholder="dd/mm/yyyy"
             className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 pr-8 text-center"
           />
@@ -134,10 +161,15 @@ function DateNavigator({ value, onChange, label, showTodayBadge = false }) {
             type="date"
             ref={hiddenRef}
             className="absolute opacity-0 pointer-events-none w-0 h-0"
-            onChange={(e) => {
-              const [y, m, d] = e.target.value.split("-");
-              onChange(`${d}/${m}/${y}`);
-            }}
+            max={
+              maxDate
+                ? (() => {
+                    const [d, m, y] = maxDate.split("/");
+                    return `${y}-${m}-${d}`;
+                  })()
+                : undefined
+            }
+            onChange={handlePickerChange}
           />
           <button
             type="button"
@@ -642,6 +674,7 @@ function AttendanceFormModal({
   useEscape(onClose);
   const isEdit = mode === "edit";
   const parseTime = (val) => (val && val !== "--" ? val : "");
+  const [selectedEmpLeftDate, setSelectedEmpLeftDate] = useState(null);
 
   const [form, setForm] = useState({
     empId: "",
@@ -686,6 +719,21 @@ function AttendanceFormModal({
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
+
+    // When employee selection changes, update left date constraint
+    if (name === "empId") {
+      const emp = employees.find((e) => e._id === value);
+      if (emp?.leftBusiness?.isLeft && emp?.leftBusiness?.leftDate) {
+        const ld = new Date(emp.leftBusiness.leftDate);
+        const dd = String(ld.getDate()).padStart(2, "0");
+        const mm = String(ld.getMonth() + 1).padStart(2, "0");
+        const yyyy = ld.getFullYear();
+        setSelectedEmpLeftDate(`${dd}/${mm}/${yyyy}`);
+      } else {
+        setSelectedEmpLeftDate(null);
+      }
+    }
+
     setForm((prev) => ({
       ...prev,
       [name]: type === "checkbox" ? checked : value,
@@ -789,6 +837,17 @@ function AttendanceFormModal({
       } else {
         resolvedEmpId = form.empId;
       }
+
+      if (!isEdit && selectedEmpLeftDate) {
+        const [fd, fm, fy] = form.date.split("/").map(Number);
+        const [ld, lm, ly] = selectedEmpLeftDate.split("/").map(Number);
+        if (new Date(fy, fm - 1, fd) > new Date(ly, lm - 1, ld)) {
+          return toast.error(
+            "Cannot add attendance after employee's last working date",
+          );
+        }
+      }
+
       await axios.post(
         "/api/attendance/save-row",
         {
@@ -874,6 +933,7 @@ function AttendanceFormModal({
             <DateNavigator
               value={form.date}
               onChange={(val) => setForm((prev) => ({ ...prev, date: val }))}
+              maxDate={!isEdit ? selectedEmpLeftDate : null}
             />
           </div>
           <div>
@@ -1122,7 +1182,7 @@ function AttendanceFormModal({
 
 // ─── Delete Confirm Modal ─────────────────────────────────────────────────────
 function DeleteConfirmModal({ record, onClose, onConfirm, deleting }) {
-   useEscape(onClose);
+  useEscape(onClose);
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm">
@@ -1195,7 +1255,9 @@ function MarkTab({ userRole, isSuperAdmin, isAdmin, isHybrid }) {
       setLoading(true);
       try {
         const [empRes, attRes] = await Promise.all([
-          axios.get("/api/employees?includeFrozen=true", { headers: authHeader() }),
+          axios.get("/api/employees?includeFrozen=true", {
+            headers: authHeader(),
+          }),
           axios.get(`/api/attendance/range?fromDate=${date}&toDate=${date}`, {
             headers: authHeader(),
           }),

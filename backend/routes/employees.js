@@ -1128,7 +1128,17 @@ router.patch("/:id/left-business", adminAuth, async (req, res) => {
       });
     }
 
-    const leftDate = new Date();
+
+    const leftDate = req.body.leftDate
+  ? new Date(req.body.leftDate)
+  : new Date();
+
+// Validate it's not in the future
+if (leftDate > new Date()) {
+  return res.status(400).json({ success: false, message: "Left date cannot be in the future." });
+}
+
+
     const scheduledDeletion = new Date(
       leftDate.getTime() + 30 * 24 * 60 * 60 * 1000,
     );
