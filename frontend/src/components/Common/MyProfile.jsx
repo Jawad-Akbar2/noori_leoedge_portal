@@ -784,7 +784,7 @@ export default function MyProfile() {
       ((endMin - startMin) / 60) *
       22 *
       parseFloat(form.hourlyRate)
-    ).toFixed(2);
+    ).toLocaleString("en-PK");
   };
 
   const SalaryRows = () => {

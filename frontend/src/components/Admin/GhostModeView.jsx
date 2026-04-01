@@ -10,7 +10,7 @@ import toast from 'react-hot-toast';
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
 const fmt = (n) =>
-  (n ?? 0).toLocaleString('en-PK', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  (n ?? 0).toLocaleString('en-PK');
 
 const toApiDate = (isoStr) => {
   if (!isoStr) return '';

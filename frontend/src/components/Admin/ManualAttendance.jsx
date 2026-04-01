@@ -58,7 +58,7 @@ const authHeader = () => ({
 // ─── Pure helpers ─────────────────────────────────────────────────────────────
 const safeTime = (v) => (v && v !== "--" ? v : "--");
 const emptyTime = (v) => (v && v !== "--" ? v : "");
-const pkr = (v) => `PKR ${Number(v || 0).toFixed(2)}`;
+const pkr = (v) => `PKR ${Number(v || 0).toLocaleString("en-PK")}`;
 const displayTime = (val) => (val && val !== "--" ? val : "--");
 
 function resolveEmpId(raw) {
@@ -1495,9 +1495,9 @@ function MarkTab({ userRole, isSuperAdmin, isAdmin, isHybrid }) {
         `"${r.inTime || ""}"`,
         `"${r.outTime || ""}"`,
         (r.financials?.hoursWorked || 0).toFixed(2),
-        (r.financials?.otAmount || 0).toFixed(2),
-        (r.financials?.deduction || 0).toFixed(2),
-        (r.financials?.finalDayEarning || 0).toFixed(2),
+        (r.financials?.otAmount || 0).toLocaleString("en-PK"),
+        (r.financials?.deduction || 0).toLocaleString("en-PK"),
+        (r.financials?.finalDayEarning || 0).toLocaleString("en-PK"),
         `"${r.lastModified || ""}"`,
       ].join(","),
     );
@@ -1621,7 +1621,7 @@ function MarkTab({ userRole, isSuperAdmin, isAdmin, isHybrid }) {
           <td className="px-3 py-2 text-right text-xs text-gray-600 whitespace-nowrap">
             {row.__isVirtual && !row.__dirty
               ? "—"
-              : (row.financials?.hoursWorked || 0).toFixed(2)}
+              : (row.financials?.hoursWorked || 0).toLocaleString("en-PK")}
           </td>
         )}
         {!isHybrid && (
@@ -1631,7 +1631,7 @@ function MarkTab({ userRole, isSuperAdmin, isAdmin, isHybrid }) {
             ) : (
               <div className="flex items-center justify-end gap-1">
                 <span className="text-blue-700">
-                  {(row.financials?.otAmount || 0).toFixed(2)}
+                  {(row.financials?.otAmount || 0).toLocaleString("en-PK")}
                 </span>
                 {editable && isAdmin && (
                   <button
@@ -1658,7 +1658,7 @@ function MarkTab({ userRole, isSuperAdmin, isAdmin, isHybrid }) {
             ) : (
               <div className="flex items-center justify-end gap-1">
                 <span className="text-red-700">
-                  {(row.financials?.deduction || 0).toFixed(2)}
+                  {(row.financials?.deduction || 0).toLocaleString("en-PK")}
                 </span>
                 {editable && isAdmin && (
                   <button
@@ -2263,10 +2263,10 @@ function ManageTab({ userRole, isSuperAdmin, isAdmin, isHybrid }) {
           `"${record.status || "--"}"`,
           `"${record.inTime ?? "--"}"`,
           `"${record.outTime ?? "--"}"`,
-          `"${record.financials?.hoursWorked?.toFixed(2) || "0.00"}"`,
-          `"${record.financials?.otAmount?.toFixed(2) || "0.00"}"`,
-          `"${record.financials?.deduction?.toFixed(2) || "0.00"}"`,
-          `"${record.financials?.finalDayEarning?.toFixed(2) || "0.00"}"`,
+          `"${record.financials?.hoursWorked?.toFixed(2) || "0"}"`,
+          `"${record.financials?.otAmount?.toLocaleString("en-PK") || "0"}"`,
+          `"${record.financials?.deduction?.toLocaleString("en-PK") || "0"}"`,
+          `"${record.financials?.finalDayEarning?.toLocaleString("en-PK") || "0"}"`,
           `"${record.lastModified || "--"}"`,
         ].join(","),
       );
@@ -2479,7 +2479,7 @@ function ManageTab({ userRole, isSuperAdmin, isAdmin, isHybrid }) {
                           </td>
                           {!isHybrid && (
                             <td className="px-4 py-3 text-right">
-                              {(record.financials?.hoursWorked || 0).toFixed(2)}
+                              {(record.financials?.hoursWorked || 0).toLocaleString("en-PK")}
                             </td>
                           )}
                           {!isHybrid && (
@@ -2491,7 +2491,7 @@ function ManageTab({ userRole, isSuperAdmin, isAdmin, isHybrid }) {
                                 className="inline-flex items-center gap-1 text-blue-700 hover:text-blue-900"
                               >
                                 PKR{" "}
-                                {(record.financials?.otAmount || 0).toFixed(2)}{" "}
+                                {(record.financials?.otAmount || 0).toLocaleString("en-PK")}{" "}
                                 <Eye size={12} />
                               </button>
                             </td>
@@ -2505,7 +2505,7 @@ function ManageTab({ userRole, isSuperAdmin, isAdmin, isHybrid }) {
                                 className="inline-flex items-center gap-1 text-red-700 hover:text-red-900"
                               >
                                 PKR{" "}
-                                {(record.financials?.deduction || 0).toFixed(2)}{" "}
+                                {(record.financials?.deduction || 0).toLocaleString("en-PK")}{" "}
                                 <Eye size={12} />
                               </button>
                             </td>
@@ -2515,7 +2515,7 @@ function ManageTab({ userRole, isSuperAdmin, isAdmin, isHybrid }) {
                               PKR{" "}
                               {(
                                 record.financials?.finalDayEarning || 0
-                              ).toFixed(2)}
+                              ).toLocaleString("en-PK")}
                             </td>
                           )}
                           <td className="px-4 py-3 text-xs text-gray-600">
@@ -2627,9 +2627,7 @@ function ManageTab({ userRole, isSuperAdmin, isAdmin, isHybrid }) {
                         {!isHybrid && (
                           <p>
                             <span className="font-medium">Earning:</span> PKR{" "}
-                            {(record.financials?.finalDayEarning || 0).toFixed(
-                              2,
-                            )}
+                            {(record.financials?.finalDayEarning || 0).toLocaleString("en-PK")}
                           </p>
                         )}
                         <p className="text-xs text-gray-500">

@@ -669,7 +669,7 @@ export default function PayrollReports() {
               <div key={key} className={`bg-${color}-50 p-4 rounded-lg border border-${color}-200`}>
                 <p className="text-sm text-gray-600">{label}</p>
                 <p className={`text-2xl font-bold text-${color}-600 mt-2`}>
-                PKR {(salaryTotals[key] || 0).toLocaleString("en-PK")}
+              PKR {Number(salaryTotals[key] || 0).toLocaleString("en-PK")}
                 </p>
               </div>
             ))}
@@ -707,10 +707,10 @@ export default function PayrollReports() {
                         <td className="px-4 py-2 font-medium">
                           {emp.name} <span className="text-xs text-gray-500">({emp.empNumber})</span>
                         </td>
-                        <td className="px-4 py-2 text-right">PKR {emp.baseSalary.toFixed(2)}</td>
-                        <td className="px-4 py-2 text-right text-red-600">PKR {emp.totalDeduction.toFixed(2)}</td>
-                        <td className="px-4 py-2 text-right text-green-600">PKR {emp.totalOt.toFixed(2)}</td>
-                        <td className="px-4 py-2 text-right font-semibold text-blue-600">PKR {emp.netPayable.toFixed(2)}</td>
+                        <td className="px-4 py-2 text-right">PKR {emp.baseSalary.toLocaleString("en-PK")}</td>
+                        <td className="px-4 py-2 text-right text-red-600">PKR {emp.totalDeduction.toLocaleString("en-PK")}</td>
+                        <td className="px-4 py-2 text-right text-green-600">PKR {emp.totalOt.toLocaleString("en-PK")}</td>
+                        <td className="px-4 py-2 text-right font-semibold text-blue-600">PKR {emp.netPayable.toLocaleString("en-PK")}</td>
                         <td className="px-4 py-2">
                           <button onClick={() => toggleEmployeeExpansion(emp.empId)}
                             className="text-blue-600 hover:text-blue-800 text-sm font-medium">
@@ -739,10 +739,10 @@ export default function PayrollReports() {
                                       <td className="px-3 py-2 border">{day.inTime}</td>
                                       <td className="px-3 py-2 border">{day.outTime}</td>
                                       <td className="px-3 py-2 border text-right">{day.hoursWorked.toFixed(2)}</td>
-                                      <td className="px-3 py-2 border text-right">PKR {day.basePay.toFixed(2)}</td>
-                                      <td className="px-3 py-2 border text-right text-red-600">PKR {day.deduction.toFixed(2)}</td>
-                                      <td className="px-3 py-2 border text-right text-green-600">PKR {day.otAmount.toFixed(2)}</td>
-                                      <td className="px-3 py-2 border text-right font-semibold">PKR {day.finalDayEarning.toFixed(2)}</td>
+                                      <td className="px-3 py-2 border text-right">PKR {day.basePay.toLocaleString('en-PK')}</td>
+                                      <td className="px-3 py-2 border text-right text-red-600">PKR {day.deduction.toLocaleString("en-PK")}</td>
+                                      <td className="px-3 py-2 border text-right text-green-600">PKR {day.otAmount.toLocaleString("en-PK")}</td>
+                                      <td className="px-3 py-2 border text-right font-semibold">PKR {day.finalDayEarning.toLocaleString("en-PK")}</td>
                                     </tr>
                                   ))}
                                 </tbody>
