@@ -134,7 +134,7 @@ function RootRedirect() {
   const { user, role, loading } = useAuth();
   if (loading) return null;
   if (user && role) {
-    if (role === 'admin' || role === 'superadmin') return <Navigate to="/admin/dashboard"    replace />;
+    if (role === 'admin' || role === 'superadmin' || role === 'owner') return <Navigate to="/admin/dashboard"    replace />;
     if (role === 'hybrid')                         return <Navigate to="/hybrid/dashboard"   replace />;
     return                                                <Navigate to="/employee/dashboard" replace />;
   }
@@ -170,7 +170,7 @@ export default function App() {
             <Route
               path="/admin/*"
               element={
-                <ProtectedRoute requiredRole={['admin', 'superadmin']}>
+                <ProtectedRoute requiredRole={['admin', 'superadmin', 'owner']}>
                   <AdminLayoutWrapper />
                 </ProtectedRoute>
               }

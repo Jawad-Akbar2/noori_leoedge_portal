@@ -11,7 +11,7 @@ import { useAuth } from "../../context/AuthContext.js";
 
 /** Returns the correct home dashboard path for any role */
 function homePath(role) {
-  if (role === "admin" || role === "superadmin") return "/admin/dashboard";
+  if (role === "admin" || role === "superadmin" || role === "owner") return "/admin/dashboard";
   if (role === "hybrid")                         return "/hybrid/dashboard";
   return "/employee/dashboard";
 }

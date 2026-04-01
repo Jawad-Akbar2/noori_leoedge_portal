@@ -61,7 +61,7 @@ export default function Header({ onMenuClick }) {
   const handleProfile = () => {
     const role = user?.role;
     navigate(
-      role === "admin" || role === "superadmin"
+      role === "admin" || role === "superadmin" || role === "owner"
         ? "/admin/profile"
         : "/employee/profile"
     );

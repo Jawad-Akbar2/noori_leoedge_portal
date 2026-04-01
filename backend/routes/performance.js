@@ -10,17 +10,18 @@ import { countWorkingDays } from '../utils/helpers.js';
 
 const router = express.Router();
 
-const SYSTEM_ROLES = ['superadmin'];
+const SYSTEM_ROLES = ['superadmin', 'owner'];
 
 /**
  * Scoped Mongoose filter for payroll-eligible employees.
  *
  *   superadmin caller -> admin + employee  (excludes only superadmin)
- *   admin caller      -> employee only     (excludes admin + superadmin)
+ *   owner caller      -> admin + employee  (excludes only owner)
+ *   admin caller      -> employee only     (excludes admin + superadmin + owner)
  */
 const payrollFilter = (callerRole, extra = {}) => ({
-  role:       callerRole === 'superadmin'
-                ? { $nin: ['superadmin'] }
+  role:       callerRole === 'superadmin' || callerRole === 'owner'
+                ? { $nin: ['superadmin', 'owner'] }
                 : 'employee',
   status:     { $in: ["Active", "Frozen"] },
   isArchived: false,
@@ -108,7 +109,7 @@ router.get('/summary', adminAuth, async (req, res) => {
     let records = await PerformanceRecord.find(prQuery).lean();
 
     // If using cached records, filter by caller role so admin doesn't see other admins
-    if (records.length > 0 && req.userRole !== 'superadmin') {
+    if (records.length > 0 && req.userRole !== 'superadmin' && req.userRole !== 'owner') {
       // Need to join with Employee to check role — use empId list approach
       const employeeIds = await Employee.find(payrollFilter(req.userRole))
         .distinct('_id');
@@ -215,8 +216,8 @@ router.get('/:empId', adminAuth, async (req, res) => {
     }
 
     // Scope by caller role
-    const roleFilter = req.userRole === 'superadmin'
-      ? { role: { $nin: ['superadmin'] } }
+    const roleFilter = req.userRole === 'superadmin' || req.userRole === 'owner'
+      ? { role: { $nin: ['superadmin', 'owner'] } }
       : { role: 'employee' };
 
     const employee = await Employee.findOne({
@@ -384,7 +385,7 @@ router.patch('/:id/score', adminAuth, async (req, res) => {
     if (!record) return res.status(404).json({ success: false, message: 'Performance record not found' });
 
     // Admin cannot override performance scores for other admins/superadmins
-    if (req.userRole !== 'superadmin') {
+    if (req.userRole !== 'superadmin' && req.userRole !== 'owner') {
       const emp = await Employee.findOne({ _id: record.empId, role: 'employee' });
       if (!emp) {
         return res.status(403).json({

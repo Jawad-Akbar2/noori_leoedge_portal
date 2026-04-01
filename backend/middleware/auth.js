@@ -81,7 +81,7 @@ async function adminAuth(req, res, next) {
     const user = await resolveUser(req, res);
     if (!user) return;
 
-    if (!["admin", "superadmin", "hybrid"].includes(user.role)) {
+    if (!["admin", "superadmin", "hybrid", "owner"].includes(user.role)) {
       return res
         .status(403)
         .json({ success: false, message: "Admin access required" });

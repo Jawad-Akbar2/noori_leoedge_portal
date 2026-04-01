@@ -7,7 +7,7 @@ import { Calendar, Download } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 const COLORS = ['#10b981', '#f59e0b', '#3b82f6', '#ef4444'];
-const PRIVILEGED_ROLES = ['admin', 'superadmin'];
+const PRIVILEGED_ROLES = ['admin', 'superadmin', 'owner'];
 
 const formatDateToDisplay = (dateStr) => {
   if (!dateStr) return '';
@@ -669,7 +669,7 @@ export default function PayrollReports() {
               <div key={key} className={`bg-${color}-50 p-4 rounded-lg border border-${color}-200`}>
                 <p className="text-sm text-gray-600">{label}</p>
                 <p className={`text-2xl font-bold text-${color}-600 mt-2`}>
-                  PKR {(salaryTotals[key] || 0).toFixed(2)}
+                PKR {(salaryTotals[key] || 0).toLocaleString("en-PK", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </p>
               </div>
             ))}

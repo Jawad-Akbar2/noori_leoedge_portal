@@ -31,7 +31,7 @@ import TimePicker from "../Common/TimePicker.jsx";
 import { useEscape } from "../../context/EscapeStack";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
-const PRIVILEGED_ROLES = ["admin", "superadmin"];
+const PRIVILEGED_ROLES = ["admin", "superadmin", "owner"];
 const STATUS_OPTIONS = ["Present", "Late", "Absent", "Leave"];
 const STATUS_STYLES = {
   Present: "bg-green-100  text-green-800  border-green-200",
@@ -2745,9 +2745,11 @@ function ManageTab({ userRole, isSuperAdmin, isAdmin, isHybrid }) {
 export default function ManualAttendance() {
   const [activeTab, setActiveTab] = useState("manage");
   const userRole = getCurrentUserRole();
-  const isSuperAdmin = userRole === "superadmin";
+  const isSuperAdmin = userRole === "superadmin"  || userRole === "owner";
   const isAdmin = userRole === "admin" || isSuperAdmin;
+  const isOwner = userRole === "owner";
   const isHybrid = userRole === "hybrid";
+  
   const tabProps = { userRole, isSuperAdmin, isAdmin, isHybrid };
 
   return (

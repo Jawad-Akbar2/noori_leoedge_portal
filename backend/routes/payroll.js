@@ -14,15 +14,16 @@ import {
 const router = express.Router();
 
 // ─── Only superadmin is login-only — excluded from all payroll/attendance logic
-const SYSTEM_ROLES = ["superadmin"];
+const SYSTEM_ROLES = ["superadmin", "owner"];
 
 /**
  * payrollFilter:
  *   superadmin caller → admin + employee (excludes only superadmin)
+ *   owner caller      → admin + employee (excludes only owner)
  *   admin caller      → employee only
  */
 const payrollFilter = (callerRole, extra = {}) => ({
-  role: callerRole === "superadmin" ? { $nin: ["superadmin"] } : "employee",
+  role: callerRole === "superadmin" || callerRole === "owner" ? { $nin: ["superadmin", "owner"] } : "employee",
   status: { $in: ["Active", "Frozen"] },
   isArchived: false,
   isDeleted: false,
@@ -585,7 +586,7 @@ router.get("/employee-breakdown/:empId", adminAuth, async (req, res) => {
 
     const roleFilter =
       req.userRole === "superadmin"
-        ? { role: { $nin: ["superadmin"] } }
+        ? { role: { $nin: ["superadmin", "owner"] } }
         : { role: "employee" };
 
     const [emp, records] = await Promise.all([

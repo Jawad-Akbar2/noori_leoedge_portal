@@ -21,7 +21,7 @@ export default function Login() {
 
   useEffect(() => {
     if (user && role) {
-      navigate(role === 'admin' || role === 'superadmin' ? '/admin/dashboard' : '/employee/dashboard', { replace: true });
+      navigate(role === 'admin' || role === 'superadmin' || role === 'owner' ? '/admin/dashboard' : '/employee/dashboard', { replace: true });
     }
   }, [user, role, navigate]);
 
@@ -53,7 +53,7 @@ export default function Login() {
 
       toast.success(`Welcome, ${userData.firstName}!`);
       navigate(
-        userData.role === 'admin' || userData.role === 'superadmin' ? '/admin/dashboard' : '/employee/dashboard',
+        userData.role === 'admin' || userData.role === 'superadmin' || userData.role === 'owner' ? '/admin/dashboard' : '/employee/dashboard',
         { replace: true }
       );
     } catch (err) {

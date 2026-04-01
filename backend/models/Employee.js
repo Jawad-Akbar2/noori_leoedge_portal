@@ -3,7 +3,7 @@
 import mongoose from "mongoose";
 import bcryptjs from "bcryptjs";
 
-const SYSTEM_ROLES = ["superadmin"];
+const SYSTEM_ROLES = [ "owner", "superadmin"];
 const PAYROLL_ROLES = ["admin", "employee", "hybrid"];
 
 // ─── Reusable sub-schema for a single uploaded file ───────────────────────────
@@ -66,7 +66,7 @@ const employeeSchema = new mongoose.Schema(
 
     role: {
       type: String,
-      enum: ["superadmin", "admin", "employee", "hybrid"],
+      enum: ["superadmin", "admin", "employee", "hybrid","owner"],
       default: "employee",
       index: true,
     },
@@ -182,16 +182,6 @@ const employeeSchema = new mongoose.Schema(
 // ─── Cross-field validation ───────────────────────────────────────────────────
 
 employeeSchema.pre("validate", function (next) {
-  if (SYSTEM_ROLES.includes(this.role)) {
-    this.salaryType = null;
-    this.hourlyRate = null;
-    this.monthlySalary = null;
-    if (this.shift) {
-      this.shift.start = null;
-      this.shift.end = null;
-    }
-    return next();
-  }
 
   if (PAYROLL_ROLES.includes(this.role)) {
     const errors = [];

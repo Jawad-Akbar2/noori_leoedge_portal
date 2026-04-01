@@ -18,11 +18,11 @@ const EMPLOYEES = [
   // The pre-validate hook in Employee.js enforces null for these fields.
   {
     email:          'waleed@leoedgeconsulting.com',
-    employeeNumber: 'superadmin001',
+    employeeNumber: 'owner001',
     firstName:      'Waleed',
     lastName:       'Raja',
     department:     'Manager',
-    role:           'superadmin',
+    role:           'owner',
     joiningDate:    new Date(),
     status:         'Active',
     password:       'Admin@123456'

@@ -119,7 +119,7 @@ const IdCardSide = ({
 
 // currentUserRole is passed from ManageEmployees
 export default function AddEmployeeModal({ onClose, onSave, currentUserRole }) {
-  const isSuperAdmin = currentUserRole === "superadmin";
+  const isSuperAdmin = currentUserRole === "superadmin" || currentUserRole === "owner";
 
   const [activeTab, setActiveTab] = useState("basic");
   const [profilePicture, setProfilePicture] = useState(null);
@@ -311,7 +311,7 @@ export default function AddEmployeeModal({ onClose, onSave, currentUserRole }) {
 
   // Role badge preview shown when superadmin selects admin/superadmin role
   const selectedRoleIsPrivileged =
-    isSuperAdmin && ["admin", "superadmin"].includes(formData.role);
+    isSuperAdmin && ["admin", "superadmin", "owner"].includes(formData.role);
 
   return (
     <>

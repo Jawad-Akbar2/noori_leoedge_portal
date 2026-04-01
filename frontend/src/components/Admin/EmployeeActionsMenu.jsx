@@ -32,7 +32,7 @@ export default function EmployeeActionsMenu({
   const [showEditModal, setShowEditModal] = useState(false);
   const [showGhostMode, setShowGhostMode] = useState(false);
 
-  const isSuperAdmin  = currentUserRole === 'superadmin';
+  const isSuperAdmin  = currentUserRole === 'superadmin' || currentUserRole === 'owner';
   const targetIsAdmin = employee?.role === 'admin' || employee?.role === 'superadmin';
 
   // Admin cannot act on other admins or superadmins — all action buttons are hidden.

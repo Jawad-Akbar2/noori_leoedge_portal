@@ -15,10 +15,10 @@ import GhostModeView from "./GhostModeView";
 import toast from "react-hot-toast";
 
 // ─── Role helpers ─────────────────────────────────────────────────────────────
-const PRIVILEGED_ROLES = ["admin", "superadmin"];
+const PRIVILEGED_ROLES = ["admin", "superadmin", "owner"];
 
 function canManage(actorRole, targetRole) {
-  if (actorRole === "superadmin") return true;
+  if (actorRole === "superadmin" || actorRole === "owner") return true;
   if (actorRole === "admin") return !PRIVILEGED_ROLES.includes(targetRole);
   return false;
 }
@@ -41,6 +41,12 @@ function getRoleBadge(role) {
       return (
         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-semibold bg-purple-100 text-purple-800">
           <Shield size={10} /> Superadmin
+        </span>
+      );
+    case "owner":
+      return (
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-semibold bg-purple-100 text-purple-800">
+          <Shield size={10} /> Owner
         </span>
       );
     case "admin":
@@ -102,16 +108,16 @@ export default function ManageEmployees() {
   const [currentUserId, setCurrentUserId] = useState(initId);
   const [currentUserRole, setCurrentUserRole] = useState(initRole);
   const [leftDate, setLeftDate] = useState(() => {
-  const today = new Date();
-  return today.toISOString().slice(0, 10); // yyyy-mm-dd for the input
-});
+    const today = new Date();
+    return today.toISOString().slice(0, 10); // yyyy-mm-dd for the input
+  });
 
   // ── Reason modal state ────────────────────────────────────────────────────
   const [showReasonModal, setShowReasonModal] = useState(false);
   const [reasonTarget, setReasonTarget] = useState(null); // employee
   const [reasonText, setReasonText] = useState("");
 
-  const isSuperAdmin = currentUserRole === "superadmin";
+  const isSuperAdmin = currentUserRole === "superadmin" || currentUserRole === "owner";
   const isAdmin = currentUserRole === "admin" || isSuperAdmin;
 
   const filterEmployees = useCallback(
@@ -310,14 +316,14 @@ export default function ManageEmployees() {
   };
 
   // ─── Left-business actions ────────────────────────────────────────────────
- const openMarkLeftModal = (employee) => {
-  if (!guardAction(employee, "mark as left")) return;
-  setReasonTarget(employee);
-  setReasonText("");
-  setLeftDate(new Date().toISOString().slice(0, 10));
-  setShowReasonModal(true);
-  setOpenMenuId(null);
-};
+  const openMarkLeftModal = (employee) => {
+    if (!guardAction(employee, "mark as left")) return;
+    setReasonTarget(employee);
+    setReasonText("");
+    setLeftDate(new Date().toISOString().slice(0, 10));
+    setShowReasonModal(true);
+    setOpenMenuId(null);
+  };
 
   const confirmMarkLeft = async () => {
     if (!reasonTarget) return;
@@ -325,7 +331,7 @@ export default function ManageEmployees() {
       const token = localStorage.getItem("token");
       await axios.patch(
         `/api/employees/${reasonTarget._id}/left-business`,
-         { reason: reasonText, leftDate },
+        { reason: reasonText, leftDate },
         { headers: { Authorization: `Bearer ${token}` } },
       );
       toast.success(
@@ -658,7 +664,7 @@ export default function ManageEmployees() {
       </div>
 
       {/* Table */}
-     <div className="bg-white rounded-xl shadow-sm border border-gray-100">
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100">
         {loading ? (
           <div className="p-12 text-center">
             <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mb-4" />
@@ -696,7 +702,7 @@ export default function ManageEmployees() {
         ) : (
           <>
             {/* Desktop */}
-<div className="hidden md:block overflow-x-auto overflow-y-visible">
+            <div className="hidden md:block overflow-x-auto overflow-y-visible">
               <table className="w-full text-sm">
                 <thead className="bg-gray-50 border-b border-gray-100">
                   <tr>
@@ -784,17 +790,22 @@ export default function ManageEmployees() {
                         </td>
                         <td className="px-4 py-3 relative text-center">
                           <button
-                          onClick={(e) => {
-  e.stopPropagation();
-  if (openMenuId !== employee._id) {
-    const rect = e.currentTarget.getBoundingClientRect();
-    setMenuPos({
-      top: rect.bottom + window.scrollY + 4,
-      right: window.innerWidth - rect.right,
-    });
-  }
-  setOpenMenuId(openMenuId === employee._id ? null : employee._id);
-}}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (openMenuId !== employee._id) {
+                                const rect =
+                                  e.currentTarget.getBoundingClientRect();
+                                setMenuPos({
+                                  top: rect.bottom + window.scrollY + 4,
+                                  right: window.innerWidth - rect.right,
+                                });
+                              }
+                              setOpenMenuId(
+                                openMenuId === employee._id
+                                  ? null
+                                  : employee._id,
+                              );
+                            }}
                             className="text-gray-400 hover:text-gray-600 inline-block p-1.5 rounded-lg hover:bg-gray-100 transition"
                           >
                             <MoreVertical size={16} />
@@ -977,17 +988,17 @@ export default function ManageEmployees() {
               </div>
 
               <div>
-  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
-    Last Working Date
-  </label>
-  <input
-    type="date"
-    value={leftDate}
-    max={new Date().toISOString().slice(0, 10)}
-    onChange={(e) => setLeftDate(e.target.value)}
-    className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-400 focus:outline-none text-sm"
-  />
-</div>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
+                  Last Working Date
+                </label>
+                <input
+                  type="date"
+                  value={leftDate}
+                  max={new Date().toISOString().slice(0, 10)}
+                  onChange={(e) => setLeftDate(e.target.value)}
+                  className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-400 focus:outline-none text-sm"
+                />
+              </div>
             </div>
             <div className="p-6 pt-0 flex gap-3">
               <button

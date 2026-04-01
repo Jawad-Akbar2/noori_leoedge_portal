@@ -26,13 +26,15 @@ const publicEmployee = (emp) => {
 };
 
 const roleVisibilityFilter = (requestingRole) => {
-  if (requestingRole === "superadmin") return {};
+  if (requestingRole === "superadmin" || requestingRole === "owner") {
+    return { role: { $ne: "owner" } }; // 👈 exclude owner
+  }
   return { role: "employee" };
 };
 
 const resolveNewRole = (creatorRole, requestedRole) => {
-  if (creatorRole === "superadmin") {
-    return ["employee", "admin", "superadmin"].includes(requestedRole)
+  if (creatorRole === "superadmin" || creatorRole === "owner") {
+    return ["employee", "admin", "superadmin", "owner"].includes(requestedRole)
       ? requestedRole
       : "employee";
   }
@@ -646,6 +648,19 @@ router.post("/", adminAuth, async (req, res) => {
 
     const resolvedRole = resolveNewRole(req.role, requestedRole);
 
+    let finalShift = shift || { start: "09:00", end: "18:00" };
+    let finalSalaryType = salaryType || "hourly";
+    let finalHourlyRate = parseFloat(hourlyRate) || 0;
+    let finalMonthlySalary =
+      finalSalaryType === "monthly" ? parseFloat(monthlySalary) : null;
+
+    if (["superadmin"].includes(resolvedRole)) {
+      finalShift = { start: null, end: null };
+      finalSalaryType = null;
+      finalHourlyRate = null;
+      finalMonthlySalary = null;
+    }
+
     const existing = await Employee.findOne({
       $or: [
         { email: email.toLowerCase().trim() },
@@ -701,11 +716,11 @@ router.post("/", adminAuth, async (req, res) => {
       },
       role: resolvedRole,
       joiningDate: parsedJoiningDate,
-      shift: shift || { start: "09:00", end: "18:00" },
-      salaryType: resolvedSalaryType,
-      hourlyRate: parseFloat(hourlyRate) || 0,
-      monthlySalary:
-        resolvedSalaryType === "monthly" ? parseFloat(monthlySalary) : null,
+
+      shift: finalShift,
+      salaryType: finalSalaryType,
+      hourlyRate: finalHourlyRate,
+      monthlySalary: finalMonthlySalary,
       status: "Inactive",
       inviteToken,
       inviteTokenExpires: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
@@ -731,7 +746,8 @@ router.put("/:id", adminAuth, async (req, res) => {
   try {
     if (
       String(req.userId) === String(req.params.id) &&
-      req.role !== "superadmin"
+      req.role !== "superadmin" &&
+      req.role !== "owner"
     ) {
       return res.status(403).json({
         success: false,
@@ -801,9 +817,14 @@ router.put("/:id", adminAuth, async (req, res) => {
     });
 
     // ── Role (superadmin only) ─────────────────────────────────────────────────
-    if (req.body.role !== undefined && req.role === "superadmin") {
+    if (
+      req.body.role !== undefined &&
+      (req.role === "superadmin" || req.role === "owner")
+    ) {
       if (
-        !["employee", "admin", "superadmin", "hybrid"].includes(req.body.role)
+        !["employee", "admin", "superadmin", "owner", "hybrid"].includes(
+          req.body.role,
+        )
       ) {
         return res
           .status(400)
@@ -957,6 +978,13 @@ router.put("/:id", adminAuth, async (req, res) => {
       }
     }
 
+    if (["owner"].includes(employee.role)) {
+      employee.shift = { start: null, end: null };
+      employee.salaryType = null;
+      employee.hourlyRate = null;
+      employee.monthlySalary = null;
+    }
+
     await employee.save();
     return res.json({
       success: true,
@@ -973,7 +1001,6 @@ router.put("/:id", adminAuth, async (req, res) => {
     res.status(500).json({ success: false, message: err.message });
   }
 });
-
 
 // ─── PATCH /api/employees/:id/archive ────────────────────────────────────────
 router.patch("/:id/archive", adminAuth, async (req, res) => {
@@ -1128,16 +1155,17 @@ router.patch("/:id/left-business", adminAuth, async (req, res) => {
       });
     }
 
-
     const leftDate = req.body.leftDate
-  ? new Date(req.body.leftDate)
-  : new Date();
+      ? new Date(req.body.leftDate)
+      : new Date();
 
-// Validate it's not in the future
-if (leftDate > new Date()) {
-  return res.status(400).json({ success: false, message: "Left date cannot be in the future." });
-}
-
+    // Validate it's not in the future
+    if (leftDate > new Date()) {
+      return res.status(400).json({
+        success: false,
+        message: "Left date cannot be in the future.",
+      });
+    }
 
     const scheduledDeletion = new Date(
       leftDate.getTime() + 30 * 24 * 60 * 60 * 1000,

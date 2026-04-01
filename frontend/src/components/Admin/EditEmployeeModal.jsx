@@ -118,7 +118,7 @@ const IdCardSide = ({ label, side, currentFile, onUpload, onDelete, isLoading })
 // ═════════════════════════════════════════════════════════════════════════════
 
 export default function EditEmployeeModal({ employee, onClose, onSave, currentUserRole }) {
-  const isSuperAdmin = currentUserRole === 'superadmin';
+  const isSuperAdmin = currentUserRole === 'superadmin' || currentUserRole === 'owner';
   const targetRole   = employee?.role || 'employee';
 
   const [activeTab,    setActiveTab]    = useState('basic');
@@ -382,7 +382,7 @@ export default function EditEmployeeModal({ employee, onClose, onSave, currentUs
     </div>
   );
 
-  const editingPrivileged = ['admin','superadmin'].includes(targetRole);
+  const editingPrivileged = ['admin','superadmin', 'owner'].includes(targetRole);
 
   const TABS = [
     { key: 'basic', label: 'Basic Info' },
@@ -488,13 +488,13 @@ export default function EditEmployeeModal({ employee, onClose, onSave, currentUs
                 {isSuperAdmin ? (
                   <Field label="Role" required>
                     <select name="role" value={formData.role} onChange={handleInputChange} disabled={loading}
-                      className={inp(`border-gray-300 ${['admin','superadmin'].includes(formData.role) ? 'border-purple-400 bg-purple-50 font-medium text-purple-900' : ''}`)}>
+                      className={inp(`border-gray-300 ${['admin','superadmin', 'owner'].includes(formData.role) ? 'border-purple-400 bg-purple-50 font-medium text-purple-900' : ''}`)}>
                       <option value="employee">Employee</option>
                       <option value="admin">Admin</option>
                       <option value="superadmin">Superadmin</option>
                       <option value="hybrid">Hybrid</option>
                     </select>
-                    {['admin','superadmin'].includes(formData.role) && (
+                    {['admin','superadmin', 'owner'].includes(formData.role) && (
                       <p className="text-xs text-purple-700 mt-1 flex items-center gap-1"><Shield size={10} /> {formData.role}-level system access</p>
                     )}
                   </Field>

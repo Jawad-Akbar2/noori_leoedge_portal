@@ -20,7 +20,7 @@ import {
 const router = express.Router();
 
 // ─── Only superadmin is login-only — excluded from attendance/payroll logic ───
-const SYSTEM_ROLES = ["superadmin"];
+const SYSTEM_ROLES = ["superadmin", "owner"];
 
 const payrollEmployeeFilter = (extra = {}) => ({
   role: { $nin: SYSTEM_ROLES },
