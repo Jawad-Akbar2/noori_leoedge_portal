@@ -191,7 +191,8 @@ export default function AddEmployeeModal({ onClose, onSave, currentUserRole }) {
       ((endMin - startMin) / 60) *
       22 *
       parseFloat(formData.hourlyRate)
-    ).toFixed(2);
+    ).toLocaleString("en-PK")
+                      
   };
 
   const isValidTime = (time) => /^([0-1][0-9]|2[0-3]):[0-5][0-9]$/.test(time);
@@ -685,10 +686,7 @@ export default function AddEmployeeModal({ onClose, onSave, currentUserRole }) {
                         Fixed Monthly Salary:
                       </p>
                       <p className="text-3xl font-bold text-blue-600">
-                        PKR{" "}
-                        {formData.monthlySalary
-                          ? parseFloat(formData.monthlySalary).toFixed(2)
-                          : "0.00"}
+                        PKR {(formData.monthlySalary || 0).toLocaleString( { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </p>
                       <p className="text-xs text-gray-500 mt-2">
                         Pro-rated by actual working days attended each pay

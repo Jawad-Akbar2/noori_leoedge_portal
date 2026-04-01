@@ -30,10 +30,7 @@ const isoToDisplay = (isoStr) => {
 
 /** PKR number formatter */
 const pkr = (val) =>
-  (val ?? 0).toLocaleString("en-PK", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
+  (val ?? 0).toLocaleString("en-PK");
 
 /** Default pay-period start: 18th of current (or prior) month */
 const defaultFromDate = () => {
