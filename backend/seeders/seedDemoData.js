@@ -287,7 +287,7 @@ async function seedDemoData() {
 
     // ── Load all active, non-deleted employees ─────────────────────────────
     const allEmployees = await Employee.find({
-      status:     'Active',
+      status:    { $in: ["Active", "Frozen"] },
       isArchived: false,
       isDeleted:  false
     });

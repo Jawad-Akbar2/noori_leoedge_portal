@@ -48,17 +48,6 @@ async function resolveUser(req, res) {
     }
   }
 
-  // Frozen accounts cannot access anything
-  if (user.status === "Frozen") {
-    res
-      .status(403)
-      .json({
-        success: false,
-        message: "Account is frozen. Contact admin/super admin.",
-      });
-    return null;
-  }
-
   // Role is the source of truth from the DB, not the token payload.
   req.user = user;
   req.userId = String(user._id);
@@ -121,7 +110,7 @@ async function employeeAuth(req, res, next) {
         .json({ success: false, message: "Employee access required" });
     }
 
-    if (user.status !== "Active") {
+    if (user.status !== "Active" && user.status !== "Frozen") {
       return res
         .status(403)
         .json({ success: false, message: "Account is not active" });

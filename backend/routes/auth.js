@@ -57,13 +57,7 @@ router.post('/login', async (req, res) => {
       return res.status(401).json({ success: false, message: 'Invalid credentials' });
     }
 
-    // Frozen accounts cannot log in at all
-    if (employee.status === 'Frozen') {
-      return res.status(403).json({
-        success: false,
-        message: 'Account is frozen. Please contact your administrator.'
-      });
-    }
+   
 
     // Inactive + no invite token = never activated
     if (employee.status === 'Inactive' && !employee.inviteToken) {

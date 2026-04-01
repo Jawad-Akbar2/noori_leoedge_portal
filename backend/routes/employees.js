@@ -527,14 +527,27 @@ router.get("/", adminAuth, async (req, res) => {
       department,
       search,
       includeArchived = "false",
+      includeFrozen = "false", // 👈 NEW
       page = 1,
       limit = 200,
     } = req.query;
 
     const query = { isDeleted: false, ...roleVisibilityFilter(req.role) };
+
     if (includeArchived !== "true") query.isArchived = false;
-    if (status) query.status = status;
+
+    // 🔥 Key Logic
+    if (!includeFrozen) {
+      query.status = "Active"; // default
+    }
+
+    // Optional override
+    if (status && ["Active", "Frozen"].includes(status)) {
+      query.status = status;
+    }
+
     if (department) query.department = department;
+
     if (search) {
       query.$or = [
         { firstName: { $regex: search, $options: "i" } },
@@ -545,6 +558,7 @@ router.get("/", adminAuth, async (req, res) => {
     }
 
     const skip = (Number(page) - 1) * Number(limit);
+
     const [employees, total] = await Promise.all([
       Employee.find(query)
         .select("-password -tempPassword -inviteToken -inviteTokenExpires")
@@ -960,41 +974,6 @@ router.put("/:id", adminAuth, async (req, res) => {
   }
 });
 
-// ─── PATCH /api/employees/:id/freeze ─────────────────────────────────────────
-router.patch("/:id/freeze", adminAuth, async (req, res) => {
-  try {
-    if (String(req.userId) === String(req.params.id)) {
-      return res.status(403).json({
-        success: false,
-        message: "You cannot freeze your own account",
-      });
-    }
-    const employee = await Employee.findOne({
-      _id: req.params.id,
-      isDeleted: false,
-      ...roleVisibilityFilter(req.role),
-    });
-    if (!employee)
-      return res
-        .status(404)
-        .json({ success: false, message: "Employee not found" });
-    if (employee.status === "Inactive") {
-      return res.status(400).json({
-        success: false,
-        message: "Cannot freeze an inactive account.",
-      });
-    }
-    employee.status = employee.status === "Frozen" ? "Active" : "Frozen";
-    await employee.save();
-    return res.json({
-      success: true,
-      message: `Employee ${employee.status === "Frozen" ? "frozen" : "unfrozen"}`,
-      employee: publicEmployee(employee),
-    });
-  } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
-  }
-});
 
 // ─── PATCH /api/employees/:id/archive ────────────────────────────────────────
 router.patch("/:id/archive", adminAuth, async (req, res) => {

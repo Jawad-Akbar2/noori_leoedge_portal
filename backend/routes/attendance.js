@@ -24,7 +24,7 @@ const SYSTEM_ROLES = ["superadmin"];
 
 const payrollEmployeeFilter = (extra = {}) => ({
   role: { $nin: SYSTEM_ROLES },
-  status: "Active",
+  status: { $in: ["Active", "Frozen"] },
   isArchived: false,
   isDeleted: false,
   ...extra,

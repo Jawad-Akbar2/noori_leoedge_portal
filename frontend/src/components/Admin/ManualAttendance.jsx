@@ -672,7 +672,7 @@ function AttendanceFormModal({
     if (!isEdit) {
       setLoadingEmp(true);
       axios
-        .get("/api/employees?status=Active", { headers: authHeader() })
+        .get("/api/employees?includeFrozen=true", { headers: authHeader() })
         .then((res) => {
           let list = res.data?.employees || [];
           if (currentUserRole === "admin")
@@ -1195,7 +1195,7 @@ function MarkTab({ userRole, isSuperAdmin, isAdmin, isHybrid }) {
       setLoading(true);
       try {
         const [empRes, attRes] = await Promise.all([
-          axios.get("/api/employees?status=Active", { headers: authHeader() }),
+          axios.get("/api/employees?includeFrozen=true", { headers: authHeader() }),
           axios.get(`/api/attendance/range?fromDate=${date}&toDate=${date}`, {
             headers: authHeader(),
           }),

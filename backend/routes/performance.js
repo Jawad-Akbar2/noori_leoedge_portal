@@ -22,7 +22,7 @@ const payrollFilter = (callerRole, extra = {}) => ({
   role:       callerRole === 'superadmin'
                 ? { $nin: ['superadmin'] }
                 : 'employee',
-  status:     'Active',
+  status:     { $in: ["Active", "Frozen"] },
   isArchived: false,
   isDeleted:  false,
   ...extra
