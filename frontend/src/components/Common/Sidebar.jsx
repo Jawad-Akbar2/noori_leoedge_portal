@@ -214,7 +214,7 @@ const UserProfile = ({ user, color, isCollapsed, onLogout }) => {
           {!isCollapsed && (
             <div className="flex-1 min-w-0">
               <p className="text-white text-sm font-semibold truncate">
-                {user?.name || 'Guest User'}
+                {user?.firstName || 'Guest User'}
               </p>
               <p className="text-white/70 text-xs truncate">
                 {user?.email || 'user@example.com'}
