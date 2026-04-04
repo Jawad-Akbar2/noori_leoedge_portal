@@ -1,61 +1,50 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import axios from 'axios';
-import { Calendar, Check, X } from 'lucide-react';
+import { Calendar, Check, X, Bell, Filter, RefreshCw, AlertCircle, UserCheck, CalendarDays, Clock, MessageSquare, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 const formatDateToDisplay = (dateStr) => {
   if (!dateStr) return '--';
   const d = new Date(dateStr);
-  if (isNaN(d)) return dateStr; // already formatted string
-  return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`;
+  if (isNaN(d)) return dateStr;
+  return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
 };
 
 export default function NotificationCenter() {
-  const [activeBlock,         setActiveBlock]         = useState('leaves');
-  const [leaveRequests,       setLeaveRequests]       = useState([]);
-  const [correctionRequests,  setCorrectionRequests]  = useState([]);
-  const [fromDate,            setFromDate]            = useState(
+  const [activeBlock, setActiveBlock] = useState('leaves');
+  const [leaveRequests, setLeaveRequests] = useState([]);
+  const [correctionRequests, setCorrectionRequests] = useState([]);
+  const [fromDate, setFromDate] = useState(
     new Date(Date.now() - 45 * 86400000).toISOString().split('T')[0]
   );
   const [toDate, setToDate] = useState(new Date().toISOString().split('T')[0]);
   const [statusFilter, setStatusFilter] = useState('Pending');
-  const [loading,      setLoading]      = useState(true);
-  // FIX #5: reject modal state
-  const [rejectModal,  setRejectModal]  = useState({ open: false, type: null, id: null });
+  const [loading, setLoading] = useState(true);
+  const [rejectModal, setRejectModal] = useState({ open: false, type: null, id: null });
   const [rejectReason, setRejectReason] = useState('');
 
   const fromDateRef = useRef(null);
-  const toDateRef   = useRef(null);
+  const toDateRef = useRef(null);
 
   const getToken = () => localStorage.getItem('token');
 
-  // ── Fetch from correct endpoint ───────────────────────────────────────────
-  // FIX #1: was calling /api/notifications/pending which only returns Pending.
-  // Use /api/requests/admin/pending so status filter actually works.
   const fetchRequests = useCallback(async () => {
     setLoading(true);
     try {
       const token = getToken();
-      // FIX #1: correct endpoint that supports date-range (days param)
       const days = Math.ceil((new Date(toDate) - new Date(fromDate)) / 86400000) + 1;
       const response = await axios.get(`/api/requests/admin/pending?days=${Math.max(days, 1)}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
 
-      let leaves      = response.data.leaveRequests      || [];
+      let leaves = response.data.leaveRequests || [];
       let corrections = response.data.correctionRequests || [];
 
-      // FIX #2: /api/requests/admin/pending only returns Pending.
-      // For Approved/Rejected we need a different approach — filter client-side
-      // from a broader query isn't possible here. Show a note when non-Pending selected.
-      // Status filter is kept for UI consistency but the endpoint is Pending-only.
-
-      // Date filter (client-side narrowing within the returned window)
       const from = new Date(fromDate);
-      const to   = new Date(toDate);
+      const to = new Date(toDate);
       to.setHours(23, 59, 59, 999);
 
-      leaves      = leaves.filter(r => { const d = new Date(r.createdAt); return d >= from && d <= to; });
+      leaves = leaves.filter(r => { const d = new Date(r.createdAt); return d >= from && d <= to; });
       corrections = corrections.filter(r => { const d = new Date(r.createdAt); return d >= from && d <= to; });
 
       setLeaveRequests(leaves);
@@ -69,7 +58,6 @@ export default function NotificationCenter() {
 
   useEffect(() => { fetchRequests(); }, [fetchRequests]);
 
-  // ── Approve leave ─────────────────────────────────────────────────────────
   const handleApproveLeave = async (id) => {
     try {
       await axios.patch(`/api/requests/leave/${id}/approve`, {}, {
@@ -82,7 +70,6 @@ export default function NotificationCenter() {
     }
   };
 
-  // ── Approve correction ────────────────────────────────────────────────────
   const handleApproveCorrection = async (id) => {
     try {
       await axios.patch(`/api/requests/correction/${id}/approve`, {}, {
@@ -95,7 +82,6 @@ export default function NotificationCenter() {
     }
   };
 
-  // FIX #5: reject handlers — were empty onClick={() => {}}
   const openRejectModal = (type, id) => {
     setRejectModal({ open: true, type, id });
     setRejectReason('');
@@ -122,223 +108,314 @@ export default function NotificationCenter() {
     }
   };
 
-  // FIX #3: removed handleClearAll — /api/notifications/clear does not exist in backend
-
   return (
-    <div className="p-4 md:p-6 bg-gray-50 min-h-screen">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
-        <h1 className="text-2xl md:text-3xl font-bold text-gray-800">Notification Center</h1>
+    <div className="p-4 md:p-6 max-w-[1600px] mx-auto">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
+        <div>
+          <h1 className="text-2xl md:text-3xl font-bold text-gray-800 tracking-tight">
+            Notification Center
+          </h1>
+          <p className="text-sm text-gray-500 mt-1">
+            Manage and review employee requests
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-lg">
+            <button
+              onClick={() => setActiveBlock('leaves')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all ${
+                activeBlock === 'leaves'
+                  ? 'bg-white text-gray-900 shadow-sm'
+                  : 'text-gray-600 hover:text-gray-800'
+              }`}
+            >
+              <CalendarDays size={16} />
+              Leave Requests ({leaveRequests.length})
+            </button>
+            <button
+              onClick={() => setActiveBlock('corrections')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all ${
+                activeBlock === 'corrections'
+                  ? 'bg-white text-gray-900 shadow-sm'
+                  : 'text-gray-600 hover:text-gray-800'
+              }`}
+            >
+              <Clock size={16} />
+              Corrections ({correctionRequests.length})
+            </button>
+          </div>
+        </div>
       </div>
 
-      {/* Filters */}
-      <div className="bg-white rounded-lg shadow p-4 md:p-6 mb-6">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">From Date</label>
-            <div className="relative">
-              <input type="date" ref={fromDateRef} value={fromDate}
-                onChange={e => setFromDate(e.target.value)}
-                className="absolute opacity-0 pointer-events-none" />
-              <div onClick={() => fromDateRef.current?.showPicker()}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg flex items-center justify-between cursor-pointer bg-white">
-                <span>{formatDateToDisplay(fromDate)}</span>
-                <Calendar size={18} className="text-gray-400" />
-              </div>
-            </div>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">To Date</label>
-            <div className="relative">
-              <input type="date" ref={toDateRef} value={toDate}
-                onChange={e => setToDate(e.target.value)}
-                className="absolute opacity-0 pointer-events-none" />
-              <div onClick={() => toDateRef.current?.showPicker()}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg flex items-center justify-between cursor-pointer bg-white">
-                <span>{formatDateToDisplay(toDate)}</span>
-                <Calendar size={18} className="text-gray-400" />
-              </div>
-            </div>
-          </div>
-          {/* FIX #2: Status filter note — endpoint is Pending-only */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Status <span className="text-xs text-gray-400">(Pending only from API)</span>
+      {/* Filters Card */}
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5 mb-6">
+        <div className="flex flex-wrap items-end gap-4">
+          {/* From Date */}
+          <div className="flex-1 min-w-[160px]">
+            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
+              From Date
             </label>
-            <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+            <div className="relative">
+              <input
+                type="date"
+                ref={fromDateRef}
+                value={fromDate}
+                onChange={e => setFromDate(e.target.value)}
+                className="absolute opacity-0 pointer-events-none"
+              />
+              <div
+                onClick={() => fromDateRef.current?.showPicker()}
+                className="w-full px-3 py-2 border border-gray-200 rounded-xl flex items-center justify-between cursor-pointer bg-white shadow-sm hover:border-gray-300 transition"
+              >
+                <span className="text-sm text-gray-700">{formatDateToDisplay(fromDate)}</span>
+                <Calendar size={16} className="text-gray-400" />
+              </div>
+            </div>
+          </div>
+
+          {/* To Date */}
+          <div className="flex-1 min-w-[160px]">
+            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
+              To Date
+            </label>
+            <div className="relative">
+              <input
+                type="date"
+                ref={toDateRef}
+                value={toDate}
+                onChange={e => setToDate(e.target.value)}
+                className="absolute opacity-0 pointer-events-none"
+              />
+              <div
+                onClick={() => toDateRef.current?.showPicker()}
+                className="w-full px-3 py-2 border border-gray-200 rounded-xl flex items-center justify-between cursor-pointer bg-white shadow-sm hover:border-gray-300 transition"
+              >
+                <span className="text-sm text-gray-700">{formatDateToDisplay(toDate)}</span>
+                <Calendar size={16} className="text-gray-400" />
+              </div>
+            </div>
+          </div>
+
+          {/* Status Filter */}
+          <div className="flex-1 min-w-[160px]">
+            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
+              Status
+            </label>
+            <select
+              value={statusFilter}
+              onChange={e => setStatusFilter(e.target.value)}
+              className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 shadow-sm"
+            >
               <option value="Pending">Pending</option>
             </select>
           </div>
-          <div className="flex items-end">
-            <button onClick={fetchRequests}
-              className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition">
+
+          {/* Refresh Button */}
+          <div>
+            <button
+              onClick={fetchRequests}
+              disabled={loading}
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition shadow-sm text-sm font-medium disabled:opacity-50"
+            >
+              <RefreshCw size={14} className={loading ? "animate-spin" : ""} />
               Refresh
             </button>
           </div>
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="bg-white rounded-lg shadow mb-6">
-        <div className="flex border-b">
-          <button onClick={() => setActiveBlock('leaves')}
-            className={`flex-1 px-4 py-3 font-medium border-b-2 transition ${
-              activeBlock === 'leaves'
-                ? 'border-blue-500 text-blue-600'
-                : 'border-transparent text-gray-600'
-            }`}>
-            Leave Requests ({leaveRequests.length})
-          </button>
-          <button onClick={() => setActiveBlock('corrections')}
-            className={`flex-1 px-4 py-3 font-medium border-b-2 transition ${
-              activeBlock === 'corrections'
-                ? 'border-blue-500 text-blue-600'
-                : 'border-transparent text-gray-600'
-            }`}>
-            Correction Requests ({correctionRequests.length})
-          </button>
-        </div>
+      {/* Content Card */}
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+        {loading ? (
+          <div className="p-16 text-center">
+            <div className="inline-block animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600 mb-4" />
+            <p className="text-gray-600 font-medium">Loading requests...</p>
+          </div>
+        ) : (
+          <>
+            {/* Leave Requests Table */}
+            {activeBlock === 'leaves' && (
+              <div className="overflow-x-auto">
+                {leaveRequests.length === 0 ? (
+                  <div className="p-16 text-center text-gray-500">
+                    <Bell className="mx-auto mb-4 text-gray-300" size={48} />
+                    <p>No pending leave requests</p>
+                  </div>
+                ) : (
+                  <table className="w-full text-sm">
+                    <thead className="bg-gray-50 border-b border-gray-200">
+                      <tr>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Employee</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Leave Type</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">From</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">To</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Reason</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Submitted</th>
+                        <th className="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase tracking-wider">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {leaveRequests.map(r => (
+                        <tr key={r._id} className="hover:bg-gray-50/50 transition">
+                          <td className="px-4 py-3">
+                            <p className="font-medium text-gray-900">{r.empName}</p>
+                            <p className="text-xs text-gray-500 mt-0.5">#{r.empNumber}</p>
+                          </td>
+                          <td className="px-4 py-3">
+                            <span className="inline-flex px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-700">
+                              {r.leaveType}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-sm text-gray-600">{r.fromDateFormatted || formatDateToDisplay(r.fromDate)}</td>
+                          <td className="px-4 py-3 text-sm text-gray-600">{r.toDateFormatted || formatDateToDisplay(r.toDate)}</td>
+                          <td className="px-4 py-3 text-sm text-gray-500 max-w-xs truncate">{r.reason}</td>
+                          <td className="px-4 py-3 text-xs text-gray-400">{formatDateToDisplay(r.createdAt)}</td>
+                          <td className="px-4 py-3 text-center">
+                            <div className="flex items-center justify-center gap-2">
+                              <button
+                                onClick={() => handleApproveLeave(r._id)}
+                                className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-green-700 bg-green-50 border border-green-200 rounded-lg hover:bg-green-100 transition"
+                                title="Approve"
+                              >
+                                <Check size={12} /> Approve
+                              </button>
+                              <button
+                                onClick={() => openRejectModal('leave', r._id)}
+                                className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-red-700 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 transition"
+                                title="Reject"
+                              >
+                                <X size={12} /> Reject
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            )}
+
+            {/* Correction Requests Table */}
+            {activeBlock === 'corrections' && (
+              <div className="overflow-x-auto">
+                {correctionRequests.length === 0 ? (
+                  <div className="p-16 text-center text-gray-500">
+                    <Bell className="mx-auto mb-4 text-gray-300" size={48} />
+                    <p>No pending correction requests</p>
+                  </div>
+                ) : (
+                  <table className="w-full text-sm">
+                    <thead className="bg-gray-50 border-b border-gray-200">
+                      <tr>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Employee</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Date</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Type</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Original In</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Corrected In</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Original Out</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Corrected Out</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Reason</th>
+                        <th className="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase tracking-wider">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {correctionRequests.map(r => (
+                        <tr key={r._id} className="hover:bg-gray-50/50 transition">
+                          <td className="px-4 py-3">
+                            <p className="font-medium text-gray-900">{r.empName}</p>
+                            <p className="text-xs text-gray-500 mt-0.5">#{r.empNumber}</p>
+                          </td>
+                          <td className="px-4 py-3 text-sm text-gray-600">{r.dateFormatted || formatDateToDisplay(r.date)}</td>
+                          <td className="px-4 py-3">
+                            <span className="inline-flex px-2 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-700">
+                              {r.correctionType}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-sm text-gray-400">{r.originalInTime || '--'}</td>
+                          <td className="px-4 py-3 text-sm font-medium text-green-600">{r.correctedInTime || '--'}</td>
+                          <td className="px-4 py-3 text-sm text-gray-400">{r.originalOutTime || '--'}</td>
+                          <td className="px-4 py-3 text-sm font-medium text-green-600">{r.correctedOutTime || '--'}</td>
+                          <td className="px-4 py-3 text-sm text-gray-500 max-w-xs truncate">{r.reason}</td>
+                          <td className="px-4 py-3 text-center">
+                            <div className="flex items-center justify-center gap-2">
+                              <button
+                                onClick={() => handleApproveCorrection(r._id)}
+                                className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-green-700 bg-green-50 border border-green-200 rounded-lg hover:bg-green-100 transition"
+                                title="Approve"
+                              >
+                                <Check size={12} /> Approve
+                              </button>
+                              <button
+                                onClick={() => openRejectModal('correction', r._id)}
+                                className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-red-700 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 transition"
+                                title="Reject"
+                              >
+                                <X size={12} /> Reject
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            )}
+          </>
+        )}
       </div>
 
-      {loading ? (
-        <div className="text-center py-12 text-gray-500">Loading...</div>
-      ) : (
-        <div className="bg-white rounded-lg shadow overflow-hidden">
-          {/* ── Leave Requests ─────────────────────────────────────────────── */}
-          {activeBlock === 'leaves' && (
-            <div className="overflow-x-auto">
-              {leaveRequests.length === 0 ? (
-                <div className="text-center py-12 text-gray-400">No pending leave requests</div>
-              ) : (
-                <table className="w-full text-sm">
-                  <thead className="bg-gray-100 border-b">
-                    <tr>
-                      <th className="px-4 py-3 text-left">Employee</th>
-                      <th className="px-4 py-3 text-left">Leave Type</th>
-                      {/* FIX #4: show both fromDate and toDate (not just date) */}
-                      <th className="px-4 py-3 text-left">From</th>
-                      <th className="px-4 py-3 text-left">To</th>
-                      <th className="px-4 py-3 text-left">Reason</th>
-                      <th className="px-4 py-3 text-left">Submitted</th>
-                      <th className="px-4 py-3 text-left">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y">
-                    {leaveRequests.map(r => (
-                      <tr key={r._id} className="hover:bg-gray-50">
-                        <td className="px-4 py-3">
-                          <span className="font-medium">{r.empName}</span>
-                          <br />
-                          <span className="text-xs text-gray-500">{r.empNumber}</span>
-                        </td>
-                        <td className="px-4 py-3">{r.leaveType}</td>
-                        {/* FIX #4: use fromDateFormatted / toDateFormatted from backend */}
-                        <td className="px-4 py-3">{r.fromDateFormatted || formatDateToDisplay(r.fromDate)}</td>
-                        <td className="px-4 py-3">{r.toDateFormatted   || formatDateToDisplay(r.toDate)}</td>
-                        <td className="px-4 py-3 text-gray-600 max-w-xs truncate">{r.reason}</td>
-                        <td className="px-4 py-3 text-gray-500 text-xs">{formatDateToDisplay(r.createdAt)}</td>
-                        <td className="px-4 py-3">
-                          <div className="flex gap-2">
-                            <button onClick={() => handleApproveLeave(r._id)}
-                              className="p-1 bg-green-100 text-green-600 rounded hover:bg-green-200" title="Approve">
-                              <Check size={18} />
-                            </button>
-                            {/* FIX #5: reject button now opens modal */}
-                            <button onClick={() => openRejectModal('leave', r._id)}
-                              className="p-1 bg-red-100 text-red-600 rounded hover:bg-red-200" title="Reject">
-                              <X size={18} />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-            </div>
-          )}
-
-          {/* ── Correction Requests ───────────────────────────────────────── */}
-          {activeBlock === 'corrections' && (
-            <div className="overflow-x-auto">
-              {correctionRequests.length === 0 ? (
-                <div className="text-center py-12 text-gray-400">No pending correction requests</div>
-              ) : (
-                <table className="w-full text-sm">
-                  <thead className="bg-gray-100 border-b">
-                    <tr>
-                      <th className="px-4 py-3 text-left">Employee</th>
-                      <th className="px-4 py-3 text-left">Date</th>
-                      <th className="px-4 py-3 text-left">Type</th>
-                      <th className="px-4 py-3 text-left">Original In</th>
-                      <th className="px-4 py-3 text-left">Corrected In</th>
-                      <th className="px-4 py-3 text-left">Original Out</th>
-                      <th className="px-4 py-3 text-left">Corrected Out</th>
-                      <th className="px-4 py-3 text-left">Reason</th>
-                      <th className="px-4 py-3 text-left">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y">
-                    {correctionRequests.map(r => (
-                      <tr key={r._id} className="hover:bg-gray-50">
-                        <td className="px-4 py-3">
-                          <span className="font-medium">{r.empName}</span>
-                          <br />
-                          <span className="text-xs text-gray-500">{r.empNumber}</span>
-                        </td>
-                        {/* FIX #4: use dateFormatted from backend */}
-                        <td className="px-4 py-3">{r.dateFormatted || formatDateToDisplay(r.date)}</td>
-                        <td className="px-4 py-3">{r.correctionType}</td>
-                        {/* FIX #8: show original times alongside corrected times */}
-                        <td className="px-4 py-3 text-gray-500">{r.originalInTime  || '--'}</td>
-                        <td className="px-4 py-3 font-medium">{r.correctedInTime  || '--'}</td>
-                        <td className="px-4 py-3 text-gray-500">{r.originalOutTime || '--'}</td>
-                        <td className="px-4 py-3 font-medium">{r.correctedOutTime || '--'}</td>
-                        <td className="px-4 py-3 text-gray-600 max-w-xs truncate">{r.reason}</td>
-                        <td className="px-4 py-3">
-                          <div className="flex gap-2">
-                            <button onClick={() => handleApproveCorrection(r._id)}
-                              className="p-1 bg-green-100 text-green-600 rounded hover:bg-green-200" title="Approve">
-                              <Check size={18} />
-                            </button>
-                            {/* FIX #5: reject button now opens modal */}
-                            <button onClick={() => openRejectModal('correction', r._id)}
-                              className="p-1 bg-red-100 text-red-600 rounded hover:bg-red-200" title="Reject">
-                              <X size={18} />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* FIX #5: Reject reason modal */}
+      {/* Reject Reason Modal */}
       {rejectModal.open && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg shadow-xl w-full max-w-md p-6">
-            <h3 className="text-lg font-bold text-gray-800 mb-4">
-              Reject {rejectModal.type === 'leave' ? 'Leave' : 'Correction'} Request
-            </h3>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Reason for rejection <span className="text-red-500">*</span>
-            </label>
-            <textarea value={rejectReason} onChange={e => setRejectReason(e.target.value)}
-              rows={3} placeholder="Enter reason..."
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 mb-4" />
-            <div className="flex gap-3">
-              <button onClick={() => setRejectModal({ open: false, type: null, id: null })}
-                className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 text-gray-700">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md animate-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+              <div className="flex items-center gap-2">
+                <div className="p-1.5 rounded-lg bg-red-100">
+                  <X size={16} className="text-red-600" />
+                </div>
+                <h2 className="text-lg font-bold text-gray-800">
+                  Reject {rejectModal.type === 'leave' ? 'Leave' : 'Correction'} Request
+                </h2>
+              </div>
+              <button
+                onClick={() => setRejectModal({ open: false, type: null, id: null })}
+                className="p-1 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            <div className="px-6 py-5">
+              <label className="block text-sm font-semibold text-gray-700 mb-2">
+                Reason for rejection <span className="text-red-500">*</span>
+              </label>
+              <textarea
+                value={rejectReason}
+                onChange={e => setRejectReason(e.target.value)}
+                rows={4}
+                placeholder="Please provide a reason for rejecting this request..."
+                className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-red-500/20 focus:border-red-500 text-sm resize-none"
+                autoFocus
+              />
+              <div className="mt-4 bg-red-50 rounded-xl p-3 border border-red-200">
+                <p className="text-xs text-red-700 flex items-center gap-1.5">
+                  <AlertCircle size={12} /> This action cannot be undone.
+                </p>
+              </div>
+            </div>
+            <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-100 bg-gray-50/50 rounded-b-2xl">
+              <button
+                onClick={() => setRejectModal({ open: false, type: null, id: null })}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition"
+              >
                 Cancel
               </button>
-              <button onClick={handleReject}
-                className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700">
-                Reject
+              <button
+                onClick={handleReject}
+                className="flex items-center gap-2 px-5 py-2 text-sm font-medium text-white bg-gradient-to-r from-red-600 to-red-700 rounded-xl hover:from-red-700 hover:to-red-800 transition shadow-md"
+              >
+                <X size={15} /> Reject Request
               </button>
             </div>
           </div>

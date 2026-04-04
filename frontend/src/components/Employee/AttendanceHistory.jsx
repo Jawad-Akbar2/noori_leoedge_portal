@@ -1,80 +1,106 @@
 // Employee/AttendanceHistory.jsx
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
-import axios from 'axios';
-import { MoreVertical, Calendar, Eye, X } from 'lucide-react';
-import toast from 'react-hot-toast';
+import React, { useState, useEffect, useRef, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
+import axios from "axios";
+import { MoreVertical, Calendar, Eye, X } from "lucide-react";
+import toast from "react-hot-toast";
 
 // ── date helpers ──────────────────────────────────────────────────────────────
 
 /** JS Date → "dd/mm/yyyy"  (what /api/payroll/my/summary expects) */
 const toApiDate = (isoStr) => {
-  if (!isoStr) return '';
-  const [y, m, d] = isoStr.split('-');
+  if (!isoStr) return "";
+  const [y, m, d] = isoStr.split("-");
   return `${d}/${m}/${y}`;
 };
 
 /** "YYYY-MM-DD" → "dd/mm/yyyy"  (display only) */
 const isoToDisplay = (isoStr) => {
-  if (!isoStr) return '';
-  const [y, m, d] = isoStr.split('-');
+  if (!isoStr) return "";
+  const [y, m, d] = isoStr.split("-");
   return `${d}/${m}/${y}`;
 };
 
 /** Default pay-period start: 18th of current (or previous) month */
 const defaultFromDate = () => {
-  const now   = new Date();
-  const day   = now.getDate();
-  const year  = now.getFullYear();
+  const now = new Date();
+  const day = now.getDate();
+  const year = now.getFullYear();
   const month = now.getMonth();
-  const start = day >= 18
-    ? new Date(year, month,     18)
-    : new Date(year, month - 1, 18);
-  return start.toISOString().split('T')[0];
+  const start =
+    day >= 18 ? new Date(year, month, 18) : new Date(year, month - 1, 18);
+  return start.toISOString().split("T")[0];
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
 
 const STATUS_FILTERS = [
-  { key: 'Present', label: 'Present', on: 'bg-green-100 text-green-700',  off: 'bg-gray-100 text-gray-500' },
-  { key: 'Late',    label: 'Late',    on: 'bg-yellow-100 text-yellow-700', off: 'bg-gray-100 text-gray-500' },
-  { key: 'Leave',   label: 'Leave',   on: 'bg-blue-100 text-blue-700',     off: 'bg-gray-100 text-gray-500' },
-  { key: 'Absent',  label: 'Absent',  on: 'bg-red-100 text-red-700',       off: 'bg-gray-100 text-gray-500' },
-  { key: 'OT',      label: 'Has OT',  on: 'bg-purple-100 text-purple-700', off: 'bg-gray-100 text-gray-500' },
+  {
+    key: "Present",
+    label: "Present",
+    on: "bg-green-100 text-green-700",
+    off: "bg-gray-100 text-gray-500",
+  },
+  {
+    key: "Late",
+    label: "Late",
+    on: "bg-yellow-100 text-yellow-700",
+    off: "bg-gray-100 text-gray-500",
+  },
+  {
+    key: "Leave",
+    label: "Leave",
+    on: "bg-blue-100 text-blue-700",
+    off: "bg-gray-100 text-gray-500",
+  },
+  {
+    key: "Absent",
+    label: "Absent",
+    on: "bg-red-100 text-red-700",
+    off: "bg-gray-100 text-gray-500",
+  },
+  {
+    key: "OT",
+    label: "Has OT",
+    on: "bg-purple-100 text-purple-700",
+    off: "bg-gray-100 text-gray-500",
+  },
 ];
 
 const statusBadge = (status) => {
   const map = {
-    Present: 'bg-green-100 text-green-800',
-    Late:    'bg-yellow-100 text-yellow-800',
-    Leave:   'bg-blue-100 text-blue-800',
-    Absent:  'bg-gray-100 text-gray-700',
+    Present: "bg-green-100 text-green-800",
+    Late: "bg-yellow-100 text-yellow-800",
+    Leave: "bg-blue-100 text-blue-800",
+    Absent: "bg-gray-100 text-gray-700",
   };
-  return map[status] ?? 'bg-gray-100 text-gray-700';
+  return map[status] ?? "bg-gray-100 text-gray-700";
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
 
 export default function AttendanceHistory() {
-  const navigate     = useNavigate();
-  const fromDateRef  = useRef(null);
-  const toDateRef    = useRef(null);
-  const menuRef      = useRef(null);
+  const navigate = useNavigate();
+  const fromDateRef = useRef(null);
+  const toDateRef = useRef(null);
+  const menuRef = useRef(null);
 
   const [fromDate, setFromDate] = useState(defaultFromDate);
-  const [toDate,   setToDate]   = useState(() => new Date().toISOString().split('T')[0]);
-
-  // Which status chips are active (all on by default)
-  const [activeFilters, setActiveFilters] = useState(
-    () => Object.fromEntries(STATUS_FILTERS.map(f => [f.key, true]))
+  const [toDate, setToDate] = useState(
+    () => new Date().toISOString().split("T")[0],
   );
 
-  const [allRecords,      setAllRecords]      = useState([]);
+  // Which status chips are active (all on by default)
+  const [activeFilters, setActiveFilters] = useState(() =>
+    Object.fromEntries(STATUS_FILTERS.map((f) => [f.key, true])),
+  );
+
+  const [allRecords, setAllRecords] = useState([]);
   const [filteredRecords, setFilteredRecords] = useState([]);
-  const [loading,         setLoading]         = useState(false);
-  const [openMenuId,      setOpenMenuId]      = useState(null);
-  const [detailsModal,    setDetailsModal]    = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [openMenuId, setOpenMenuId] = useState(null);
+  const [detailsModal, setDetailsModal] = useState(null);
 
   // ── close context menu on outside click ──────────────────────────────────
   useEffect(() => {
@@ -83,8 +109,8 @@ export default function AttendanceHistory() {
         setOpenMenuId(null);
       }
     };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
   }, []);
 
   // ── fetch ────────────────────────────────────────────────────────────────
@@ -93,13 +119,13 @@ export default function AttendanceHistory() {
   const fetchAttendance = useCallback(async () => {
     setLoading(true);
     try {
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem("token");
 
-      const response = await axios.get('/api/payroll/my/summary', {
+      const response = await axios.get("/api/payroll/my/summary", {
         params: {
           // FIX 2: correct param names for this route
           startDate: toApiDate(fromDate),
-          endDate:   toApiDate(toDate),
+          endDate: toApiDate(toDate),
         },
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -109,13 +135,15 @@ export default function AttendanceHistory() {
       const breakdown = response.data.dailyBreakdown ?? [];
       setAllRecords(breakdown);
     } catch (err) {
-      toast.error(err.response?.data?.message || 'Failed to fetch attendance');
+      toast.error(err.response?.data?.message || "Failed to fetch attendance");
     } finally {
       setLoading(false);
     }
   }, [fromDate, toDate]);
 
-  useEffect(() => { fetchAttendance(); }, [fetchAttendance]);
+  useEffect(() => {
+    fetchAttendance();
+  }, [fetchAttendance]);
 
   // ── apply filters ─────────────────────────────────────────────────────────
   useEffect(() => {
@@ -124,7 +152,8 @@ export default function AttendanceHistory() {
       // OT filter: show/hide rows that have any OT hours
       if (!activeFilters.OT && (r.otHours ?? 0) > 0) return false;
       // Status filters
-      if (status && !activeFilters[status] && status !== undefined) return false;
+      if (status && !activeFilters[status] && status !== undefined)
+        return false;
       return true;
     });
     setFilteredRecords(filtered);
@@ -135,7 +164,7 @@ export default function AttendanceHistory() {
 
   // FIX 5: use navigate instead of window.location.href
   const goToRequest = (type, date) => {
-    localStorage.setItem('selectedDate', date);
+    localStorage.setItem("selectedDate", date);
     navigate(`/employee/requests?type=${type}`);
   };
 
@@ -151,15 +180,18 @@ export default function AttendanceHistory() {
 
   return (
     <div className="p-4 md:p-6 bg-gray-50 min-h-screen">
-      <h1 className="text-2xl md:text-3xl font-bold text-gray-800 mb-6">Attendance History</h1>
+      <h1 className="text-2xl md:text-3xl font-bold text-gray-800 mb-6">
+        Attendance History
+      </h1>
 
       {/* ── Filter panel ── */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 md:p-6 mb-6">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-
           {/* From date */}
           <div className="relative">
-            <label className="block text-sm font-medium text-gray-700 mb-1">From Date</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              From Date
+            </label>
             <div
               onClick={() => fromDateRef.current?.showPicker()}
               className="flex items-center justify-between w-full px-4 py-2 border border-gray-300 rounded-lg cursor-pointer bg-white hover:border-blue-400 transition"
@@ -178,7 +210,9 @@ export default function AttendanceHistory() {
 
           {/* To date */}
           <div className="relative">
-            <label className="block text-sm font-medium text-gray-700 mb-1">To Date</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              To Date
+            </label>
             <div
               onClick={() => toDateRef.current?.showPicker()}
               className="flex items-center justify-between w-full px-4 py-2 border border-gray-300 rounded-lg cursor-pointer bg-white hover:border-blue-400 transition"
@@ -217,7 +251,9 @@ export default function AttendanceHistory() {
                 activeFilters[f.key] ? f.on : f.off
               }`}
             >
-              {activeFilters[f.key] ? null : <span className="mr-1 opacity-60">✕</span>}
+              {activeFilters[f.key] ? null : (
+                <span className="mr-1 opacity-60">✕</span>
+              )}
               {f.label}
             </button>
           ))}
@@ -225,7 +261,10 @@ export default function AttendanceHistory() {
       </div>
 
       {/* ── Table ── */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden" ref={menuRef}>
+      <div
+        className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden"
+        ref={menuRef}
+      >
         {loading ? (
           <div className="py-16 text-center text-gray-400">Loading…</div>
         ) : filteredRecords.length === 0 ? (
@@ -238,47 +277,85 @@ export default function AttendanceHistory() {
                 <thead className="bg-gray-50 border-b text-gray-600">
                   <tr>
                     <th className="px-5 py-3 text-left font-semibold">Date</th>
-                    <th className="px-5 py-3 text-left font-semibold">In / Out</th>
-                    <th className="px-5 py-3 text-left font-semibold">Status</th>
+                    <th className="px-5 py-3 text-left font-semibold">
+                      In / Out
+                    </th>
+                    <th className="px-5 py-3 text-left font-semibold">
+                      Status
+                    </th>
                     <th className="px-5 py-3 text-left font-semibold">OT</th>
-<th className="px-5 py-3 text-left font-semibold">Deduction</th>
-<th className="px-5 py-3 text-left font-semibold">Day Earning</th>
+                    <th className="px-5 py-3 text-left font-semibold">
+                      Deduction
+                    </th>
+                    <th className="px-5 py-3 text-left font-semibold">
+                      Day Earning
+                    </th>
                     {/* FIX 3: finalDayEarning (not dailyEarning) */}
-                    <th className="px-5 py-3 text-left font-semibold">Actions</th>
+                    <th className="px-5 py-3 text-left font-semibold">
+                      Actions
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
                   {filteredRecords.map((record, idx) => (
-                    <tr key={record.dateRaw ?? idx} className="hover:bg-gray-50">
+                    <tr
+                      key={record.dateRaw ?? idx}
+                      className="hover:bg-gray-50"
+                    >
                       <td className="px-5 py-3 font-medium text-gray-800">
                         {/* date is already "dd/mm/yyyy" from the API */}
                         {record.date}
                       </td>
                       <td className="px-5 py-3 text-gray-600">
-                        {record.inTime && record.outTime
-                          ? `${record.inTime} / ${record.outTime}`
-                          : <span className="text-gray-400">— / —</span>}
+                        {record.inTime && record.outTime ? (
+                          `${record.inTime} / ${record.outTime}`
+                        ) : (
+                          <span className="text-gray-400">— / —</span>
+                        )}
                       </td>
                       <td className="px-5 py-3">
-                        <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${statusBadge(record.status)}`}>
+                        <span
+                          className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${statusBadge(record.status)}`}
+                        >
                           {record.status}
                         </span>
                       </td>
-                   <td className="px-5 py-3 text-green-600 font-medium">
-  <button type="button" onClick={() => setDetailsModal({ type: 'ot', record })}
-    className="inline-flex items-center gap-1 hover:text-green-800">
-    PKR {(record.otAmount ?? 0).toLocaleString('en-PK', { minimumFractionDigits: 2 })} <Eye size={12} />
-  </button>
-</td>
-<td className="px-5 py-3 text-red-500 font-medium">
-  <button type="button" onClick={() => setDetailsModal({ type: 'deduction', record })}
-    className="inline-flex items-center gap-1 hover:text-red-700">
-    PKR {(record.deduction ?? 0).toLocaleString('en-PK', { minimumFractionDigits: 2 })} <Eye size={12} />
-  </button>
-</td>
+                      <td className="px-5 py-3 text-green-600 font-medium">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setDetailsModal({ type: "ot", record })
+                          }
+                          className="inline-flex items-center gap-1 hover:text-green-800"
+                        >
+                          PKR{" "}
+                          {(record.otAmount ?? 0).toLocaleString("en-PK", {
+                            minimumFractionDigits: 2,
+                          })}{" "}
+                          <Eye size={12} />
+                        </button>
+                      </td>
+                      <td className="px-5 py-3 text-red-500 font-medium">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setDetailsModal({ type: "deduction", record })
+                          }
+                          className="inline-flex items-center gap-1 hover:text-red-700"
+                        >
+                          PKR{" "}
+                          {(record.deduction ?? 0).toLocaleString("en-PK", {
+                            minimumFractionDigits: 2,
+                          })}{" "}
+                          <Eye size={12} />
+                        </button>
+                      </td>
                       <td className="px-5 py-3 font-semibold text-blue-600">
                         {/* FIX 3: finalDayEarning (not dailyEarning which doesn't exist) */}
-                        PKR {(record.finalDayEarning ?? 0).toLocaleString('en-PK', { minimumFractionDigits: 2 })}
+                        PKR{" "}
+                        {(record.finalDayEarning ?? 0).toLocaleString("en-PK", {
+                          minimumFractionDigits: 2,
+                        })}
                       </td>
                       <td className="px-5 py-3 relative">
                         <button
@@ -292,13 +369,19 @@ export default function AttendanceHistory() {
                         {openMenuId === idx && (
                           <div className="absolute right-4 top-10 w-44 bg-white rounded-lg shadow-lg z-40 border border-gray-200">
                             <button
-                              onClick={() => { goToRequest('leave', record.date); setOpenMenuId(null); }}
+                              onClick={() => {
+                                goToRequest("leave", record.date);
+                                setOpenMenuId(null);
+                              }}
                               className="w-full px-4 py-2.5 text-left text-sm hover:bg-gray-50 border-b border-gray-100"
                             >
                               Request Leave
                             </button>
                             <button
-                              onClick={() => { goToRequest('correction', record.date); setOpenMenuId(null); }}
+                              onClick={() => {
+                                goToRequest("correction", record.date);
+                                setOpenMenuId(null);
+                              }}
                               className="w-full px-4 py-2.5 text-left text-sm hover:bg-gray-50"
                             >
                               Request Correction
@@ -318,15 +401,19 @@ export default function AttendanceHistory() {
                 <div key={record.dateRaw ?? idx} className="p-4">
                   <div className="flex justify-between items-start mb-2">
                     <div>
-                      <p className="font-semibold text-gray-800">{record.date}</p>
+                      <p className="font-semibold text-gray-800">
+                        {record.date}
+                      </p>
                       <p className="text-sm text-gray-500 mt-0.5">
                         {record.inTime && record.outTime
                           ? `${record.inTime} → ${record.outTime}`
-                          : 'No punch record'}
+                          : "No punch record"}
                       </p>
                     </div>
                     <button
-                      onClick={() => setOpenMenuId(openMenuId === idx ? null : idx)}
+                      onClick={() =>
+                        setOpenMenuId(openMenuId === idx ? null : idx)
+                      }
                       className="p-1 text-gray-400"
                     >
                       <MoreVertical size={18} />
@@ -334,37 +421,54 @@ export default function AttendanceHistory() {
                   </div>
 
                   <div className="flex items-center justify-between">
-                    <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${statusBadge(record.status)}`}>
+                    <span
+                      className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${statusBadge(record.status)}`}
+                    >
                       {record.status}
                     </span>
                     <span className="font-semibold text-blue-600 text-sm">
-                      PKR {(record.finalDayEarning ?? 0).toLocaleString('en-PK', { minimumFractionDigits: 2 })}
+                      PKR{" "}
+                      {(record.finalDayEarning ?? 0).toLocaleString("en-PK", {
+                        minimumFractionDigits: 2,
+                      })}
                     </span>
                   </div>
 
-                 <div className="flex gap-3 mt-1.5">
-  {(record.otAmount ?? 0) > 0 && (
-    <p className="text-xs text-green-600 font-medium">
-      OT: PKR {record.otAmount.toLocaleString('en-PK', { minimumFractionDigits: 2 })}
-    </p>
-  )}
-  {(record.deduction ?? 0) > 0 && (
-    <p className="text-xs text-red-500 font-medium">
-      Deduction: PKR {record.deduction.toLocaleString('en-PK', { minimumFractionDigits: 2 })}
-    </p>
-  )}
-</div>
+                  <div className="flex gap-3 mt-1.5">
+                    {(record.otAmount ?? 0) > 0 && (
+                      <p className="text-xs text-green-600 font-medium">
+                        OT: PKR{" "}
+                        {record.otAmount.toLocaleString("en-PK", {
+                          minimumFractionDigits: 2,
+                        })}
+                      </p>
+                    )}
+                    {(record.deduction ?? 0) > 0 && (
+                      <p className="text-xs text-red-500 font-medium">
+                        Deduction: PKR{" "}
+                        {record.deduction.toLocaleString("en-PK", {
+                          minimumFractionDigits: 2,
+                        })}
+                      </p>
+                    )}
+                  </div>
 
                   {openMenuId === idx && (
                     <div className="mt-3 grid grid-cols-2 gap-2">
                       <button
-                        onClick={() => { goToRequest('leave', record.date); setOpenMenuId(null); }}
+                        onClick={() => {
+                          goToRequest("leave", record.date);
+                          setOpenMenuId(null);
+                        }}
                         className="px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm hover:bg-gray-50 text-center"
                       >
                         Request Leave
                       </button>
                       <button
-                        onClick={() => { goToRequest('correction', record.date); setOpenMenuId(null); }}
+                        onClick={() => {
+                          goToRequest("correction", record.date);
+                          setOpenMenuId(null);
+                        }}
                         className="px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm hover:bg-gray-50 text-center"
                       >
                         Correction
@@ -378,37 +482,59 @@ export default function AttendanceHistory() {
         )}
       </div>
       {/* OT / Deduction detail popup */}
-{detailsModal && (
-  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-    <div className="bg-white rounded-xl shadow-2xl w-full max-w-md">
-      <div className="flex items-center justify-between px-5 py-3 border-b">
-        <h3 className="font-semibold text-gray-800">
-          {detailsModal.type === 'ot' ? 'OT Details' : 'Deduction Details'} — {detailsModal.record.date}
-        </h3>
-        <button onClick={() => setDetailsModal(null)} className="text-gray-400 hover:text-gray-600">
-          <X size={18} />
-        </button>
-      </div>
-      <div className="p-4 space-y-2 max-h-80 overflow-auto">
-        {(() => {
-          const entries = detailsModal.type === 'ot'
-            ? detailsModal.record.otDetails
-            : detailsModal.record.deductionDetails;
-          if (!entries?.length) return <p className="text-sm text-gray-500">No detail entries found.</p>;
-          return entries.map((entry, i) => (
-            <div key={i} className="border rounded-lg p-2 text-sm bg-gray-50">
-              {detailsModal.type === 'ot' ? (
-                <p>{entry.type === 'manual' ? `Amount: PKR ${entry.amount}` : `Hours: ${entry.hours} × ${entry.rate}x`} · {entry.reason}</p>
-              ) : (
-                <p>Amount: PKR {entry.amount} · {entry.reason}</p>
-              )}
+      {detailsModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md">
+            <div className="flex items-center justify-between px-5 py-3 border-b">
+              <h3 className="font-semibold text-gray-800">
+                {detailsModal.type === "ot"
+                  ? "OT Details"
+                  : "Deduction Details"}{" "}
+                — {detailsModal.record.date}
+              </h3>
+              <button
+                onClick={() => setDetailsModal(null)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X size={18} />
+              </button>
             </div>
-          ));
-        })()}
-      </div>
-    </div>
-  </div>
-)}
+            <div className="p-4 space-y-2 max-h-80 overflow-auto">
+              {(() => {
+                const entries =
+                  detailsModal.type === "ot"
+                    ? detailsModal.record.otDetails
+                    : detailsModal.record.deductionDetails;
+                if (!entries?.length)
+                  return (
+                    <p className="text-sm text-gray-500">
+                      No detail entries found.
+                    </p>
+                  );
+                return entries.map((entry, i) => (
+                  <div
+                    key={i}
+                    className="border rounded-lg p-2 text-sm bg-gray-50"
+                  >
+                    {detailsModal.type === "ot" ? (
+                      <p>
+                        {entry.type === "manual"
+                          ? `Amount: PKR ${entry.amount}`
+                          : `Hours: ${entry.hours} × ${entry.rate}x`}{" "}
+                        · {entry.reason}
+                      </p>
+                    ) : (
+                      <p>
+                        Amount: PKR {entry.amount} · {entry.reason}
+                      </p>
+                    )}
+                  </div>
+                ));
+              })()}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

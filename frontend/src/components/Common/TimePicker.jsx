@@ -1,41 +1,16 @@
-// ─── TimePicker.jsx ───────────────────────────────────────────────────────────
+import React, { useRef, useState, useEffect, useCallback, forwardRef } from 'react';
+import { Clock, ChevronUp, ChevronDown } from 'lucide-react';
+
+// ─── Modern TimePicker ────────────────────────────────────────────────────────
 // Drop-in replacement for bare <input type="text"> time fields.
 // Usage:
 //   <TimePicker value="09:30" onChange={(val) => setTime(val)} placeholder="09:00" disabled={false} />
-//
-// • Clicking the field opens a compact popover with hour + minute scrollers
-// • Typing directly still works (HH:mm validated on blur)
-// • Pressing Escape or clicking outside closes the popover
-// • Fully keyboard-navigable (Tab moves between columns, arrows scroll)
 
-import React, {
-  useState, useRef, useEffect, useCallback, forwardRef
-} from 'react';
-import { Clock, ChevronUp, ChevronDown } from 'lucide-react';
-
-// ─── helpers ─────────────────────────────────────────────────────────────────
-const pad   = (n) => String(n).padStart(2, '0');
-const HOURS = Array.from({ length: 24 }, (_, i) => pad(i));   // 00-23
-const MINS  = Array.from({ length: 60 }, (_, i) => pad(i));   // 00-59
-
-function parseHHmm(val) {
-  if (!val || val === '--') return { h: null, m: null };
-  const m = val.match(/^(\d{1,2}):(\d{2})$/);
-  if (!m) return { h: null, m: null };
-  const h = parseInt(m[1], 10);
-  const mn = parseInt(m[2], 10);
-  if (h < 0 || h > 23 || mn < 0 || mn > 59) return { h: null, m: null };
-  return { h, m: mn };
-}
-
-// ─── ScrollColumn ─────────────────────────────────────────────────────────────
-// A virtualised-ish scroller for a single time unit (hours or minutes).
 function ScrollColumn({ items, selected, onSelect, label }) {
-  const listRef   = useRef(null);
-  const ITEM_H    = 36; // px — must match the CSS below
-  const CENTER    = 2;  // index of the "selected" slot from top (0-based)
+  const listRef = useRef(null);
+  const ITEM_H = 36;
+  const CENTER = 2;
 
-  // Scroll so `selected` sits in the centre slot
   const scrollTo = useCallback((idx, behavior = 'instant') => {
     if (!listRef.current) return;
     listRef.current.scrollTo({
@@ -45,25 +20,24 @@ function ScrollColumn({ items, selected, onSelect, label }) {
   }, []);
 
   useEffect(() => {
-    if (selected !== null) scrollTo(parseInt(items.indexOf(pad(selected)), 10));
+    if (selected !== null) scrollTo(items.indexOf(pad(selected)));
   }, [selected, items, scrollTo]);
 
   const handleKeyDown = (e) => {
-    const idx = selected !== null ? parseInt(items.indexOf(pad(selected)), 10) : 0;
+    const idx = selected !== null ? items.indexOf(pad(selected)) : 0;
     if (e.key === 'ArrowDown') { e.preventDefault(); onSelect(parseInt(items[(idx + 1) % items.length], 10)); }
-    if (e.key === 'ArrowUp')   { e.preventDefault(); onSelect(parseInt(items[(idx - 1 + items.length) % items.length], 10)); }
+    if (e.key === 'ArrowUp') { e.preventDefault(); onSelect(parseInt(items[(idx - 1 + items.length) % items.length], 10)); }
   };
 
   const step = (dir) => {
-    const idx = selected !== null ? parseInt(items.indexOf(pad(selected)), 10) : 0;
+    const idx = selected !== null ? items.indexOf(pad(selected)) : 0;
     onSelect(parseInt(items[(idx + dir + items.length) % items.length], 10));
   };
 
   return (
     <div className="flex flex-col items-center">
-      <span className="text-[10px] font-semibold uppercase tracking-widest text-gray-400 mb-1">{label}</span>
+      <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1">{label}</span>
 
-      {/* Up arrow */}
       <button
         type="button"
         onMouseDown={e => { e.preventDefault(); step(-1); }}
@@ -73,22 +47,13 @@ function ScrollColumn({ items, selected, onSelect, label }) {
         <ChevronUp size={14} />
       </button>
 
-      {/* Scroll list */}
       <div
         ref={listRef}
         tabIndex={0}
         onKeyDown={handleKeyDown}
-        className="relative w-14 overflow-y-scroll focus:outline-none"
-        style={{
-          height: ITEM_H * 5,          // show 5 items
-          scrollbarWidth: 'none',      // Firefox
-          msOverflowStyle: 'none',     // IE
-        }}
+        className="relative w-14 overflow-y-scroll focus:outline-none scrollbar-hide"
+        style={{ height: ITEM_H * 5 }}
       >
-        {/* hide webkit scrollbar via inline style trick */}
-        <style>{`.tp-scroll::-webkit-scrollbar{display:none}`}</style>
-
-        {/* top padding so first real item can sit in slot 2 */}
         <div style={{ height: CENTER * ITEM_H }} />
 
         {items.map((item) => {
@@ -117,11 +82,9 @@ function ScrollColumn({ items, selected, onSelect, label }) {
           );
         })}
 
-        {/* bottom padding */}
         <div style={{ height: (5 - CENTER - 1) * ITEM_H }} />
       </div>
 
-      {/* Down arrow */}
       <button
         type="button"
         onMouseDown={e => { e.preventDefault(); step(1); }}
@@ -134,21 +97,32 @@ function ScrollColumn({ items, selected, onSelect, label }) {
   );
 }
 
-// ─── TimePicker ───────────────────────────────────────────────────────────────
+const pad = (n) => String(n).padStart(2, '0');
+const HOURS = Array.from({ length: 24 }, (_, i) => pad(i));
+const MINS = Array.from({ length: 60 }, (_, i) => pad(i));
+
+function parseHHmm(val) {
+  if (!val || val === '--') return { h: null, m: null };
+  const m = val.match(/^(\d{1,2}):(\d{2})$/);
+  if (!m) return { h: null, m: null };
+  const h = parseInt(m[1], 10);
+  const mn = parseInt(m[2], 10);
+  if (h < 0 || h > 23 || mn < 0 || mn > 59) return { h: null, m: null };
+  return { h, m: mn };
+}
+
 export const TimePicker = forwardRef(function TimePicker(
   { value, onChange, placeholder, disabled, readOnly, className = '' },
   _ref
 ) {
-  const [open,     setOpen]     = useState(false);
+  const [open, setOpen] = useState(false);
   const [inputVal, setInputVal] = useState(value || '');
   const wrapRef = useRef(null);
 
-  // Keep input in sync when value changes externally
   useEffect(() => {
     setInputVal(value && value !== '--' ? value : '');
   }, [value]);
 
-  // Close on outside click
   useEffect(() => {
     if (!open) return;
     const handle = (e) => {
@@ -189,7 +163,6 @@ export const TimePicker = forwardRef(function TimePicker(
       setInputVal(str);
       onChange(str);
     } else {
-      // Revert to last good value
       setInputVal(value && value !== '--' ? value : '');
     }
   };
@@ -209,7 +182,6 @@ export const TimePicker = forwardRef(function TimePicker(
 
   return (
     <div ref={wrapRef} className={`relative inline-block ${className}`}>
-      {/* Text input */}
       <div className="relative flex items-center">
         <input
           type="text"
@@ -221,10 +193,10 @@ export const TimePicker = forwardRef(function TimePicker(
           placeholder={placeholder || 'HH:mm'}
           disabled={disabled}
           className={`
-            w-[80px] border border-gray-300 rounded-md px-2 py-1 text-xs
-            focus:ring-2 focus:ring-blue-400 focus:outline-none
-            disabled:opacity-60 placeholder:text-gray-300
-            pr-6
+            w-[88px] border border-gray-200 rounded-xl px-3 py-2 text-sm bg-white
+            focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:outline-none
+            disabled:opacity-50 disabled:bg-gray-50 placeholder:text-gray-300
+            pr-7 transition-all
           `}
         />
         <button
@@ -232,56 +204,39 @@ export const TimePicker = forwardRef(function TimePicker(
           tabIndex={-1}
           disabled={disabled}
           onMouseDown={e => { e.preventDefault(); if (!disabled) setOpen(v => !v); }}
-          className="absolute right-1.5 text-gray-400 hover:text-blue-500 disabled:opacity-40 transition"
+          className="absolute right-2.5 text-gray-400 hover:text-blue-500 disabled:opacity-40 transition"
         >
-          <Clock size={12} />
+          <Clock size={14} />
         </button>
       </div>
 
-      {/* Popover */}
       {open && (
         <div
           className="
             absolute z-50 mt-1 left-0
-            bg-white border border-gray-200 rounded-xl shadow-xl
-            p-3 flex flex-col gap-2
+            bg-white border border-gray-200 rounded-xl shadow-lg
+            p-3 flex flex-col gap-2 animate-in fade-in zoom-in-95 duration-100
           "
           style={{ minWidth: 148 }}
           onMouseDown={e => e.stopPropagation()}
         >
-          {/* Highlight band for selected row */}
           <div className="relative flex items-start justify-center gap-1">
-            {/* centre-row highlight */}
             <div
-              className="absolute left-0 right-0 rounded-lg bg-blue-50 pointer-events-none"
-              style={{ top: 36 * 2 + 28 + 4, height: 36 }}   // header(28) + 2 rows + padding
+              className="absolute left-0 right-0 rounded-lg bg-blue-50/50 pointer-events-none"
+              style={{ top: 28 + 36 * 2 + 4, height: 36 }}
             />
 
-            <ScrollColumn
-              items={HOURS}
-              selected={selH}
-              onSelect={handleHourChange}
-              label="HH"
-            />
+            <ScrollColumn items={HOURS} selected={selH} onSelect={handleHourChange} label="HH" />
 
             <div className="flex flex-col items-center justify-center self-stretch">
-              <span
-                className="text-lg font-bold text-gray-400 select-none"
-                style={{ marginTop: 28 + 36 * 2 + 10 }}   // align with centre row
-              >:</span>
+              <span className="text-lg font-bold text-gray-300 select-none" style={{ marginTop: 28 + 36 * 2 + 10 }}>:</span>
             </div>
 
-            <ScrollColumn
-              items={MINS}
-              selected={selM}
-              onSelect={handleMinChange}
-              label="MM"
-            />
+            <ScrollColumn items={MINS} selected={selM} onSelect={handleMinChange} label="MM" />
           </div>
 
-          {/* Quick-pick row */}
-          <div className="border-t pt-2 flex flex-wrap gap-1">
-            {['08:00','09:00','10:00','12:00','14:00','17:00','18:00','00:00'].map(t => (
+          <div className="border-t border-gray-100 pt-2 flex flex-wrap gap-1">
+            {['08:00', '09:00', '10:00', '12:00', '14:00', '17:00', '18:00', '00:00'].map(t => (
               <button
                 key={t}
                 type="button"
@@ -291,18 +246,17 @@ export const TimePicker = forwardRef(function TimePicker(
                   commit(h, m);
                   setOpen(false);
                 }}
-                className="px-1.5 py-0.5 text-[10px] font-mono bg-gray-100 hover:bg-blue-100 hover:text-blue-700 rounded transition text-gray-600"
+                className="px-2 py-0.5 text-[10px] font-mono bg-gray-100 hover:bg-blue-100 hover:text-blue-700 rounded transition text-gray-600"
               >
                 {t}
               </button>
             ))}
           </div>
 
-          {/* Done button */}
           <button
             type="button"
             onMouseDown={e => { e.preventDefault(); setOpen(false); }}
-            className="w-full py-1.5 rounded-lg bg-blue-600 text-white text-xs font-semibold hover:bg-blue-700 transition"
+            className="w-full py-1.5 rounded-lg bg-gradient-to-r from-blue-600 to-blue-700 text-white text-xs font-semibold hover:from-blue-700 hover:to-blue-800 transition shadow-sm"
           >
             Done
           </button>
@@ -311,5 +265,10 @@ export const TimePicker = forwardRef(function TimePicker(
     </div>
   );
 });
+
+// Add scrollbar-hide utility if not already present
+const style = document.createElement('style');
+style.textContent = `.scrollbar-hide::-webkit-scrollbar{display:none}.scrollbar-hide{-ms-overflow-style:none;scrollbar-width:none}`;
+document.head.appendChild(style);
 
 export default TimePicker;
