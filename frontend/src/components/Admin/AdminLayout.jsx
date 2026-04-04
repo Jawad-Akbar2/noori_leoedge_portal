@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { Outlet } from 'react-router-dom';
-import AdminSidebar from './Sidebar';
 import Header from '../Common/Header';
 
 export default function AdminLayout() {
@@ -23,8 +22,6 @@ export default function AdminLayout() {
 
   return (
     <div className="flex h-screen bg-gray-100">
-      {/* PERSISTENT DRAWER - Never unmounted on route change */}
-      <AdminSidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 
       {/* Overlay for mobile */}
       {isMobile && sidebarOpen && (

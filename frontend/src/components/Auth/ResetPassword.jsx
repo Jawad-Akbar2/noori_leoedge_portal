@@ -1,18 +1,10 @@
 /**
- * components/Auth/ResetPassword.jsx
- *
- * Security flow:
- *  1. On mount: reads ?token + ?email from URL
- *  2. Hits POST /api/auth/verify-reset-token  (does NOT consume the token)
- *  3. If valid → writes a tab-scoped session fingerprint via resetFlowSession
- *  4. isResetSessionValid() is checked on every render — direct URL access
- *     skips step 2-3 so the session is never written → redirect to /forgot-password
- *  5. On success → clears session, navigates to /login
+ * components/Auth/ResetPassword.jsx - Modernized with consistent design
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { KeyRound, Eye, EyeOff, CheckCircle, AlertTriangle, Clock } from 'lucide-react';
+import { KeyRound, Eye, EyeOff, CheckCircle, AlertTriangle, Clock, Shield, Lock, ArrowLeft } from 'lucide-react';
 import toast from 'react-hot-toast';
 import apiClient from '../../services/api.js';
 import {
@@ -21,36 +13,28 @@ import {
   clearResetSession
 } from '../../utils/resetFlowSession.js';
 
-// ── Statuses ──────────────────────────────────────────────────────────────────
-// 'verifying'  – checking token with backend on mount
-// 'invalid'    – token bad / expired / direct URL access
-// 'ready'      – token confirmed, form shown
-// 'success'    – password changed
-
 export default function ResetPassword() {
-  const [searchParams]               = useSearchParams();
-  const navigate                     = useNavigate();
+  const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
 
   const token = searchParams.get('token') || '';
   const email = decodeURIComponent(searchParams.get('email') || '');
 
-  const [status,          setStatus]          = useState('verifying');
-  const [expiresIn,       setExpiresIn]       = useState(null);  // seconds
-  const [newPassword,     setNewPassword]     = useState('');
+  const [status, setStatus] = useState('verifying');
+  const [expiresIn, setExpiresIn] = useState(null);
+  const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [showNew,         setShowNew]         = useState(false);
-  const [showConfirm,     setShowConfirm]     = useState(false);
-  const [loading,         setLoading]         = useState(false);
+  const [showNew, setShowNew] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [focusedField, setFocusedField] = useState(null);
 
-  // ── Mount: verify token with backend ─────────────────────────────────────
   const verifyToken = useCallback(async () => {
-    // No token/email in URL → definitely a direct visit
     if (!token || !email) {
       setStatus('invalid');
       return;
     }
 
-    // If this tab already verified (e.g. hot-reload), skip the round-trip
     if (isResetSessionValid(email)) {
       setStatus('ready');
       return;
@@ -59,7 +43,7 @@ export default function ResetPassword() {
     try {
       const { data } = await apiClient.post('/auth/verify-reset-token', { email, token });
       if (data.valid) {
-        markResetSessionValid(email);           // write tab-scoped fingerprint
+        markResetSessionValid(email);
         setExpiresIn(data.expiresInSeconds);
         setStatus('ready');
       } else {
@@ -74,48 +58,38 @@ export default function ResetPassword() {
 
   useEffect(() => {
     verifyToken();
-
-    // Clear session if user navigates away without completing
-    return () => {
-      // Only clear if they didn't succeed (success clears it explicitly)
-      // We check the DOM flag set in handleSubmit
-    };
   }, [verifyToken]);
 
-  // Countdown timer display
   useEffect(() => {
     if (!expiresIn || status !== 'ready') return;
     const id = setInterval(() => setExpiresIn(s => (s > 0 ? s - 1 : 0)), 1000);
     return () => clearInterval(id);
   }, [expiresIn, status]);
 
-  // Guard: re-check session on every render (catches back-button tricks)
   useEffect(() => {
     if (status === 'ready' && !isResetSessionValid(email)) {
       setStatus('invalid');
     }
   });
 
-  // ── Password strength ─────────────────────────────────────────────────────
   const strength = (() => {
     if (!newPassword) return 0;
     let s = 0;
-    if (newPassword.length >= 8)           s++;
-    if (/[A-Z]/.test(newPassword))         s++;
-    if (/[0-9]/.test(newPassword))         s++;
-    if (/[^A-Za-z0-9]/.test(newPassword))  s++;
+    if (newPassword.length >= 8) s++;
+    if (/[A-Z]/.test(newPassword)) s++;
+    if (/[0-9]/.test(newPassword)) s++;
+    if (/[^A-Za-z0-9]/.test(newPassword)) s++;
     return s;
   })();
 
   const strengthMeta = [
     null,
-    { label: 'Weak',   color: 'bg-red-500',    text: 'text-red-500'   },
-    { label: 'Fair',   color: 'bg-yellow-400',  text: 'text-yellow-500'},
-    { label: 'Good',   color: 'bg-blue-400',    text: 'text-blue-500'  },
-    { label: 'Strong', color: 'bg-green-500',   text: 'text-green-600' },
+    { label: 'Weak', color: 'bg-red-500', text: 'text-red-500', icon: '🔴' },
+    { label: 'Fair', color: 'bg-yellow-400', text: 'text-yellow-500', icon: '🟡' },
+    { label: 'Good', color: 'bg-blue-400', text: 'text-blue-500', icon: '🔵' },
+    { label: 'Strong', color: 'bg-green-500', text: 'text-green-600', icon: '🟢' },
   ][strength];
 
-  // ── Submit ────────────────────────────────────────────────────────────────
   const handleSubmit = async (e) => {
     e.preventDefault();
 
@@ -137,12 +111,12 @@ export default function ResetPassword() {
     setLoading(true);
     try {
       await apiClient.post('/auth/reset-password', { email, token, newPassword });
-      clearResetSession();   // single-use — wipe immediately
+      clearResetSession();
       setStatus('success');
+      toast.success('Password reset successfully!');
     } catch (err) {
       const msg = err.response?.data?.message || 'Failed to reset password. The link may have expired.';
       toast.error(msg);
-      // If the backend says the token is gone, treat it as invalid
       if (err.response?.status === 400) {
         clearResetSession();
         setStatus('invalid');
@@ -159,208 +133,281 @@ export default function ResetPassword() {
     return `${m}:${sec.toString().padStart(2, '0')}`;
   };
 
-  // ── Render: verifying ─────────────────────────────────────────────────────
+  // Loading state
   if (status === 'verifying') {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-600 to-blue-800 flex items-center justify-center p-4">
-        <div className="bg-white rounded-lg shadow-2xl w-full max-w-md p-12 text-center">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-50 rounded-full mb-6">
-            <span className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin block" />
+      <div className="min-h-screen bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-800 flex items-center justify-center p-4">
+        <div className="bg-white/95 backdrop-blur-sm rounded-2xl shadow-2xl max-w-md w-full p-12 text-center">
+          <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-blue-500 to-blue-600 rounded-2xl shadow-lg mb-6">
+            <span className="w-8 h-8 border-4 border-white border-t-transparent rounded-full animate-spin block" />
           </div>
-          <p className="text-gray-600 font-medium">Verifying your reset link…</p>
+          <p className="text-gray-600 font-medium">Verifying your reset link...</p>
         </div>
       </div>
     );
   }
 
-  // ── Render: invalid / direct URL access ───────────────────────────────────
+  // Invalid state
   if (status === 'invalid') {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-600 to-blue-800 flex items-center justify-center p-4">
-        <div className="bg-white rounded-lg shadow-2xl w-full max-w-md p-8 md:p-12 text-center">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-red-100 rounded-full mb-6">
-            <AlertTriangle className="text-red-500" size={32} />
-          </div>
-          <h1 className="text-2xl font-bold text-gray-800 mb-3">Link invalid or expired</h1>
-          <p className="text-gray-600 mb-8 leading-relaxed text-sm">
-            This password reset link has already been used, has expired, or is invalid.
-            Please request a new one.
-          </p>
-          <Link
-            to="/forgot-password"
-            className="inline-block w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 transition-colors font-semibold text-center"
-          >
-            Request New Link
-          </Link>
-          <div className="mt-4">
-            <Link to="/login" className="text-sm text-gray-500 hover:text-blue-600 transition-colors">
-              Back to login
+      <div className="min-h-screen bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-800 flex items-center justify-center p-4 relative overflow-hidden">
+        <div className="absolute inset-0 overflow-hidden">
+          <div className="absolute -top-40 -right-40 w-80 h-80 bg-white/10 rounded-full blur-3xl animate-pulse"></div>
+        </div>
+        
+        <div className="relative bg-white/95 backdrop-blur-sm rounded-2xl shadow-2xl max-w-md w-full overflow-hidden">
+          <div className="h-1 bg-gradient-to-r from-red-500 via-orange-500 to-yellow-500"></div>
+          
+          <div className="p-8 md:p-10 text-center">
+            <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-red-500 to-red-600 rounded-2xl shadow-lg mb-6">
+              <AlertTriangle className="text-white" size={36} />
+            </div>
+            
+            <h1 className="text-2xl font-bold text-gray-800 mb-3">Link Invalid or Expired</h1>
+            <p className="text-gray-600 mb-6 leading-relaxed text-sm">
+              This password reset link has already been used, has expired, or is invalid.
+              Please request a new one.
+            </p>
+            
+            <Link
+              to="/forgot-password"
+              className="inline-block w-full bg-gradient-to-r from-blue-600 to-blue-700 text-white py-3 rounded-xl hover:from-blue-700 hover:to-blue-800 transition-all font-semibold text-center"
+            >
+              Request New Link
             </Link>
+            
+            <div className="mt-4">
+              <Link to="/login" className="text-sm text-gray-500 hover:text-blue-600 transition-colors inline-flex items-center gap-1">
+                <ArrowLeft size={14} />
+                Back to Login
+              </Link>
+            </div>
           </div>
         </div>
       </div>
     );
   }
 
-  // ── Render: success ───────────────────────────────────────────────────────
+  // Success state
   if (status === 'success') {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-600 to-blue-800 flex items-center justify-center p-4">
-        <div className="bg-white rounded-lg shadow-2xl w-full max-w-md p-8 md:p-12 text-center">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-green-100 rounded-full mb-6">
-            <CheckCircle className="text-green-600" size={32} />
+      <div className="min-h-screen bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-800 flex items-center justify-center p-4 relative overflow-hidden">
+        <div className="absolute inset-0 overflow-hidden">
+          <div className="absolute -top-40 -right-40 w-80 h-80 bg-white/10 rounded-full blur-3xl animate-pulse"></div>
+        </div>
+        
+        <div className="relative bg-white/95 backdrop-blur-sm rounded-2xl shadow-2xl max-w-md w-full overflow-hidden">
+          <div className="h-1 bg-gradient-to-r from-green-500 via-emerald-500 to-teal-500"></div>
+          
+          <div className="p-8 md:p-10 text-center">
+            <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-green-500 to-emerald-600 rounded-2xl shadow-lg mb-6 transform transition-transform hover:scale-105">
+              <CheckCircle className="text-white" size={36} />
+            </div>
+            
+            <h1 className="text-2xl font-bold text-gray-800 mb-3">Password Reset!</h1>
+            <p className="text-gray-600 mb-6 leading-relaxed">
+              Your password has been successfully updated. You can now log in with your new password.
+            </p>
+            
+            <button
+              onClick={() => navigate('/login', { replace: true })}
+              className="w-full bg-gradient-to-r from-blue-600 to-blue-700 text-white py-3 rounded-xl hover:from-blue-700 hover:to-blue-800 transition-all font-semibold"
+            >
+              Go to Login
+            </button>
           </div>
-          <h1 className="text-2xl font-bold text-gray-800 mb-3">Password reset!</h1>
-          <p className="text-gray-600 mb-8 leading-relaxed">
-            Your password has been updated. You can now log in with your new password.
-          </p>
-          <button
-            onClick={() => navigate('/login', { replace: true })}
-            className="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 transition-colors font-semibold"
-          >
-            Go to Login
-          </button>
         </div>
       </div>
     );
   }
 
-  // ── Render: ready (form) ──────────────────────────────────────────────────
+  // Ready state - Form
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-600 to-blue-800 flex items-center justify-center p-4">
-      <div className="bg-white rounded-lg shadow-2xl w-full max-w-md p-8 md:p-12">
+    <div className="min-h-screen bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-800 flex items-center justify-center p-4 relative overflow-hidden">
+      <div className="absolute inset-0 overflow-hidden">
+        <div className="absolute -top-40 -right-40 w-80 h-80 bg-white/10 rounded-full blur-3xl animate-pulse"></div>
+        <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-white/10 rounded-full blur-3xl animate-pulse delay-1000"></div>
+      </div>
 
-        {/* Header */}
-        <div className="text-center mb-6">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-100 rounded-full mb-4">
-            <KeyRound className="text-blue-600" size={32} />
-          </div>
-          <h1 className="text-2xl font-bold text-gray-800 mb-1">Set new password</h1>
-          <p className="text-gray-500 text-sm">
-            For <span className="font-medium text-gray-700">{email}</span>
-          </p>
-        </div>
-
-        {/* Countdown */}
-        {expiresIn !== null && (
-          <div className={`flex items-center justify-center gap-2 text-sm font-medium mb-5 px-3 py-2 rounded-lg ${
-            expiresIn < 120 ? 'bg-red-50 text-red-600' : 'bg-blue-50 text-blue-600'
-          }`}>
-            <Clock size={14} />
-            Link expires in {formatTime(expiresIn)}
-          </div>
-        )}
-
-        <form onSubmit={handleSubmit} className="space-y-5">
-
-          {/* New password */}
-          <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-2">
-              New Password
-            </label>
-            <div className="relative">
-              <input
-                type={showNew ? 'text' : 'password'}
-                value={newPassword}
-                onChange={e => setNewPassword(e.target.value)}
-                required
-                disabled={loading}
-                autoFocus
-                className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-colors pr-12"
-                placeholder="Min. 8 characters"
-                autoComplete="new-password"
-              />
-              <button
-                type="button"
-                onClick={() => setShowNew(v => !v)}
-                className="absolute right-4 top-3.5 text-gray-400 hover:text-gray-600"
-                tabIndex={-1}
-              >
-                {showNew ? <EyeOff size={20} /> : <Eye size={20} />}
-              </button>
+      <div className="relative w-full max-w-md">
+        <div className="bg-white/95 backdrop-blur-sm rounded-2xl shadow-2xl overflow-hidden transform transition-all duration-500">
+          <div className="h-1 bg-gradient-to-r from-blue-500 via-purple-500 to-indigo-500"></div>
+          
+          <div className="p-8 md:p-10">
+            {/* Header */}
+            <div className="text-center mb-6">
+              <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-blue-500 to-blue-600 rounded-2xl shadow-lg mb-5 transform transition-transform hover:scale-105">
+                <Lock className="text-white" size={36} />
+              </div>
+              <h1 className="text-2xl font-bold bg-gradient-to-r from-gray-800 to-gray-600 bg-clip-text text-transparent mb-2">
+                Set New Password
+              </h1>
+              <p className="text-gray-500 text-sm">
+                For <span className="font-medium text-gray-700">{email}</span>
+              </p>
             </div>
 
-            {/* Strength meter */}
-            {newPassword && (
-              <div className="mt-2">
-                <div className="flex gap-1 mb-1">
-                  {[1, 2, 3, 4].map(i => (
-                    <div
-                      key={i}
-                      className={`h-1.5 flex-1 rounded-full transition-all duration-300 ${
-                        i <= strength ? strengthMeta?.color : 'bg-gray-200'
-                      }`}
-                    />
-                  ))}
+            {/* Countdown Timer */}
+            {expiresIn !== null && (
+              <div className={`flex items-center justify-center gap-2 text-sm font-medium mb-6 px-3 py-2 rounded-xl ${
+                expiresIn < 120 ? 'bg-red-50 text-red-600' : 'bg-blue-50 text-blue-600'
+              }`}>
+                <Clock size={14} />
+                <span>Link expires in <strong>{formatTime(expiresIn)}</strong></span>
+              </div>
+            )}
+
+            <form onSubmit={handleSubmit} className="space-y-5">
+              {/* New Password */}
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  New Password
+                </label>
+                <div className={`relative transition-all duration-200 ${
+                  focusedField === 'new' ? 'transform scale-[1.02]' : ''
+                }`}>
+                  <Lock className={`absolute left-3 top-3.5 transition-colors duration-200 ${
+                    focusedField === 'new' ? 'text-blue-500' : 'text-gray-400'
+                  }`} size={18} />
+                  <input
+                    type={showNew ? 'text' : 'password'}
+                    value={newPassword}
+                    onChange={e => setNewPassword(e.target.value)}
+                    onFocus={() => setFocusedField('new')}
+                    onBlur={() => setFocusedField(null)}
+                    required
+                    disabled={loading}
+                    autoFocus
+                    className="w-full pl-10 pr-12 py-3 border-2 rounded-xl focus:outline-none transition-all duration-200 bg-gray-50/50"
+                    style={{
+                      borderColor: focusedField === 'new' ? '#3B82F6' : '#E5E7EB',
+                      boxShadow: focusedField === 'new' ? '0 0 0 3px rgba(59, 130, 246, 0.1)' : 'none'
+                    }}
+                    placeholder="Min. 8 characters"
+                    autoComplete="new-password"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowNew(v => !v)}
+                    className="absolute right-3 top-3.5 text-gray-400 hover:text-gray-600 transition-colors"
+                    tabIndex={-1}
+                  >
+                    {showNew ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
                 </div>
-                {strengthMeta && (
-                  <p className={`text-xs font-medium ${strengthMeta.text}`}>
-                    {strengthMeta.label}
+
+                {/* Strength Meter */}
+                {newPassword && (
+                  <div className="mt-3">
+                    <div className="flex gap-1.5 mb-2">
+                      {[1, 2, 3, 4].map(i => (
+                        <div
+                          key={i}
+                          className={`h-1.5 flex-1 rounded-full transition-all duration-300 ${
+                            i <= strength ? strengthMeta?.color : 'bg-gray-200'
+                          }`}
+                        />
+                      ))}
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <p className={`text-xs font-medium ${strengthMeta?.text}`}>
+                        {strengthMeta?.label} Password
+                      </p>
+                      <p className="text-xs text-gray-400">
+                        {newPassword.length}/8+ chars
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Confirm Password */}
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Confirm Password
+                </label>
+                <div className={`relative transition-all duration-200 ${
+                  focusedField === 'confirm' ? 'transform scale-[1.02]' : ''
+                }`}>
+                  <Lock className={`absolute left-3 top-3.5 transition-colors duration-200 ${
+                    focusedField === 'confirm' ? 'text-blue-500' : 'text-gray-400'
+                  }`} size={18} />
+                  <input
+                    type={showConfirm ? 'text' : 'password'}
+                    value={confirmPassword}
+                    onChange={e => setConfirmPassword(e.target.value)}
+                    onFocus={() => setFocusedField('confirm')}
+                    onBlur={() => setFocusedField(null)}
+                    required
+                    disabled={loading}
+                    className="w-full pl-10 pr-12 py-3 border-2 rounded-xl focus:outline-none transition-all duration-200 bg-gray-50/50"
+                    style={{
+                      borderColor: focusedField === 'confirm' 
+                        ? '#3B82F6' 
+                        : (confirmPassword && confirmPassword !== newPassword ? '#EF4444' : '#E5E7EB'),
+                      boxShadow: focusedField === 'confirm' ? '0 0 0 3px rgba(59, 130, 246, 0.1)' : 'none'
+                    }}
+                    placeholder="Re-enter your password"
+                    autoComplete="new-password"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirm(v => !v)}
+                    className="absolute right-3 top-3.5 text-gray-400 hover:text-gray-600 transition-colors"
+                    tabIndex={-1}
+                  >
+                    {showConfirm ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </div>
+                {confirmPassword && confirmPassword !== newPassword && (
+                  <p className="mt-2 text-xs text-red-500 flex items-center gap-1">
+                    <AlertTriangle size={12} />
+                    Passwords do not match
                   </p>
                 )}
               </div>
-            )}
-          </div>
 
-          {/* Confirm password */}
-          <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-2">
-              Confirm Password
-            </label>
-            <div className="relative">
-              <input
-                type={showConfirm ? 'text' : 'password'}
-                value={confirmPassword}
-                onChange={e => setConfirmPassword(e.target.value)}
-                required
-                disabled={loading}
-                className={`w-full px-4 py-3 border-2 rounded-lg focus:outline-none focus:ring-2 transition-colors pr-12 ${
-                  confirmPassword && confirmPassword !== newPassword
-                    ? 'border-red-400 focus:border-red-400 focus:ring-red-100'
-                    : 'border-gray-300 focus:border-blue-500 focus:ring-blue-200'
-                }`}
-                placeholder="Re-enter password"
-                autoComplete="new-password"
-              />
+              {/* Submit Button */}
               <button
-                type="button"
-                onClick={() => setShowConfirm(v => !v)}
-                className="absolute right-4 top-3.5 text-gray-400 hover:text-gray-600"
-                tabIndex={-1}
+                type="submit"
+                disabled={loading || !newPassword || !confirmPassword || newPassword !== confirmPassword}
+                className="relative w-full bg-gradient-to-r from-blue-600 to-blue-700 text-white py-3 rounded-xl hover:from-blue-700 hover:to-blue-800 transition-all duration-200 font-semibold disabled:opacity-50 disabled:cursor-not-allowed overflow-hidden mt-4"
               >
-                {showConfirm ? <EyeOff size={20} /> : <Eye size={20} />}
+                <span className="relative z-10 flex items-center justify-center gap-2">
+                  {loading ? (
+                    <>
+                      <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      Resetting...
+                    </>
+                  ) : (
+                    <>
+                      Reset Password
+                      <KeyRound size={18} />
+                    </>
+                  )}
+                </span>
               </button>
+            </form>
+
+            {/* Footer */}
+            <div className="text-center mt-6">
+              <Link
+                to="/forgot-password"
+                className="text-sm text-gray-500 hover:text-blue-600 transition-colors inline-flex items-center gap-1"
+              >
+                Request a new link
+              </Link>
             </div>
-            {confirmPassword && confirmPassword !== newPassword && (
-              <p className="mt-1.5 text-xs text-red-500 flex items-center gap-1">
-                <AlertTriangle size={12} /> Passwords do not match
-              </p>
-            )}
+
+            {/* Security Badge */}
+            <div className="mt-6 pt-4 border-t border-gray-100">
+              <div className="flex items-center justify-center gap-2 text-xs text-gray-400">
+                <Shield size={12} />
+                <span>256-bit encrypted connection</span>
+              </div>
+            </div>
           </div>
-
-          <button
-            type="submit"
-            disabled={loading || !newPassword || !confirmPassword || newPassword !== confirmPassword}
-            className="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed mt-2"
-          >
-            {loading ? (
-              <span className="flex items-center justify-center gap-2">
-                <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                Resetting…
-              </span>
-            ) : 'Reset Password'}
-          </button>
-        </form>
-
-        <div className="text-center mt-5">
-          <Link
-            to="/forgot-password"
-            className="text-sm text-gray-500 hover:text-blue-600 transition-colors"
-          >
-            Request a new link
-          </Link>
         </div>
-
       </div>
     </div>
   );

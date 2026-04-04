@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { Users, Clock, DollarSign, Menu, X } from 'lucide-react';
-import Sidebar from './Sidebar';
 import DashboardStats from './DashboardStats';
 
 export default function AdminDashboard() {
@@ -88,19 +87,6 @@ export default function AdminDashboard() {
 
       {/* Main Content */}
       <div className="flex-1 overflow-auto">
-        {/* Header */}
-        <header className="bg-white shadow sticky top-0 z-30">
-          <div className="flex items-center justify-between p-4 md:p-6">
-            <button
-              onClick={() => setSidebarOpen(!sidebarOpen)}
-              className="md:hidden text-gray-600"
-            >
-              {sidebarOpen ? <X size={24} /> : <Menu size={24} />}
-            </button>
-            <h1 className="text-2xl font-bold text-gray-800">Dashboard</h1>
-            
-          </div>
-        </header>
 
         {/* Dashboard Content */}
         <main className="p-4 md:p-6">
