@@ -37,6 +37,7 @@ import MyRequests          from './components/Employee/MyRequests';
 import HybridSidebar       from './components/Common/HybridSidebar.jsx';
 
 import { useWindowSize }   from './hooks/useWindowSize.js';
+import ProfileGate from './components/Common/ProfileGate';
 
 // ─── Shared layout wrapper ────────────────────────────────────────────────────
 
@@ -70,16 +71,18 @@ function AppLayout({ Sidebar, children }) {
 function AdminLayoutWrapper() {
   return (
     <AppLayout Sidebar={AdminSidebar}>
-      <Routes>
-        <Route path="dashboard"     element={<AdminDashboard />} />
-        <Route path="employees"     element={<ManageEmployees />} />
-        <Route path="attendance"    element={<ManualAttendance />} />
-        <Route path="payroll"       element={<PayrollReports />} />
-        <Route path="notifications" element={<NotificationCenter />} />
-        <Route path="profile"       element={<MyProfile />} />
-        <Route path="/"             element={<Navigate to="dashboard" replace />} />
-        <Route path="*"             element={<Navigate to="dashboard" replace />} />
-      </Routes>
+      <ProfileGate profilePath="/admin/profile">
+        <Routes>
+          <Route path="dashboard"     element={<AdminDashboard />} />
+          <Route path="employees"     element={<ManageEmployees />} />
+          <Route path="attendance"    element={<ManualAttendance />} />
+          <Route path="payroll"       element={<PayrollReports />} />
+          <Route path="notifications" element={<NotificationCenter />} />
+          <Route path="profile"       element={<MyProfile />} />
+          <Route path="/"             element={<Navigate to="dashboard" replace />} />
+          <Route path="*"             element={<Navigate to="dashboard" replace />} />
+        </Routes>
+      </ProfileGate>
     </AppLayout>
   );
 }
@@ -89,15 +92,18 @@ function AdminLayoutWrapper() {
 function EmployeeLayoutWrapper() {
   return (
     <AppLayout Sidebar={EmployeeSidebar}>
-      <Routes>
-        <Route path="dashboard"  element={<EmployeeDashboard />} />
-        <Route path="attendance" element={<AttendanceHistory />} />
-        <Route path="salary"     element={<MySalary />} />
-        <Route path="requests"   element={<MyRequests />} />
-        <Route path="profile"    element={<MyProfile />} />
-        <Route path="/"          element={<Navigate to="dashboard" replace />} />
-        <Route path="*"          element={<Navigate to="dashboard" replace />} />
-      </Routes>
+      {/* ↓ ONE gate wraps ALL employee routes */}
+      <ProfileGate profilePath="/employee/profile">
+        <Routes>
+          <Route path="dashboard"  element={<EmployeeDashboard />} />
+          <Route path="attendance" element={<AttendanceHistory />} />
+          <Route path="salary"     element={<MySalary />} />
+          <Route path="requests"   element={<MyRequests />} />
+          <Route path="profile"    element={<MyProfile />} />
+          <Route path="/"          element={<Navigate to="dashboard" replace />} />
+          <Route path="*"          element={<Navigate to="dashboard" replace />} />
+        </Routes>
+      </ProfileGate>
     </AppLayout>
   );
 }
@@ -106,24 +112,23 @@ function EmployeeLayoutWrapper() {
 // Same employee experience + Manage Attendance + Notifications from admin.
 // Zero new page components — everything is reused.
 
+// Do the same for HybridLayoutWrapper:
 function HybridLayoutWrapper() {
   return (
     <AppLayout Sidebar={HybridSidebar}>
-      <Routes>
-        {/* Employee modules */}
-        <Route path="dashboard"         element={<EmployeeDashboard />} />
-        <Route path="attendance"        element={<AttendanceHistory />} />
-        <Route path="salary"            element={<MySalary />} />
-        <Route path="requests"          element={<MyRequests />} />
-        <Route path="profile"           element={<MyProfile />} />
-
-        {/* Extra admin modules */}
-        <Route path="manage-attendance" element={<ManualAttendance />} />
-        <Route path="notifications"     element={<NotificationCenter />} />
-
-        <Route path="/"                 element={<Navigate to="dashboard" replace />} />
-        <Route path="*"                 element={<Navigate to="dashboard" replace />} />
-      </Routes>
+      <ProfileGate profilePath="/hybrid/profile">
+        <Routes>
+          <Route path="dashboard"         element={<EmployeeDashboard />} />
+          <Route path="attendance"        element={<AttendanceHistory />} />
+          <Route path="salary"            element={<MySalary />} />
+          <Route path="requests"          element={<MyRequests />} />
+          <Route path="profile"           element={<MyProfile />} />
+          <Route path="manage-attendance" element={<ManualAttendance />} />
+          <Route path="notifications"     element={<NotificationCenter />} />
+          <Route path="/"                 element={<Navigate to="dashboard" replace />} />
+          <Route path="*"                 element={<Navigate to="dashboard" replace />} />
+        </Routes>
+      </ProfileGate>
     </AppLayout>
   );
 }

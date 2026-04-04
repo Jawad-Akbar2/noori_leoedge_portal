@@ -310,6 +310,25 @@ export default function AddEmployeeModal({ onClose, onSave, currentUserRole }) {
     onClose();
   };
 
+  const handleShare = async () => {
+  if (!generatedLink) return;
+  const shareData = {
+    title: `Employee Invite – ${newEmployee?.firstName} ${newEmployee?.lastName}`,
+    text: `You've been invited to join as an employee. Click the link to complete your registration.`,
+    url: generatedLink,
+  };
+  try {
+    if (navigator.share) {
+      await navigator.share(shareData);
+    } else {
+      await navigator.clipboard.writeText(generatedLink);
+      toast.success("Link copied to clipboard!");
+    }
+  } catch (err) {
+    if (err.name !== "AbortError") toast.error("Could not share link");
+  }
+};
+
   // Role badge preview shown when superadmin selects admin/superadmin role
   const selectedRoleIsPrivileged =
     isSuperAdmin && ["admin", "superadmin", "owner"].includes(formData.role);
@@ -836,6 +855,7 @@ export default function AddEmployeeModal({ onClose, onSave, currentUserRole }) {
           employee={newEmployee}
           inviteLink={generatedLink}
           onClose={handleCloseLinkDialog}
+          onShare={handleShare}
         />
       )}
     </>

@@ -74,6 +74,46 @@ async function auth(req, res, next) {
 }
 
 /**
+ * profileComplete — blocks any route if the employee's profile is incomplete.
+ * Must be used AFTER `auth` or `employeeAuth`.
+ * Admins / superadmins / owners are exempt — they're never blocked.
+ */
+async function profileComplete(req, res, next) {
+  try {
+    const user = req.user;
+
+    // Only owner and superadmin are exempt — they're system accounts with no payroll
+    if (["owner", "superadmin"].includes(user.role)) {
+      return next();
+    }
+
+    const missing = [];
+
+    if (!user.bank?.bankName?.trim())      missing.push("Bank name");
+    if (!user.bank?.accountName?.trim())   missing.push("Account name");
+    if (!user.bank?.accountNumber?.trim()) missing.push("Account number (IBAN)");
+    if (!user.idCard?.front?.url)          missing.push("ID card front");
+    if (!user.idCard?.back?.url)           missing.push("ID card back");
+    if (!user.emergencyContact?.name?.trim())  missing.push("Emergency contact name");
+    if (!user.emergencyContact?.phone?.trim()) missing.push("Emergency contact phone");
+
+    if (missing.length > 0) {
+      return res.status(403).json({
+        success: false,
+        code: "PROFILE_INCOMPLETE",
+        message: "Complete your profile to access this feature.",
+        missing,
+      });
+    }
+
+    next();
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+}
+
+
+/**
  * adminAuth — authenticated AND role === 'admin' or 'superadmin' or 'hybrid'
  */
 async function adminAuth(req, res, next) {
@@ -124,5 +164,5 @@ async function employeeAuth(req, res, next) {
   }
 }
 
-export { auth, adminAuth, employeeAuth };
+export { auth, adminAuth, employeeAuth, profileComplete };
 export default auth;
