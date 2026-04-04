@@ -23,6 +23,7 @@ import {
   BadgeCheck,
 } from "lucide-react";
 import toast from "react-hot-toast";
+import ProfileHeader from "../Common/ProfileHeader";
 
 // ═══════════════════════════════════════════════════════════════
 // ROLE DETECTION
@@ -572,56 +573,67 @@ export default function MyProfile() {
     e.target.value = "";
   };
 
-  const uploadProfilePicture = async (base64Image) => {
-    setUploadingPic(true);
-    try {
-      const token = localStorage.getItem("token");
-      const { data } = await axios.put(
-        "/api/employees/me/profile-picture",
-        { profilePicture: base64Image },
-        { headers: { Authorization: `Bearer ${token}` } },
-      );
-      if (data.success) {
-        setProfilePicture(base64Image);
-        // Notify Header so it updates immediately without a page reload
-        window.dispatchEvent(
-          new CustomEvent("profile-pic-updated", { detail: base64Image }),
-        );
-        toast.success("Profile picture updated");
-      } else toast.error(data.message || "Failed to update profile picture");
-    } catch (err) {
-      toast.error(
-        err.response?.data?.message || "Failed to update profile picture",
-      );
-    } finally {
-      setUploadingPic(false);
-    }
-  };
+const uploadProfilePicture = async (base64Image) => {
+  setUploadingPic(true);
+  try {
+    const token = localStorage.getItem("token");
 
-  const deleteProfilePicture = async () => {
-    if (anyBusy) return;
-    setUploadingPic(true);
-    try {
-      const token = localStorage.getItem("token");
-      const { data } = await axios.delete("/api/employees/me/profile-picture", {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (data.success) {
-        setProfilePicture(null);
-        // Notify Header to revert to initials immediately
-        window.dispatchEvent(
-          new CustomEvent("profile-pic-updated", { detail: null }),
-        );
-        toast.success("Profile picture removed");
-      } else toast.error(data.message);
-    } catch (err) {
-      toast.error(
-        err.response?.data?.message || "Failed to remove profile picture",
-      );
-    } finally {
-      setUploadingPic(false);
+    const { data } = await axios.put(
+      "/api/employees/me/profile-picture",
+      { profilePicture: base64Image },
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+
+    if (data.success) {
+      setProfilePicture(base64Image);   // ✅ update parent state
+
+      setEmployee(prev => ({
+        ...prev,
+        profilePicture: { data: base64Image }
+      }));
+
+      toast.success("Profile picture updated");
     }
-  };
+  } catch (err) {
+    toast.error("Failed to update");
+  } finally {
+    setUploadingPic(false);
+  }
+};
+
+const deleteProfilePicture = async () => {
+  if (anyBusy) return;
+
+  setUploadingPic(true);
+  try {
+    const token = localStorage.getItem("token");
+
+    const { data } = await axios.delete(
+      "/api/employees/me/profile-picture",
+      {
+        headers: { Authorization: `Bearer ${token}` },
+      }
+    );
+
+    if (data.success) {
+      setProfilePicture(null);
+
+      // ✅ IMPORTANT: update employee state
+      setEmployee(prev => ({
+        ...prev,
+        profilePicture: null
+      }));
+
+      toast.success("Profile picture removed");
+    } else {
+      toast.error(data.message);
+    }
+  } catch (err) {
+    toast.error("Failed to remove profile picture");
+  } finally {
+    setUploadingPic(false);
+  }
+};
 
   // ── ID card ──────────────────────────────────────────────────────────────────
   const handleIdCardUpload = async (side, fileData) => {
@@ -866,126 +878,12 @@ export default function MyProfile() {
         </div>
       )}
 
-      {/* ════ PROFILE HEADER ════ */}
-      <div className={`w-full bg-gradient-to-br ${ac.headerGrad} text-white`}>
-        <div className="max-w-5xl mx-auto px-4 md:px-8 py-8 flex flex-col sm:flex-row items-center sm:items-end gap-6">
-          {/* Left: text info */}
-          <div className="flex-1 min-w-0 order-2 sm:order-1 text-center sm:text-left">
-            <div className="flex items-center gap-2 justify-center sm:justify-start mb-1">
-              <Icon size={16} className="text-white/70 shrink-0" />
-              <span className="text-sm font-medium text-white/70">
-                {config.label}
-              </span>
-            </div>
-            <h1 className="text-3xl font-extrabold tracking-tight truncate">
-              {fullName || "—"}
-            </h1>
-            <p className="text-white/80 text-sm mt-1 truncate">
-              {employee?.email}
-            </p>
-            <div className="flex flex-wrap gap-3 mt-3 justify-center sm:justify-start">
-              <span className="inline-flex items-center gap-1.5 bg-white/15 backdrop-blur-sm px-3 py-1 rounded-full text-xs font-medium">
-                <BadgeCheck size={13} /> {employee?.employeeNumber || "—"}
-              </span>
-              <span className="inline-flex items-center gap-1.5 bg-white/15 backdrop-blur-sm px-3 py-1 rounded-full text-xs font-medium">
-                {employee?.department || "—"}
-              </span>
-              {employee?.status && (
-                <span
-                  className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium
-                  ${
-                    employee.status === "Active"
-                      ? "bg-green-400/30 text-green-100"
-                      : employee.status === "Frozen"
-                        ? "bg-blue-400/30 text-blue-100"
-                        : "bg-gray-400/30 text-gray-100"
-                  }`}
-                >
-                  {employee.status}
-                </span>
-              )}
-            </div>
-          </div>
-
-          {/* Right: avatar */}
-          <div className="order-1 sm:order-2 shrink-0">
-            <div className="relative group">
-              <input
-                ref={picInputRef}
-                type="file"
-                accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
-                onChange={handlePicFileSelect}
-                disabled={anyBusy}
-                className="hidden"
-              />
-              <div
-                onClick={() => !anyBusy && picInputRef.current.click()}
-                className={`w-28 h-28 rounded-full ring-4 ${ac.avatarRing} ring-offset-2
-                  overflow-hidden bg-white/20 backdrop-blur-sm
-                  flex items-center justify-center transition relative
-                  ${anyBusy ? "opacity-60 cursor-not-allowed" : "cursor-pointer hover:ring-white"}`}
-              >
-                {/* Spinner overlay while uploading */}
-                {uploadingPic && (
-                  <div className="absolute inset-0 flex items-center justify-center bg-black/40 rounded-full z-10">
-                    <Spinner size={28} color="border-white" />
-                  </div>
-                )}
-
-                {profilePicture ? (
-                  <>
-                    <img
-                      src={profilePicture}
-                      alt="Profile"
-                      className="w-full h-full object-cover"
-                    />
-                    {!anyBusy && (
-                      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition flex items-center justify-center">
-                        <Camera
-                          size={20}
-                          className="text-white opacity-0 group-hover:opacity-100 transition"
-                        />
-                      </div>
-                    )}
-                  </>
-                ) : !uploadingPic ? (
-                  <>
-                    <User size={40} className="text-white/70" />
-                    {!anyBusy && (
-                      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition flex items-center justify-center">
-                        <Camera
-                          size={20}
-                          className="text-white opacity-0 group-hover:opacity-100 transition"
-                        />
-                      </div>
-                    )}
-                  </>
-                ) : null}
-              </div>
-
-              {/* Remove pic — hidden entirely while anything is busy */}
-              {profilePicture && !anyBusy && (
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    deleteProfilePicture();
-                  }}
-                  className="absolute -bottom-1 -right-1 p-1.5 bg-red-500 hover:bg-red-600 text-white rounded-full shadow-lg transition"
-                  title="Remove picture"
-                >
-                  <Trash2 size={12} />
-                </button>
-              )}
-            </div>
-            <p className="text-center text-[11px] text-white/50 mt-2">
-              {uploadingPic
-                ? "Uploading…"
-                : `Click to ${profilePicture ? "change" : "upload"} · max 500 KB`}
-            </p>
-          </div>
-        </div>
-      </div>
+      <ProfileHeader
+        employee={employee}
+        mode="edit" // 👈 Edit mode
+        onProfileUpdate={uploadProfilePicture}
+         onProfileDelete={deleteProfilePicture}   // ✅ ADD THIS
+      />
 
       {/* ════ CONTENT ════ */}
       <div className="max-w-6xl mx-auto px-4 md:px-6 py-6 space-y-5">

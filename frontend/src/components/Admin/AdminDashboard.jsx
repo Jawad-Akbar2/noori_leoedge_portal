@@ -1,18 +1,35 @@
 import React, { useState, useEffect } from 'react'; 
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
-import { Users, Clock, DollarSign, Menu, X } from 'lucide-react';
+import { Users, Clock, DollarSign } from 'lucide-react';
 import DashboardStats from './DashboardStats';
+import ProfileHeader from '../Common/ProfileHeader'; // Import the header component
 
 export default function AdminDashboard() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [stats, setStats] = useState(null);
+  const [employee, setEmployee] = useState(null);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
   useEffect(() => {
+    fetchEmployeeData();
     fetchStats();
   }, []);
+
+  const fetchEmployeeData = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const { data } = await axios.get("/api/employees/me", {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (data.success) {
+        setEmployee(data.employee);
+      }
+    } catch (error) {
+      console.error('Error fetching employee:', error);
+    }
+  };
 
   const fetchStats = async () => {
     try {
@@ -64,8 +81,7 @@ export default function AdminDashboard() {
         }
       );
 
-      const livePayrollAmount =
-        payrollRes.data?.grandTotals?.totalNetPayable || 0;
+      const livePayrollAmount = payrollRes.data?.grandTotals?.totalNetPayable || 0;
 
       setStats({
         totalEmployees,
@@ -80,13 +96,18 @@ export default function AdminDashboard() {
     }
   };
 
+
   return (
     <div className="flex h-screen bg-gray-100">
-      {/* Sidebar */}
-      {/* ❌ REMOVED: Sidebar is already rendered in AdminLayout */}
-
       {/* Main Content */}
       <div className="flex-1 overflow-auto">
+        {/* Profile Header */}
+        {employee && (
+          <ProfileHeader 
+            employee={employee} 
+            mode="view"  // 👈 View only mode
+          />
+        )}
 
         {/* Dashboard Content */}
         <main className="p-4 md:p-6">
