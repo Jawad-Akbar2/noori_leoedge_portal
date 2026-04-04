@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import {
-  X, Save, AlertCircle, Shield, Camera, Upload,
-  Trash2, FileText, Phone, Home, User, Check
+  X, Save, AlertCircleIcon, Shield, Camera, Upload,
+  Trash2, FileText, Phone, Home, User, Check,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { formatToDDMMYYYY } from '../../utils/dateFormatter';
@@ -13,8 +13,9 @@ const isValidTime = (t) => /^([0-1][0-9]|2[0-3]):[0-5][0-9]$/.test(t);
 
 const processBase64Image = (base64String) => {
   if (!base64String) return null;
+  // ✅ Only allow images, reject PDFs
   const base64Regex = /^data:image\/(jpeg|jpg|png|gif|webp);base64,/;
-  if (!base64Regex.test(base64String)) throw new Error('Invalid image format');
+  if (!base64Regex.test(base64String)) throw new Error('Only image formats allowed (JPEG, PNG, GIF, WebP)');
   const mimeType  = base64String.match(/^data:([^;]+);/)[1];
   const extension = mimeType.split('/')[1];
   return { data: base64String, fileName: `profile_${Date.now()}.${extension}`, mimeType, uploadedAt: new Date() };
@@ -40,24 +41,34 @@ const inp = (extra = '') =>
   `w-full px-3 py-2.5 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none text-sm transition disabled:bg-gray-50 disabled:text-gray-500 ${extra}`;
 
 // ─── ID card side uploader ────────────────────────────────────────────────────
-
 const IdCardSide = ({ label, side, currentFile, onUpload, onDelete, isLoading }) => {
   const ref = useRef(null);
 
   const handleSelect = (e) => {
     const file = e.target.files[0];
     if (!file) return;
-    const valid = ['image/jpeg','image/jpg','image/png','image/gif','image/webp','application/pdf'];
-    if (!valid.includes(file.type)) { toast.error('JPEG, PNG, GIF, WebP or PDF only'); return; }
-    if (file.size > 5 * 1024 * 1024) { toast.error('File must be under 5 MB'); return; }
+    
+    // ✅ IMAGES ONLY - Remove PDF support
+    const valid = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+    
+    if (!valid.includes(file.type)) { 
+      toast.error('Only image formats allowed: JPEG, PNG, GIF, or WebP'); 
+      return; 
+    }
+    
+    if (file.size > 5 * 1024 * 1024) { 
+      toast.error('File must be under 5 MB'); 
+      return; 
+    }
+    
     const reader = new FileReader();
     reader.onload = (ev) => onUpload(side, { url: ev.target.result, fileName: file.name });
     reader.readAsDataURL(file);
     e.target.value = '';
   };
 
-  const isImage = currentFile?.url && !currentFile.url.startsWith('data:application/pdf');
-  const isPDF   = currentFile?.url?.startsWith('data:application/pdf');
+  // ✅ Check if it's a valid image (not PDF)
+  const isValidImage = currentFile?.url && !currentFile.url.startsWith('data:application/pdf');
 
   return (
     <div className="flex-1 min-w-0">
@@ -78,13 +89,22 @@ const IdCardSide = ({ label, side, currentFile, onUpload, onDelete, isLoading })
       >
         {currentFile?.url ? (
           <>
-            {isPDF ? (
-              <div className="flex flex-col items-center justify-center h-32 gap-2">
-                <FileText size={28} className="text-red-400" />
-                <span className="text-xs text-gray-500 text-center px-2 break-all">{currentFile.fileName || 'document.pdf'}</span>
+            {/* ✅ Only images - show error if PDF somehow got through */}
+            {!isValidImage ? (
+              <div className="flex flex-col items-center justify-center h-32 gap-2 bg-red-50 rounded-[10px]">
+                <AlertCircleIcon size={28} className="text-red-400" />
+                <span className="text-xs text-red-500 text-center px-2">Invalid format — only images allowed</span>
               </div>
             ) : (
-              <img src={currentFile.url} alt={label} className="w-full h-32 object-cover rounded-[10px]" />
+              <img 
+                src={currentFile.url} 
+                alt={label} 
+                className="w-full h-32 object-cover rounded-[10px]"
+                onError={(e) => {
+                  e.target.onerror = null;
+                  e.target.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 24 24" fill="none" stroke="%23999"%3E%3Crect x="2" y="2" width="20" height="20" rx="2"/%3E%3Cpath d="M8 2v20M16 2v20M2 8h20M2 16h20"/%3E%3C/svg%3E';
+                }}
+              />
             )}
             <div className="absolute inset-0 rounded-[10px] bg-black/0 group-hover:bg-black/20 transition flex items-center justify-center">
               <div className="opacity-0 group-hover:opacity-100 transition flex items-center gap-1.5 bg-white/90 px-3 py-1.5 rounded-full shadow text-xs font-medium text-gray-700">
@@ -103,12 +123,18 @@ const IdCardSide = ({ label, side, currentFile, onUpload, onDelete, isLoading })
         ) : (
           <div className="flex flex-col items-center justify-center h-32 gap-2 text-gray-400">
             <Upload size={20} />
-            <span className="text-xs">Click to upload</span>
-            <span className="text-[10px]">JPEG, PNG, PDF · max 5 MB</span>
+            <span className="text-xs">Click to upload image</span>
+            <span className="text-[10px]">JPEG, PNG, GIF, WebP · max 5 MB</span>
           </div>
         )}
       </div>
-      <input ref={ref} type="file" accept="image/jpeg,image/jpg,image/png,image/gif,image/webp,application/pdf" onChange={handleSelect} className="hidden" />
+      <input 
+        ref={ref} 
+        type="file" 
+        accept="image/jpeg,image/jpg,image/png,image/gif,image/webp" 
+        onChange={handleSelect} 
+        className="hidden" 
+      />
     </div>
   );
 };
@@ -366,7 +392,7 @@ export default function EditEmployeeModal({ employee, onClose, onSave, currentUs
   if (error) return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
       <div className="bg-white rounded-xl w-full max-w-md p-6">
-        <div className="flex items-center gap-3 mb-4 text-red-600"><AlertCircle size={24} /><h2 className="text-lg font-bold">Error Loading Employee</h2></div>
+        <div className="flex items-center gap-3 mb-4 text-red-600"><AlertCircleIcon size={24} /><h2 className="text-lg font-bold">Error Loading Employee</h2></div>
         <p className="text-gray-600 mb-6">{error}</p>
         <button onClick={onClose} className="w-full px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 transition">Close</button>
       </div>

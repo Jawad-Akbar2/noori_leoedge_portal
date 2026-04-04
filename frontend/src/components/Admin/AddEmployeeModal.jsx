@@ -1,6 +1,16 @@
 import React, { useState, useRef } from "react";
 import axios from "axios";
-import { X, Save, AlertCircle, Calendar, Shield, Upload, Trash2, Camera, FileText } from "lucide-react";
+import {
+  X,
+  Save,
+  AlertCircle,
+  Calendar,
+  Shield,
+  Upload,
+  Trash2,
+  Camera,
+  FileText,
+} from "lucide-react";
 import toast from "react-hot-toast";
 import EmployeeLinkDialog from "./EmployeeLinkDialog";
 import { formatToDDMMYYYY } from "../../utils/dateFormatter";
@@ -20,22 +30,26 @@ const IdCardSide = ({
   const handleSelect = (e) => {
     const file = e.target.files[0];
     if (!file) return;
+
+    // ✅ IMAGES ONLY - Remove PDF support
     const valid = [
       "image/jpeg",
       "image/jpg",
       "image/png",
       "image/gif",
       "image/webp",
-      "application/pdf",
     ];
+
     if (!valid.includes(file.type)) {
-      toast.error("JPEG, PNG, GIF, WebP or PDF only");
+      toast.error("Only image formats allowed: JPEG, PNG, GIF, or WebP");
       return;
     }
+
     if (file.size > 5 * 1024 * 1024) {
       toast.error("File must be under 5 MB");
       return;
     }
+
     const reader = new FileReader();
     reader.onload = (ev) =>
       onUpload(side, { url: ev.target.result, fileName: file.name });
@@ -43,9 +57,9 @@ const IdCardSide = ({
     e.target.value = "";
   };
 
-  const isImage =
+  // ✅ Remove PDF check - always treat as image
+  const isValidImage =
     currentFile?.url && !currentFile.url.startsWith("data:application/pdf");
-  const isPDF = currentFile?.url?.startsWith("data:application/pdf");
 
   return (
     <div className="flex-1 min-w-0">
@@ -67,20 +81,18 @@ const IdCardSide = ({
       >
         {currentFile?.url ? (
           <>
-            {isPDF ? (
-              <div className="flex flex-col items-center justify-center h-32 gap-2">
-                <FileText size={28} className="text-red-400" />
-                <span className="text-xs text-gray-500 text-center px-2 break-all">
-                  {currentFile.fileName || "document.pdf"}
-                </span>
-              </div>
-            ) : (
-              <img
-                src={currentFile.url}
-                alt={label}
-                className="w-full h-32 object-cover rounded-[10px]"
-              />
-            )}
+            {/* ✅ Only images now - remove PDF rendering */}
+            <img
+              src={currentFile.url}
+              alt={label}
+              className="w-full h-32 object-cover rounded-[10px]"
+              onError={(e) => {
+                e.target.onerror = null;
+                e.target.src =
+                  'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 24 24" fill="none" stroke="%23999" stroke-width="1.5"%3E%3Crect x="2" y="2" width="20" height="20" rx="2"/%3E%3Cpath d="M8 2v20M16 2v20M2 8h20M2 16h20"/%3E%3C/svg%3E';
+                toast.error(`Failed to load ${label} image`);
+              }}
+            />
             <div className="absolute inset-0 rounded-[10px] bg-black/0 group-hover:bg-black/20 transition flex items-center justify-center">
               <div className="opacity-0 group-hover:opacity-100 transition flex items-center gap-1.5 bg-white/90 px-3 py-1.5 rounded-full shadow text-xs font-medium text-gray-700">
                 <Camera size={12} /> Change
@@ -101,15 +113,15 @@ const IdCardSide = ({
         ) : (
           <div className="flex flex-col items-center justify-center h-32 gap-2 text-gray-400">
             <Upload size={20} />
-            <span className="text-xs">Click to upload</span>
-            <span className="text-[10px]">JPEG, PNG, PDF · max 5 MB</span>
+            <span className="text-xs">Click to upload image</span>
+            <span className="text-[10px]">JPEG, PNG, GIF, WebP · max 5 MB</span>
           </div>
         )}
       </div>
       <input
         ref={ref}
         type="file"
-        accept="image/jpeg,image/jpg,image/png,image/gif,image/webp,application/pdf"
+        accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
         onChange={handleSelect}
         className="hidden"
       />
@@ -119,7 +131,8 @@ const IdCardSide = ({
 
 // currentUserRole is passed from ManageEmployees
 export default function AddEmployeeModal({ onClose, onSave, currentUserRole }) {
-  const isSuperAdmin = currentUserRole === "superadmin" || currentUserRole === "owner";
+  const isSuperAdmin =
+    currentUserRole === "superadmin" || currentUserRole === "owner";
 
   const [activeTab, setActiveTab] = useState("basic");
   const [profilePicture, setProfilePicture] = useState(null);
@@ -191,8 +204,7 @@ export default function AddEmployeeModal({ onClose, onSave, currentUserRole }) {
       ((endMin - startMin) / 60) *
       22 *
       parseFloat(formData.hourlyRate)
-    ).toLocaleString("en-PK")
-                      
+    ).toLocaleString("en-PK");
   };
 
   const isValidTime = (time) => /^([0-1][0-9]|2[0-3]):[0-5][0-9]$/.test(time);
@@ -311,23 +323,23 @@ export default function AddEmployeeModal({ onClose, onSave, currentUserRole }) {
   };
 
   const handleShare = async () => {
-  if (!generatedLink) return;
-  const shareData = {
-    title: `Employee Invite – ${newEmployee?.firstName} ${newEmployee?.lastName}`,
-    text: `You've been invited to join as an employee. Click the link to complete your registration.`,
-    url: generatedLink,
-  };
-  try {
-    if (navigator.share) {
-      await navigator.share(shareData);
-    } else {
-      await navigator.clipboard.writeText(generatedLink);
-      toast.success("Link copied to clipboard!");
+    if (!generatedLink) return;
+    const shareData = {
+      title: `Employee Invite – ${newEmployee?.firstName} ${newEmployee?.lastName}`,
+      text: `You've been invited to join as an employee. Click the link to complete your registration.`,
+      url: generatedLink,
+    };
+    try {
+      if (navigator.share) {
+        await navigator.share(shareData);
+      } else {
+        await navigator.clipboard.writeText(generatedLink);
+        toast.success("Link copied to clipboard!");
+      }
+    } catch (err) {
+      if (err.name !== "AbortError") toast.error("Could not share link");
     }
-  } catch (err) {
-    if (err.name !== "AbortError") toast.error("Could not share link");
-  }
-};
+  };
 
   // Role badge preview shown when superadmin selects admin/superadmin role
   const selectedRoleIsPrivileged =
@@ -705,7 +717,11 @@ export default function AddEmployeeModal({ onClose, onSave, currentUserRole }) {
                         Fixed Monthly Salary:
                       </p>
                       <p className="text-3xl font-bold text-blue-600">
-                        PKR {(formData.monthlySalary || 0).toLocaleString( { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        PKR{" "}
+                        {(formData.monthlySalary || 0).toLocaleString({
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2,
+                        })}
                       </p>
                       <p className="text-xs text-gray-500 mt-2">
                         Pro-rated by actual working days attended each pay
@@ -769,19 +785,39 @@ export default function AddEmployeeModal({ onClose, onSave, currentUserRole }) {
             {activeTab === "other" && (
               <div className="space-y-6">
                 {/* Profile Picture */}
+                {/* Profile Picture */}
                 <div>
                   <label className="text-sm font-medium">Profile Picture</label>
                   <input
                     type="file"
-                    accept="image/*"
+                    accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
                     onChange={handleProfileUpload}
+                    className="mt-1 block w-full text-sm text-gray-500
+      file:mr-4 file:py-2 file:px-4
+      file:rounded-lg file:border-0
+      file:text-sm file:font-semibold
+      file:bg-blue-50 file:text-blue-700
+      hover:file:bg-blue-100"
                   />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Only images: JPEG, PNG, GIF, WebP · max 500KB recommended
+                  </p>
 
                   {profilePicture && (
-                    <img
-                      src={profilePicture}
-                      className="w-20 h-20 mt-2 rounded-lg object-cover"
-                    />
+                    <div className="mt-2 relative inline-block">
+                      <img
+                        src={profilePicture}
+                        className="w-20 h-20 rounded-lg object-cover border border-gray-200"
+                        alt="Profile preview"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setProfilePicture(null)}
+                        className="absolute -top-2 -right-2 p-1 bg-red-500 text-white rounded-full hover:bg-red-600 transition shadow-sm"
+                      >
+                        <Trash2 size={10} />
+                      </button>
+                    </div>
                   )}
                 </div>
 

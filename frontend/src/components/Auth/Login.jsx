@@ -242,7 +242,7 @@ export default function Login() {
             {/* Footer */}
             <div className="mt-6 text-center">
               <p className="text-xs text-gray-400">
-                © 2024 NOORI HR Portal. All rights reserved.
+                © 2026 NOORI HR Portal. All rights reserved.
               </p>
             </div>
           </div>

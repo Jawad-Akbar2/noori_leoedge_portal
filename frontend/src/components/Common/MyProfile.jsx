@@ -291,32 +291,33 @@ const IdCardSide = ({
   const handleFileSelect = (e) => {
     const file = e.target.files[0];
     if (!file) return;
+    
+    // ✅ IMAGES ONLY - No PDFs
     const validTypes = [
       "image/jpeg",
       "image/jpg",
       "image/png",
       "image/gif",
-      "image/webp",
-      "application/pdf",
+      "image/webp"
     ];
+    
     if (!validTypes.includes(file.type)) {
-      toast.error("JPEG, PNG, GIF, WebP or PDF only");
+      toast.error("Only image formats allowed: JPEG, PNG, GIF, or WebP");
       return;
     }
+    
     if (file.size > 5 * 1024 * 1024) {
       toast.error("File must be under 5MB");
       return;
     }
+    
     const reader = new FileReader();
     reader.onload = (ev) =>
       onUpload(side, { url: ev.target.result, fileName: file.name });
     reader.onerror = () => toast.error("Failed to read file");
     reader.readAsDataURL(file);
-    // Reset so same file can be re-selected
     e.target.value = "";
   };
-
-  const isPDF = currentFile?.url?.startsWith("data:application/pdf");
 
   return (
     <div className="flex-1 min-w-0">
@@ -336,7 +337,6 @@ const IdCardSide = ({
           } ${isBusy ? "opacity-50 cursor-not-allowed" : ""}`}
         style={{ minHeight: 140 }}
       >
-        {/* Per-side upload/delete spinner overlay */}
         {isLoading && (
           <div className="absolute inset-0 flex items-center justify-center bg-white/70 rounded-[10px] z-20">
             <Spinner size={28} color="border-gray-400" />
@@ -345,21 +345,11 @@ const IdCardSide = ({
 
         {currentFile?.url ? (
           <>
-            {isPDF ? (
-              <div className="flex flex-col items-center justify-center h-36 gap-2">
-                <FileText size={32} className="text-red-400" />
-                <span className="text-xs text-gray-500 text-center px-2 break-all">
-                  {currentFile.fileName || "document.pdf"}
-                </span>
-              </div>
-            ) : (
-              <img
-                src={currentFile.url}
-                alt={label}
-                className="w-full h-36 object-cover rounded-[10px]"
-              />
-            )}
-            {/* Hover overlay — hidden while busy */}
+            <img
+              src={currentFile.url}
+              alt={label}
+              className="w-full h-36 object-cover rounded-[10px]"
+            />
             {!isBusy && (
               <div className="absolute inset-0 rounded-[10px] bg-black/0 group-hover:bg-black/20 transition flex items-center justify-center">
                 <div className="opacity-0 group-hover:opacity-100 transition flex items-center gap-1.5 bg-white/90 px-3 py-1.5 rounded-full shadow text-xs font-medium text-gray-700">
@@ -367,7 +357,6 @@ const IdCardSide = ({
                 </div>
               </div>
             )}
-            {/* Delete button */}
             <button
               type="button"
               onClick={(e) => {
@@ -383,9 +372,9 @@ const IdCardSide = ({
         ) : (
           <div className="flex flex-col items-center justify-center h-36 gap-2 text-gray-400">
             <Upload size={22} />
-            <span className="text-xs">Click to upload</span>
+            <span className="text-xs">Click to upload image</span>
             <span className="text-[10px] text-gray-400">
-              JPEG, PNG, PDF · max 5MB
+              JPEG, PNG, GIF, WebP · max 5MB
             </span>
           </div>
         )}
@@ -393,7 +382,7 @@ const IdCardSide = ({
       <input
         ref={fileInputRef}
         type="file"
-        accept="image/jpeg,image/jpg,image/png,image/gif,image/webp,application/pdf"
+        accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
         onChange={handleFileSelect}
         disabled={isBusy}
         className="hidden"

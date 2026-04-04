@@ -217,7 +217,7 @@ export default function ProfileHeader({ employee, onProfileUpdate, mode = "view"
             </p>
           ) : (
             <p className="text-center text-[11px] text-white/50 mt-2">
-              {profilePicture ? "Profile picture" : "No profile picture"}
+              {profilePicture ? "" : "No profile picture"}
             </p>
           )}
         </div>

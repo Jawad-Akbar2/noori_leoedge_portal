@@ -50,6 +50,9 @@ import performanceRoutes  from './routes/performance.js';
 import requestRoutes      from './routes/requests.js';
 import notificationRoutes from './routes/notifications.js';
 import errorHandler       from './middleware/errorHandler.js';
+import adminStatsRoutes from './routes/adminStats.js';
+import employeeStatsRoutes from './routes/employeeStats.js';
+
 
 app.use('/api/auth',          authRoutes);
 app.use('/api/employees',     employeeRoutes);
@@ -58,6 +61,9 @@ app.use('/api/payroll',       payrollRoutes);
 app.use('/api/performance',   performanceRoutes);
 app.use('/api/requests',      requestRoutes);
 app.use('/api/notifications', notificationRoutes);
+app.use('/api/stats', adminStatsRoutes);
+app.use('/api/stats', employeeStatsRoutes);
+
 
 app.get('/api/health', (_req, res) => {
   res.json({
