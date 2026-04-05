@@ -63,7 +63,7 @@ export default function Login() {
       // Redirect based on role
       if (userData.role === 'admin' || userData.role === 'superadmin' || userData.role === 'owner') {
         navigate('/admin/dashboard', { replace: true });
-      } else if (userData.role === 'hybrid') {
+      } else if (userData.role === 's') {
         navigate('/hybrid/dashboard', { replace: true });
       } else {
         navigate('/employee/dashboard', { replace: true });
@@ -73,25 +73,6 @@ export default function Login() {
     } finally {
       setLoading(false);
     }
-  };
-
-  const getRoleIcon = () => {
-    return (
-      <div className="flex items-center justify-center gap-2 mt-4">
-        <div className="flex items-center gap-1 px-2 py-1 bg-blue-50 rounded-full">
-          <Briefcase size={12} className="text-blue-600" />
-          <span className="text-xs text-blue-600">Employee</span>
-        </div>
-        <div className="flex items-center gap-1 px-2 py-1 bg-purple-50 rounded-full">
-          <Shield size={12} className="text-purple-600" />
-          <span className="text-xs text-purple-600">Admin</span>
-        </div>
-        <div className="flex items-center gap-1 px-2 py-1 bg-indigo-50 rounded-full">
-          <Users size={12} className="text-indigo-600" />
-          <span className="text-xs text-indigo-600">Hybrid</span>
-        </div>
-      </div>
-    );
   };
 
   return (
@@ -121,7 +102,6 @@ export default function Login() {
               <p className="text-gray-500 text-sm">
                 Sign in to your HR Portal account
               </p>
-              {getRoleIcon()}
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-5">

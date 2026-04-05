@@ -281,7 +281,7 @@ const UserProfile = ({ user, color, isCollapsed, onLogout }) => {
 export default function Sidebar({ 
   userRole = 'employee', // 'employee', 'admin', 'hybrid'
   user = null,
-  isOpen = true,
+  isOpen = false,
   isMobile = false,
   onToggle,
   onClose,

@@ -45,7 +45,7 @@ import NotFound from "./components/Common/404.jsx";
 
 function AppLayout({ SidebarComponent, children }) {
   const { isMobile } = useWindowSize();
-  const [sidebarOpen, setSidebarOpen] = useState(!isMobile);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const { user } = useAuth(); // Move useAuth inside component
 
   return (
