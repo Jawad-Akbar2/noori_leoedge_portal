@@ -13,7 +13,7 @@ import mongoose from 'mongoose';
  */
 const dailyBreakdownSchema = new mongoose.Schema({
   date:           { type: Date,   required: true },
-  status:         { type: String, enum: ['Present', 'Late', 'Leave', 'Absent'] },
+  status:         { type: String, enum: ['Present', 'Late', 'Leave', 'Absent', 'NCNS'] },
   inTime:         String,   // HH:mm
   outTime:        String,   // HH:mm
   hoursWorked:    { type: Number, default: 0 },
@@ -70,7 +70,7 @@ const payrollRecordSchema = new mongoose.Schema({
    * netSalary = baseSalary - totalDeduction + totalOtAmount
    * Always recomputed on save.
    */
-  netSalary: { type: Number, default: 0, min: 0 },
+  netSalary: { type: Number, default: 0 },
 
   // ── Per-day breakdown (for admin detail view & employee salary page) ──────
   dailyBreakdown: {
@@ -107,12 +107,11 @@ payrollRecordSchema.index({ empId: 1, periodStart: 1, periodEnd: 1 }, { unique: 
 
 // ─── Auto-compute netSalary on save ──────────────────────────────────────────
 payrollRecordSchema.pre('save', function (next) {
-  this.netSalary = Math.max(
-    0,
+  this.netSalary =
     (this.baseSalary || 0)
     - (this.totalDeduction || 0)
-    + (this.totalOtAmount  || 0)
-  );
+    + (this.totalOtAmount || 0);
+
   next();
 });
 

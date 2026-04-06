@@ -91,6 +91,7 @@ function calcEmployeeTotals(emp, records, workingDays) {
   const leaveDays = records.filter((r) => r.status === "Leave").length;
   const absentDays = records.filter((r) => r.status === "Absent").length;
   const lateDays = records.filter((r) => r.status === "Late").length;
+  const ncnsDays = records.filter((r) => r.status === "NCNS").length;
 
   const totalDeduction = records.reduce(
     (s, r) => s + n(r.financials?.deduction),
@@ -296,7 +297,7 @@ router.post("/attendance-overview", adminAuth, async (req, res) => {
       logMap[`${log.empId}_${log.date.toISOString().slice(0, 10)}`] = log;
     }
 
-    const statusCount = { "On-time": 0, Late: 0, Leave: 0, Absent: 0 };
+    const statusCount = { "On-time": 0, Late: 0, Leave: 0, Absent: 0, NCNS: 0 };
     const detailedList = [];
 
     for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {

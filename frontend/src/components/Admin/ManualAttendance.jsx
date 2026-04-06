@@ -47,12 +47,13 @@ import { useEscape } from "../../context/EscapeStack";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const PRIVILEGED_ROLES = ["admin", "superadmin", "owner"];
-const STATUS_OPTIONS = ["Present", "Late", "Absent", "Leave"];
+const STATUS_OPTIONS = ["Present", "Late", "Absent", "Leave", "NCNS"];
 const STATUS_STYLES = {
   Present: "bg-green-100 text-green-800 border-green-200",
   Late: "bg-yellow-100 text-yellow-800 border-yellow-200",
   Leave: "bg-blue-100 text-blue-800 border-blue-200",
   Absent: "bg-red-100 text-red-800 border-red-200",
+  NCNS: "bg-gray-100 text-gray-700 border-gray-200",
   "": "bg-gray-100 text-gray-500 border-gray-200",
 };
 
@@ -925,6 +926,7 @@ function AttendanceFormModal({
               <option value="Late">Late</option>
               <option value="Absent">Absent</option>
               <option value="Leave">Leave</option>
+              <option value="NCNS">NCNS</option>
             </select>
           </div>
           {showTimes && (
@@ -2246,6 +2248,8 @@ function ManageTab({ userRole, isSuperAdmin, isAdmin, isHybrid }) {
         return "bg-blue-100 text-blue-800";
       case "Absent":
         return "bg-red-100 text-red-800";
+      case "NCNS":
+        return "bg-gray-100 text-gray-700 border-gray-200";
       default:
         return "bg-gray-100 text-gray-800";
     }

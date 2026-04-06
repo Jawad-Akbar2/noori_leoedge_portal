@@ -66,6 +66,7 @@ const statusBadge = (status) =>
       "bg-gradient-to-r from-blue-100 to-blue-200 text-blue-800 border border-blue-200/50",
     Absent:
       "bg-gradient-to-r from-gray-100 to-gray-200 text-gray-600 border border-gray-200/50",
+    ncns: "bg-gradient-to-r from-gray-100 to-gray-200 text-gray-600 border border-gray-200/50",
   })[status] ??
   "bg-gradient-to-r from-gray-100 to-gray-200 text-gray-600 border border-gray-200/50";
 
@@ -554,6 +555,11 @@ export default function GhostModeView({ employee, onClose }) {
                           value={summaryData.lateDays}
                           icon={Clock}
                         />
+                        <InfoItem
+                          label="NCNS Days"
+                          value={summaryData.ncnsDays}
+                          icon={AlertCircle}
+                        />
                       </>
                     )}
                   </div>
@@ -662,6 +668,11 @@ export default function GhostModeView({ employee, onClose }) {
                       value: summaryData.leaveDays,
                       color: "blue",
                     },
+                    {
+                      label: "NCNS",
+                      value: summaryData.ncnsDays,
+                      color: "gray",
+                    }
                   ].map(({ label, value, color }) => (
                     <div
                       key={label}

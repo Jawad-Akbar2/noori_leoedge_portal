@@ -6,11 +6,17 @@ const deductionDetailSchema = new mongoose.Schema(
   {
     amount: { type: Number, required: true, min: 0 },
     reason: { type: String, required: true, trim: true },
-   type: {
-  type: String,
-  enum: ["late_login", "early_logout", "fixed_penalty", "hourly_penalty", "manual"],
-  default: "manual",
-},
+    type: {
+      type: String,
+      enum: [
+        "late_login",
+        "early_logout",
+        "fixed_penalty",
+        "hourly_penalty",
+        "manual",
+      ],
+      default: "manual",
+    },
     createdAt: { type: Date, default: Date.now },
   },
   { _id: false },
@@ -18,18 +24,18 @@ const deductionDetailSchema = new mongoose.Schema(
 
 const otDetailSchema = new mongoose.Schema(
   {
-    type:   { type: String, enum: ['manual', 'calc'], default: 'manual' },
+    type: { type: String, enum: ["manual", "calc"], default: "manual" },
     amount: { type: Number, min: 0, default: 0 },
-    hours:  { type: Number, min: 0, default: 0 },
-    rate:   { 
-      type: Number, 
+    hours: { type: Number, min: 0, default: 0 },
+    rate: {
+      type: Number,
       default: 1,
       validate: {
-        validator: v => [1, 1.5, 2].includes(v),
-        message: 'rate must be 1, 1.5, or 2'
-      }
+        validator: (v) => [1, 1.5, 2].includes(v),
+        message: "rate must be 1, 1.5, or 2",
+      },
     },
-    reason:    { type: String, required: true, trim: true },
+    reason: { type: String, required: true, trim: true },
     createdAt: { type: Date, default: Date.now },
   },
   { _id: false },
@@ -69,7 +75,7 @@ const attendanceLogSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ["Present", "Late", "Leave", "Absent"],
+      enum: ["Present", "Late", "Leave", "Absent", "NCNS"],
       default: "Absent",
       index: true,
     },
@@ -115,16 +121,17 @@ const attendanceLogSchema = new mongoose.Schema(
        */
       isNightShift: { type: Boolean, default: false },
     },
-salaryType: {
-  type: String,
-  enum: ['hourly', 'monthly'],
-  required: true
-},
-hourlyRate: {   // already exists — effective rate at time of log
-  type: Number,
-  required: true,
-  min: 0
-},
+    salaryType: {
+      type: String,
+      enum: ["hourly", "monthly"],
+      required: true,
+    },
+    hourlyRate: {
+      // already exists — effective rate at time of log
+      type: Number,
+      required: true,
+      min: 0,
+    },
 
     financials: {
       hoursWorked: {
@@ -138,8 +145,8 @@ hourlyRate: {   // already exists — effective rate at time of log
         default: 0,
         min: 0,
       },
-      lateMinutes:        { type: Number, default: 0, min: 0 },  // minutes after shift.start
-earlyLogoutMinutes: { type: Number, default: 0, min: 0 },  // minutes before shift.end
+      lateMinutes: { type: Number, default: 0, min: 0 }, // minutes after shift.start
+      earlyLogoutMinutes: { type: Number, default: 0, min: 0 }, // minutes before shift.end
       basePay: {
         type: Number,
         default: 0,

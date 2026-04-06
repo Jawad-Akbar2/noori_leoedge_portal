@@ -210,7 +210,7 @@ export default function PayrollReports() {
           item.name.toLowerCase().includes(selectedEmployee.toLowerCase())
         );
 
-        const statusCount = { 'On-time': 0, Late: 0, Leave: 0, Absent: 0 };
+        const statusCount = { 'On-time': 0, Late: 0, Leave: 0, Absent: 0, ncns: 0 };
         filtered.forEach(item => {
           if (statusCount[item.type] !== undefined) statusCount[item.type]++;
         });
@@ -472,6 +472,7 @@ export default function PayrollReports() {
                           item.type === 'On-time' ? 'bg-green-100 text-green-700' :
                           item.type === 'Late' ? 'bg-yellow-100 text-yellow-700' :
                           item.type === 'Leave' ? 'bg-blue-100 text-blue-700' :
+                          item.type === 'NCNS' ? 'bg-gray-100 text-gray-700' :
                           'bg-red-100 text-red-700'
                         }`}>
                           {item.type}
@@ -500,6 +501,7 @@ export default function PayrollReports() {
               <th className="px-4 py-3 text-center text-xs font-semibold text-gray-500">Absent</th>
               <th className="px-4 py-3 text-center text-xs font-semibold text-gray-500">Late</th>
               <th className="px-4 py-3 text-center text-xs font-semibold text-gray-500">Leave</th>
+              <th className="px-4 py-3 text-center text-xs font-semibold text-gray-500">NCNS</th>
               <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500">Rating</th>
             </tr>
           </thead>
@@ -820,6 +822,7 @@ export default function PayrollReports() {
                                         day.status === 'Present' ? 'bg-green-100 text-green-700' :
                                         day.status === 'Late' ? 'bg-yellow-100 text-yellow-700' :
                                         day.status === 'Leave' ? 'bg-blue-100 text-blue-700' :
+                                          day.status === 'NCNS' ? 'bg-gray-100 text-gray-700' :
                                         'bg-red-100 text-red-700'
                                       }`}>
                                         {day.status}

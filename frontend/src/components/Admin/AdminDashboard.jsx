@@ -415,6 +415,12 @@ function AttendanceSection({ data, navigate }) {
           icon={Calendar}
           accent={C.blue}
         />
+        <KpiCard
+          title="NCNS Today"
+          value={today.ncns}
+          icon={XCircle}
+          accent={C.gray}
+        />
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
@@ -460,6 +466,19 @@ function AttendanceSection({ data, navigate }) {
               }
               color={C.blue}
             />
+
+              <StatusRow
+              label="NCNS"
+              value={thisMonth.ncnsCount}
+              total={
+                thisMonth.presentCount +
+                thisMonth.absentCount +
+                thisMonth.leaveCount +
+                thisMonth.ncnsCount
+              }
+              color={C.gray}
+            />
+            
             <div className="mt-4 pt-4 border-t border-gray-100 grid grid-cols-2 gap-3 text-xs">
               {[
                 ["Att. Rate", `${thisMonth.attendanceRate}%`],

@@ -61,6 +61,12 @@ const STATUS_FILTERS = [
     off: "bg-gray-100 text-gray-500",
   },
   {
+    key: "ncns",
+    label: "NCNS",
+    on: "bg-gray-100 text-gray-700",
+    off: "bg-gray-100 text-gray-500",
+  },
+  {
     key: "OT",
     label: "Has OT",
     on: "bg-purple-100 text-purple-700",
@@ -74,6 +80,7 @@ const statusBadge = (status) => {
     Late: "bg-yellow-100 text-yellow-800",
     Leave: "bg-blue-100 text-blue-800",
     Absent: "bg-gray-100 text-gray-700",
+    NCNS: "bg-gray-100 text-gray-700",
   };
   return map[status] ?? "bg-gray-100 text-gray-700";
 };

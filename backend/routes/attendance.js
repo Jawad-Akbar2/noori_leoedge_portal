@@ -242,7 +242,16 @@ function buildFinancials({
     basePay = hoursWorked * hourlyRate;
   } else if ((inTime && !outTime) || (!inTime && outTime)) {
     hoursWorked = scheduledHrs;
-    basePay = hoursWorked * hourlyRate * 0.5;
+    basePay = hoursWorked * hourlyRate;
+
+    deduction = 50; // ✅ fixed penalty
+  } else if (status === "NCNS") {
+    const fullDayPay = scheduledHrs * hourlyRate;
+
+    hoursWorked = 0;
+    basePay = 0;
+
+    deduction = fullDayPay * 2; // ✅ 200% penalty
   }
 
   let deductionDetails = [];
@@ -796,12 +805,10 @@ router.get("/range", adminAuth, async (req, res) => {
     const to = parseDDMMYYYY(toDate);
 
     if (!from || !to) {
-      return res
-        .status(400)
-        .json({
-          success: false,
-          message: "Invalid date format. Use dd/mm/yyyy",
-        });
+      return res.status(400).json({
+        success: false,
+        message: "Invalid date format. Use dd/mm/yyyy",
+      });
     }
 
     to.setHours(23, 59, 59, 999);
@@ -867,12 +874,10 @@ router.post("/worksheet", adminAuth, async (req, res) => {
     const end = parseDDMMYYYY(toDate);
 
     if (!start || !end || isNaN(start) || isNaN(end)) {
-      return res
-        .status(400)
-        .json({
-          success: false,
-          message: "Invalid date format. Use dd/mm/yyyy",
-        });
+      return res.status(400).json({
+        success: false,
+        message: "Invalid date format. Use dd/mm/yyyy",
+      });
     }
 
     const daySpan = Math.round((end - start) / 86_400_000);
@@ -1010,12 +1015,10 @@ router.post("/save-row", adminAuth, async (req, res) => {
     } = req.body;
 
     if (!empId || !date || !status) {
-      return res
-        .status(400)
-        .json({
-          success: false,
-          message: "empId, date, and status are required",
-        });
+      return res.status(400).json({
+        success: false,
+        message: "empId, date, and status are required",
+      });
     }
 
     const roleFilter =
@@ -1054,12 +1057,10 @@ router.post("/save-row", adminAuth, async (req, res) => {
 
     const dateObj = parseDDMMYYYY(date);
     if (!dateObj || isNaN(dateObj)) {
-      return res
-        .status(400)
-        .json({
-          success: false,
-          message: "Invalid date (dd/mm/yyyy required)",
-        });
+      return res.status(400).json({
+        success: false,
+        message: "Invalid date (dd/mm/yyyy required)",
+      });
     }
     dateObj.setHours(0, 0, 0, 0);
 
@@ -1270,20 +1271,16 @@ router.post("/bulk-save", adminAuth, async (req, res) => {
     const { rows, forceOverride = false } = req.body;
 
     if (!Array.isArray(rows) || rows.length === 0) {
-      return res
-        .status(400)
-        .json({
-          success: false,
-          message: "rows array is required and must not be empty",
-        });
+      return res.status(400).json({
+        success: false,
+        message: "rows array is required and must not be empty",
+      });
     }
     if (rows.length > 500) {
-      return res
-        .status(400)
-        .json({
-          success: false,
-          message: "Maximum 500 rows per bulk-save request",
-        });
+      return res.status(400).json({
+        success: false,
+        message: "Maximum 500 rows per bulk-save request",
+      });
     }
 
     const roleFilter =

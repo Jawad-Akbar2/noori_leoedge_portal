@@ -8,7 +8,7 @@ import {
   DollarSign,
   Wallet,
   Eye,
-  X
+  X,
 } from "lucide-react";
 import toast from "react-hot-toast";
 
@@ -29,8 +29,7 @@ const isoToDisplay = (isoStr) => {
 };
 
 /** PKR number formatter */
-const pkr = (val) =>
-  (val ?? 0).toLocaleString("en-PK");
+const pkr = (val) => (val ?? 0).toLocaleString("en-PK");
 
 /** Default pay-period start: 18th of current (or prior) month */
 const defaultFromDate = () => {
@@ -60,7 +59,6 @@ export default function MySalary() {
   const [loading, setLoading] = useState(false);
   const [detailsModal, setDetailsModal] = useState(null);
 
-
   // FIX 1: correct route  → GET /api/payroll/my/summary  (employeeAuth, no :id)
   // FIX 2: correct params → startDate / endDate
   const fetchSalaryData = useCallback(async () => {
@@ -85,7 +83,6 @@ export default function MySalary() {
     }
   }, [fromDate, toDate]);
 
-  
   useEffect(() => {
     fetchSalaryData();
   }, [fetchSalaryData]);
@@ -269,6 +266,11 @@ export default function MySalary() {
                   value: summary.leaveDays ?? "—",
                   color: "text-blue-600",
                 },
+                {
+                  label: "NCNS",
+                  value: summary.ncnsDays ?? "—",
+                  color: "text-gray-600",
+                },
               ].map((s) => (
                 <div key={s.label}>
                   <p
@@ -334,7 +336,11 @@ export default function MySalary() {
                                 ? "bg-yellow-100 text-yellow-700"
                                 : day.status === "Leave"
                                   ? "bg-blue-100 text-blue-700"
-                                  : "bg-gray-100 text-gray-600"
+                                  : day.status === "Absent"
+                                    ? "bg-red-100 text-red-500"
+                                    : day.status === "ncns"
+                                      ? "bg-purple-100 text-purple-700"
+                                      : "bg-gray-100 text-gray-600"
                           }`}
                         >
                           {day.status ?? "Absent"}
@@ -352,21 +358,33 @@ export default function MySalary() {
                         PKR {pkr(day.basePay)}
                       </td>
                       <td className="px-4 py-3 text-right text-green-600">
-  {(day.otAmount ?? 0) > 0 ? (
-    <button type="button" onClick={() => setDetailsModal({ type: 'ot', day })}
-      className="inline-flex items-center gap-1 hover:text-green-800">
-      PKR {pkr(day.otAmount)} <Eye size={12} />
-    </button>
-  ) : "—"}
-</td>
-<td className="px-4 py-3 text-right text-red-500">
-  {(day.deduction ?? 0) > 0 ? (
-    <button type="button" onClick={() => setDetailsModal({ type: 'deduction', day })}
-      className="inline-flex items-center gap-1 hover:text-red-700">
-      PKR {pkr(day.deduction)} <Eye size={12} />
-    </button>
-  ) : "—"}
-</td>
+                        {(day.otAmount ?? 0) > 0 ? (
+                          <button
+                            type="button"
+                            onClick={() => setDetailsModal({ type: "ot", day })}
+                            className="inline-flex items-center gap-1 hover:text-green-800"
+                          >
+                            PKR {pkr(day.otAmount)} <Eye size={12} />
+                          </button>
+                        ) : (
+                          "—"
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-right text-red-500">
+                        {(day.deduction ?? 0) > 0 ? (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setDetailsModal({ type: "deduction", day })
+                            }
+                            className="inline-flex items-center gap-1 hover:text-red-700"
+                          >
+                            PKR {pkr(day.deduction)} <Eye size={12} />
+                          </button>
+                        ) : (
+                          "—"
+                        )}
+                      </td>
                       <td className="px-4 py-3 text-right font-semibold text-blue-600">
                         {/* FIX 4: finalDayEarning (not dailyEarning) */}
                         PKR {pkr(day.finalDayEarning)}
@@ -406,42 +424,60 @@ export default function MySalary() {
         </div>
       )}
       {/* OT / Deduction detail popup */}
-{detailsModal && (
-  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-    <div className="bg-white rounded-xl shadow-2xl w-full max-w-md">
-      <div className="flex items-center justify-between px-5 py-3 border-b">
-        <h3 className="font-semibold text-gray-800">
-          {detailsModal.type === 'ot' ? 'OT Details' : 'Deduction Details'} — {detailsModal.day.date}
-        </h3>
-        <button onClick={() => setDetailsModal(null)} className="text-gray-400 hover:text-gray-600">
-          <X size={18} />
-        </button>
-      </div>
-      <div className="p-4 space-y-2 max-h-80 overflow-auto">
-        {(() => {
-          const entries = detailsModal.type === 'ot'
-            ? detailsModal.day.otDetails
-            : detailsModal.day.deductionDetails;
-          if (!entries?.length) return <p className="text-sm text-gray-500">No detail entries found.</p>;
-          return entries.map((entry, i) => (
-            <div key={i} className="border rounded-lg p-2 text-sm bg-gray-50">
-              {detailsModal.type === 'ot' ? (
-                <p>
-                  {entry.type === 'manual'
-                    ? `Amount: PKR ${entry.amount}`
-                    : `Hours: ${entry.hours} × ${entry.rate}x`}
-                  {' · '}{entry.reason}
-                </p>
-              ) : (
-                <p>Amount: PKR {entry.amount} · {entry.reason}</p>
-              )}
+      {detailsModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md">
+            <div className="flex items-center justify-between px-5 py-3 border-b">
+              <h3 className="font-semibold text-gray-800">
+                {detailsModal.type === "ot"
+                  ? "OT Details"
+                  : "Deduction Details"}{" "}
+                — {detailsModal.day.date}
+              </h3>
+              <button
+                onClick={() => setDetailsModal(null)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X size={18} />
+              </button>
             </div>
-          ));
-        })()}
-      </div>
-    </div>
-  </div>
-)}
+            <div className="p-4 space-y-2 max-h-80 overflow-auto">
+              {(() => {
+                const entries =
+                  detailsModal.type === "ot"
+                    ? detailsModal.day.otDetails
+                    : detailsModal.day.deductionDetails;
+                if (!entries?.length)
+                  return (
+                    <p className="text-sm text-gray-500">
+                      No detail entries found.
+                    </p>
+                  );
+                return entries.map((entry, i) => (
+                  <div
+                    key={i}
+                    className="border rounded-lg p-2 text-sm bg-gray-50"
+                  >
+                    {detailsModal.type === "ot" ? (
+                      <p>
+                        {entry.type === "manual"
+                          ? `Amount: PKR ${entry.amount}`
+                          : `Hours: ${entry.hours} × ${entry.rate}x`}
+                        {" · "}
+                        {entry.reason}
+                      </p>
+                    ) : (
+                      <p>
+                        Amount: PKR {entry.amount} · {entry.reason}
+                      </p>
+                    )}
+                  </div>
+                ));
+              })()}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

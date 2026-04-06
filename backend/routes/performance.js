@@ -32,7 +32,7 @@ const payrollFilter = (callerRole, extra = {}) => ({
 // ─── shared helper ────────────────────────────────────────────────────────────
 
 function computePerformance(employee, logs, periodStart, periodEnd, totalWorkingDays) {
-  let presentDays = 0, lateDays = 0, absentDays = 0, leaveDays = 0;
+  let presentDays = 0, lateDays = 0, absentDays = 0, leaveDays = 0, ncnsDays = 0;
   let totalHoursWorked = 0, totalOtHours = 0;
 
   for (const log of logs) {
@@ -40,6 +40,7 @@ function computePerformance(employee, logs, periodStart, periodEnd, totalWorking
     else if (log.status === 'Late')    { presentDays++; lateDays++; }
     else if (log.status === 'Absent')  absentDays++;
     else if (log.status === 'Leave')   leaveDays++;
+    else if (log.status === 'NCNS')    ncnsDays++;
 
     totalHoursWorked += log.financials?.hoursWorked || 0;
     totalOtHours     += log.financials?.otHours     || 0;

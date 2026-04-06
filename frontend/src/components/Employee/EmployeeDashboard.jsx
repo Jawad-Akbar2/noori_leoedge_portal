@@ -14,6 +14,7 @@ import {
   CheckCircle, XCircle, Calendar, FileText, RefreshCw, Zap,
   Star, Award, ArrowUpRight, Activity, LogIn, LogOut,
   ChevronRight, Eye, EyeOff, Target, Percent,
+  Circle,
 } from "lucide-react";
 
 // ─── Design tokens (mirrors AdminDashboard palette) ───────────────────────────
@@ -154,6 +155,7 @@ const StatusBadge = ({ status }) => {
     Late:     ["yellow", "Late"],
     Absent:   ["red",    "Absent"],
     Leave:    ["blue",   "Leave"],
+    ncns:     ["gray",   "NCNS"],
   };
   const [color, label] = map[status] || ["gray", status];
   return <Badge label={label} color={color} />;
@@ -183,7 +185,7 @@ function TodayCard({ today }) {
     );
   }
 
-  const statusColor = { Present: C.emerald, Late: C.amber, Absent: C.rose, Leave: C.blue }[today.status] || C.slate;
+  const statusColor = { Present: C.emerald, Late: C.amber, Absent: C.rose, Leave: C.blue, ncns: C.gray }[today.status] || C.slate;
 
   return (
     <Card>
@@ -323,6 +325,7 @@ function AttendanceSection({ att, navigate }) {
         <KpiCard title="Late Days"      value={tm.lateDays}         icon={AlertCircle} accent={C.amber}   />
         <KpiCard title="Absent Days"    value={tm.absentDays}       icon={XCircle}     accent={C.rose}    />
         <KpiCard title="Leave Days"     value={tm.leaveDays}        icon={Calendar}    accent={C.blue}    />
+        <KpiCard title="NCNS Days"      value={tm.ncnsDays}         icon={Circle}      accent={C.gray}    />
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
@@ -334,7 +337,10 @@ function AttendanceSection({ att, navigate }) {
             <StatusRow label="Present"  value={tm.presentDays} total={tm.presentDays + tm.absentDays + tm.leaveDays} color={C.emerald} />
             <StatusRow label="Late"     value={tm.lateDays}    total={tm.presentDays || 1} color={C.amber}   />
             <StatusRow label="Absent"   value={tm.absentDays}  total={tm.presentDays + tm.absentDays + tm.leaveDays} color={C.rose}    />
-            <StatusRow label="Leave"    value={tm.leaveDays}   total={tm.presentDays + tm.absentDays + tm.leaveDays} color={C.blue}    />
+            <StatusRow label="Leave"    value={tm.leaveDays}   total={tm.presentDays + tm.absentDays + tm.leaveDays} color={C.blue} 
+               />
+            <StatusRow label="NCNS"     value={tm.ncnsDays}  total={tm.presentDays + tm.absentDays + tm.leaveDays} color={C.gray} 
+               />
             <div className="mt-4 pt-4 border-t border-gray-100 grid grid-cols-2 gap-3 text-xs">
               {[
                 ["Att. Rate",   `${tm.attendanceRate}%`  ],
