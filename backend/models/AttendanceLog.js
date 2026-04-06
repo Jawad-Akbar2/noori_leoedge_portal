@@ -13,6 +13,7 @@ const deductionDetailSchema = new mongoose.Schema(
         "early_logout",
         "fixed_penalty",
         "hourly_penalty",
+        "ncns_penalty",
         "manual",
       ],
       default: "manual",

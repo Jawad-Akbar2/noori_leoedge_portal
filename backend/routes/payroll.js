@@ -315,7 +315,12 @@ router.post("/attendance-overview", adminAuth, async (req, res) => {
           if (record.status === "Leave") {
             status = "Leave";
             note = "Approved leave";
-          } else if (record.status === "Absent") {
+          }
+           else if (record.status === "NCNS") {
+            status = "NCNS";
+            note = record.metadata?.notes || "No Call No Show";
+          } 
+          else if (record.status === "Absent") {
             status = "Absent";
             note = record.metadata?.notes || "Absent";
           } else if (record.inOut?.in) {
@@ -331,10 +336,6 @@ router.post("/attendance-overview", adminAuth, async (req, res) => {
               status = "On-time";
               note = "On time";
             }
-          }
-          else if (record.status === "NCNS") {
-            status = "NCNS";
-            note = record.metadata?.notes || "No Call No Show";
           }
         }
 

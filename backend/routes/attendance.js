@@ -233,6 +233,10 @@ function buildFinancials({
   const scheduledHrs = shiftHours(shift);
   let hoursWorked = 0;
   let basePay = 0;
+    let deductionDetails = [];
+  let totalDeduction = 0;
+  let lateMinutes = 0;
+  let earlyLogoutMinutes = 0;
 
   if (status === "Leave") {
     hoursWorked = scheduledHrs;
@@ -244,25 +248,45 @@ function buildFinancials({
     hoursWorked = scheduledHrs;
     basePay = hoursWorked * hourlyRate;
 
-    deduction = 50; // ✅ fixed penalty
+    totalDeduction += 50;
+    deductionDetails.push({
+      type: "incomplete_punch",
+      amount: 50,
+      reason: "Missing check-in or check-out",
+    });
   } else if (status === "NCNS") {
     const fullDayPay = scheduledHrs * hourlyRate;
 
     hoursWorked = 0;
     basePay = 0;
 
-    deduction = fullDayPay * 2; // ✅ 200% penalty
+    totalDeduction += fullDayPay * 2;
+    deductionDetails.push({
+      type: "ncns_penalty",
+      amount: fullDayPay * 2,
+      reason: "No Call No Show (200% deduction)",
+    });
   }
 
-  let deductionDetails = [];
-  let totalDeduction = 0;
-  let lateMinutes = 0;
-  let earlyLogoutMinutes = 0;
 
-  if (status !== "Leave" && status !== "Absent") {
-    ({ deductionDetails, totalDeduction, lateMinutes, earlyLogoutMinutes } =
-      computeDeductions({ inTime, outTime, outNextDay, shift, hourlyRate }));
-  }
+  if (
+  status !== "Leave" &&
+  status !== "Absent" &&
+  status !== "NCNS"
+) {
+  const result = computeDeductions({
+    inTime,
+    outTime,
+    outNextDay,
+    shift,
+    hourlyRate,
+  });
+
+  deductionDetails.push(...result.deductionDetails);
+  totalDeduction += result.totalDeduction;
+  lateMinutes = result.lateMinutes;
+  earlyLogoutMinutes = result.earlyLogoutMinutes;
+}
 
   const resolvedOtAmount = otDetails.length
     ? otDetails.reduce((s, e) => {
@@ -1043,6 +1067,8 @@ router.post("/save-row", adminAuth, async (req, res) => {
     if (employee.leftBusiness?.isLeft && employee.leftBusiness?.leftDate) {
       const leftDate = new Date(employee.leftBusiness.leftDate);
       leftDate.setHours(0, 0, 0, 0);
+    const dateObj = parseDDMMYYYY(date);
+
 
       const attendanceDate = new Date(dateObj);
       attendanceDate.setHours(0, 0, 0, 0);
@@ -1055,7 +1081,6 @@ router.post("/save-row", adminAuth, async (req, res) => {
       }
     }
 
-    const dateObj = parseDDMMYYYY(date);
     if (!dateObj || isNaN(dateObj)) {
       return res.status(400).json({
         success: false,

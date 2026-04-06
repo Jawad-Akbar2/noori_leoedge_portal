@@ -53,6 +53,7 @@ const payrollRecordSchema = new mongoose.Schema({
   lateDays:          { type: Number, default: 0 },
   absentDays:        { type: Number, default: 0 },
   leaveDays:         { type: Number, default: 0 },
+  ncnsDays:         { type: Number, default: 0 },
   totalHoursWorked:  { type: Number, default: 0 },
 
   // ── Salary components ────────────────────────────────────────────────────

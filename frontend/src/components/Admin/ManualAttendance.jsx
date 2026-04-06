@@ -2249,7 +2249,7 @@ function ManageTab({ userRole, isSuperAdmin, isAdmin, isHybrid }) {
       case "Absent":
         return "bg-red-100 text-red-800";
       case "NCNS":
-        return "bg-gray-100 text-gray-700 border-gray-200";
+        return "bg-gray-100 text-gray-700";
       default:
         return "bg-gray-100 text-gray-800";
     }
