@@ -78,6 +78,7 @@ function computePerformance(employee, logs, periodStart, periodEnd, totalWorking
     lateDays,
     absentDays,
     leaveDays,
+    ncnsDays,
     totalHoursWorked,
     totalOtHours,
     attendanceRate:   Math.round(attendanceRate  * 10) / 10,

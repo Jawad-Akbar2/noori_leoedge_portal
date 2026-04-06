@@ -126,6 +126,7 @@ function calcEmployeeTotals(emp, records, workingDays) {
     presentDays,
     leaveDays,
     absentDays,
+      ncnsDays,
     lateDays,
     workingDays,
     baseSalary: round2(baseSalary),
@@ -331,6 +332,10 @@ router.post("/attendance-overview", adminAuth, async (req, res) => {
               note = "On time";
             }
           }
+          else if (record.status === "NCNS") {
+            status = "NCNS";
+            note = record.metadata?.notes || "No Call No Show";
+          }
         }
 
         // Guard: statusCount only tracks the 4 known keys
@@ -403,6 +408,7 @@ router.post("/performance-overview", adminAuth, async (req, res) => {
       const leaveDays = records.filter((r) => r.status === "Leave").length;
       const absentDays = records.filter((r) => r.status === "Absent").length;
       const lateDays = records.filter((r) => r.status === "Late").length;
+        const ncnsDays = records.filter((r) => r.status === "NCNS").length;
       const totalOtHours = records.reduce(
         (s, r) => s + n(r.financials?.otHours),
         0,
@@ -433,6 +439,7 @@ router.post("/performance-overview", adminAuth, async (req, res) => {
         leaveDays,
         absentDays,
         lateDays,
+        ncnsDays,
         totalOtHours: round2(totalOtHours),
         workingDays,
         rating:
@@ -727,6 +734,7 @@ router.post("/export", adminAuth, async (req, res) => {
         "Present Days",
         "Leave Days",
         "Absent Days",
+        "NCNS Days",
         "Late Days",
         "Base Salary",
         "OT Hours",
@@ -744,6 +752,7 @@ router.post("/export", adminAuth, async (req, res) => {
           e.presentDays,
           e.leaveDays,
           e.absentDays,
+          e.ncnsDays,
           e.lateDays,
           e.baseSalary,
           e.totalOtHours,
