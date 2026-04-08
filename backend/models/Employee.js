@@ -126,8 +126,8 @@ const employeeSchema = new mongoose.Schema(
       enum: ["hourly", "monthly", null],
       default: null,
     },
-    hourlyRate: { type: Number, min: 0, default: null },
-    monthlySalary: { type: Number, min: 0, default: null },
+    hourlyRate: { type: Number,  default: null },
+    monthlySalary: { type: Number,  default: null },
 
     status: {
       type: String,

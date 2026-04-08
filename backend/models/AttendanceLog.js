@@ -26,8 +26,8 @@ const deductionDetailSchema = new mongoose.Schema(
 const otDetailSchema = new mongoose.Schema(
   {
     type: { type: String, enum: ["manual", "calc"], default: "manual" },
-    amount: { type: Number, min: 0, default: 0 },
-    hours: { type: Number, min: 0, default: 0 },
+    amount: { type: Number,  default: 0 },
+    hours: { type: Number,  default: 0 },
     rate: {
       type: Number,
       default: 1,
@@ -131,32 +131,32 @@ const attendanceLogSchema = new mongoose.Schema(
       // already exists — effective rate at time of log
       type: Number,
       required: true,
-      min: 0,
+      
     },
 
     financials: {
       hoursWorked: {
         type: Number,
         default: 0,
-        min: 0,
+        
       },
       // Scheduled shift duration in hours (e.g. 8h for a 22:00–06:00 shift)
       scheduledHours: {
         type: Number,
         default: 0,
-        min: 0,
+        
       },
       lateMinutes: { type: Number, default: 0, min: 0 }, // minutes after shift.start
       earlyLogoutMinutes: { type: Number, default: 0, min: 0 }, // minutes before shift.end
       basePay: {
         type: Number,
         default: 0,
-        min: 0,
+        
       },
       deduction: {
         type: Number,
         default: 0,
-        min: 0,
+        
       },
       deductionDetails: {
         type: [deductionDetailSchema],
@@ -170,12 +170,12 @@ const attendanceLogSchema = new mongoose.Schema(
       otHours: {
         type: Number,
         default: 0,
-        min: 0,
+        
       },
       otAmount: {
         type: Number,
         default: 0,
-        min: 0,
+        
       },
       otDetails: {
         type: [otDetailSchema],
@@ -188,7 +188,7 @@ const attendanceLogSchema = new mongoose.Schema(
       finalDayEarning: {
         type: Number,
         default: 0,
-        min: 0,
+        
       },
     },
 

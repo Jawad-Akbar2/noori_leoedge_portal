@@ -61,7 +61,7 @@ export const validateEmployeeCreation = [
   // monthlySalary only required when salaryType === 'monthly'
   body('monthlySalary')
     .optional({ nullable: true })
-    .isFloat({ min: 0 })
+    .isFloat({  })
     .withMessage('Monthly salary must be 0 or greater')
 ];
 

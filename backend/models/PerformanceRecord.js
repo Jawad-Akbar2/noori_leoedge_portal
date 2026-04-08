@@ -37,13 +37,13 @@ const performanceRecordSchema = new mongoose.Schema({
    * attendanceRate: (presentDays + leaveDays) / totalWorkingDays × 100
    * Recomputed on save.
    */
-  attendanceRate: { type: Number, default: 0, min: 0, max: 100 },
+  attendanceRate: { type: Number, default: 0,  max: 100 },
 
   /**
    * punctualityRate: presentDays that were NOT late / presentDays × 100
    * Recomputed on save.
    */
-  punctualityRate: { type: Number, default: 0, min: 0, max: 100 },
+  punctualityRate: { type: Number, default: 0,  max: 100 },
 
   /**
    * performanceScore: weighted composite (0–100).
@@ -54,7 +54,7 @@ const performanceRecordSchema = new mongoose.Schema({
    *
    * Admins can override this with a manual score.
    */
-  performanceScore: { type: Number, default: 0, min: 0, max: 100 },
+  performanceScore: { type: Number, default: 0,  max: 100 },
   scoreOverride:    { type: Boolean, default: false },
 
   /**
