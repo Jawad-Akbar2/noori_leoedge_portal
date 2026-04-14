@@ -73,10 +73,11 @@ export function formatDate(date) {
   if (!date) return '';
   const d = new Date(date);
   if (isNaN(d.getTime())) return '';
+
   return [
-    String(d.getDate()).padStart(2, '0'),
-    String(d.getMonth() + 1).padStart(2, '0'),
-    d.getFullYear()
+    String(d.getUTCDate()).padStart(2, '0'),
+    String(d.getUTCMonth() + 1).padStart(2, '0'),
+    d.getUTCFullYear()
   ].join('/');
 }
 
@@ -89,13 +90,14 @@ export function formatDateTimeForDisplay(date) {
   if (!date) return '';
   const d = new Date(date);
   if (isNaN(d.getTime())) return '';
+
   return [
-    String(d.getDate()).padStart(2, '0'),
-    String(d.getMonth() + 1).padStart(2, '0'),
-    d.getFullYear()
+    String(d.getUTCDate()).padStart(2, '0'),
+    String(d.getUTCMonth() + 1).padStart(2, '0'),
+    d.getUTCFullYear()
   ].join('/') + ' ' + [
-    String(d.getHours()).padStart(2, '0'),
-    String(d.getMinutes()).padStart(2, '0')
+    String(d.getUTCHours()).padStart(2, '0'),
+    String(d.getUTCMinutes()).padStart(2, '0')
   ].join(':');
 }
 
@@ -107,17 +109,29 @@ export function formatDateTimeForDisplay(date) {
  */
 export function startOfDay(date) {
   const d = new Date(date);
-  d.setHours(0, 0, 0, 0);
-  return d;
+  return new Date(Date.UTC(
+    d.getUTCFullYear(),
+    d.getUTCMonth(),
+    d.getUTCDate()
+  ));
+}
+
+export function endOfDay(date) {
+  const d = new Date(date);
+  return new Date(Date.UTC(
+    d.getUTCFullYear(),
+    d.getUTCMonth(),
+    d.getUTCDate(),
+    23, 59, 59, 999
+  ));
 }
 
 /**
- * Return a copy of the date with time set to 23:59:59.999.
- * Use this as the upper bound in date-range queries.
+ * Add days safely in UTC (no timezone shift)
  */
-export function endOfDay(date) {
-  const d = new Date(date);
-  d.setHours(23, 59, 59, 999);
+export function addDaysUTC(date, days) {
+  const d = startOfDay(date);
+  d.setUTCDate(d.getUTCDate() + days);
   return d;
 }
 

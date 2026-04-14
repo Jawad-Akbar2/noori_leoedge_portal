@@ -19,21 +19,6 @@ import {
   Circle,
   Loader2,
   RotateCcw,
-  Users,
-  Clock,
-  DollarSign,
-  TrendingUp,
-  TrendingDown,
-  Filter,
-  Grid3x3,
-  List,
-  FileSpreadsheet,
-  UserCheck,
-  UserX,
-  CalendarDays,
-  ChevronDown,
-  LayoutGrid,
-  Table,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import CSVImportModal from "./CSVImportModal.jsx";
@@ -47,14 +32,13 @@ import { useEscape } from "../../context/EscapeStack";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const PRIVILEGED_ROLES = ["admin", "superadmin", "owner"];
-const STATUS_OPTIONS = ["Present", "Late", "Absent", "Leave", "NCNS"];
+const STATUS_OPTIONS = ["Present", "Late", "Absent", "Leave"];
 const STATUS_STYLES = {
-  Present: "bg-green-100 text-green-800 border-green-200",
+  Present: "bg-green-100  text-green-800  border-green-200",
   Late: "bg-yellow-100 text-yellow-800 border-yellow-200",
-  Leave: "bg-blue-100 text-blue-800 border-blue-200",
-  Absent: "bg-red-100 text-red-800 border-red-200",
-  NCNS: "bg-gray-100 text-gray-700 border-gray-200",
-  "": "bg-gray-100 text-gray-500 border-gray-200",
+  Leave: "bg-blue-100   text-blue-800   border-blue-200",
+  Absent: "bg-red-100    text-red-800    border-red-200",
+  "": "bg-gray-100   text-gray-500   border-gray-200",
 };
 
 // ─── Auth helpers ─────────────────────────────────────────────────────────────
@@ -107,31 +91,7 @@ async function saveRowApi({
   return res.data;
 }
 
-// ─── Modern Card Component ────────────────────────────────────────────────────
-function StatCard({ label, value, icon: Icon, color, subtitle }) {
-  const colorClasses = {
-    blue: "from-blue-50 to-blue-100/50 border-blue-200 text-blue-700",
-    green: "from-green-50 to-green-100/50 border-green-200 text-green-700",
-    purple: "from-purple-50 to-purple-100/50 border-purple-200 text-purple-700",
-    orange: "from-orange-50 to-orange-100/50 border-orange-200 text-orange-700",
-    red: "from-red-50 to-red-100/50 border-red-200 text-red-700",
-  };
-
-  return (
-    <div className={`bg-gradient-to-r ${colorClasses[color]} rounded-xl border p-4 shadow-sm`}>
-      <div className="flex items-center justify-between mb-2">
-        <div className="p-1.5 bg-white/50 rounded-lg">
-          <Icon size={16} />
-        </div>
-      </div>
-      <p className="text-2xl font-bold">{value}</p>
-      <p className="text-xs text-gray-500 mt-0.5">{label}</p>
-      {subtitle && <p className="text-[10px] text-gray-400 mt-1">{subtitle}</p>}
-    </div>
-  );
-}
-
-// ─── Modern DateNavigator ─────────────────────────────────────────────────────
+// ─── DateNavigator (single date) ─────────────────────────────────────────────
 function DateNavigator({
   value,
   onChange,
@@ -141,7 +101,7 @@ function DateNavigator({
 }) {
   const hiddenRef = useRef(null);
   const isToday = value === getTodayDate();
-
+  // helper to compare dd/mm/yyyy strings
   const isAfterMax = (dateStr) => {
     if (!maxDate || !dateStr) return false;
     const [d, m, y] = dateStr.split("/").map(Number);
@@ -158,8 +118,13 @@ function DateNavigator({
     const dt = new Date(y, m - 1, d);
     dt.setDate(dt.getDate() + dir);
     const next = `${String(dt.getDate()).padStart(2, "0")}/${String(dt.getMonth() + 1).padStart(2, "0")}/${dt.getFullYear()}`;
-    if (isAfterMax(next)) return;
+    if (isAfterMax(next)) return; // block forward navigation past maxDate
     onChange(next);
+  };
+
+  const handleTextChange = (val) => {
+    if (isAfterMax(val)) return; // block manual typing past maxDate
+    onChange(val);
   };
 
   const handlePickerChange = (e) => {
@@ -170,9 +135,9 @@ function DateNavigator({
   };
 
   return (
-    <div className="space-y-1.5">
+    <div>
       {label && (
-        <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider">
+        <label className="block text-xs font-medium text-gray-700 mb-1">
           {label}
         </label>
       )}
@@ -180,33 +145,55 @@ function DateNavigator({
         <button
           type="button"
           onClick={() => shift(-1)}
-          className="p-2 rounded-xl border border-gray-200 hover:bg-gray-100 transition text-gray-600 flex-shrink-0"
+          className="p-2 rounded-lg border border-gray-300 hover:bg-gray-100 transition text-gray-600 flex-shrink-0"
         >
-          <ChevronLeft size={16} />
+          <ChevronLeft size={15} />
         </button>
-        <div className="relative flex-1 min-w-[140px]">
-          <div className="flex items-center gap-2 px-3 py-2 border border-gray-200 rounded-xl bg-white text-sm shadow-sm">
-            <Calendar size={14} className="text-gray-400" />
-            <span className="text-gray-700 font-medium">{value}</span>
-          </div>
+        <div className="relative flex-1 min-w-[130px]">
+          <input
+            type="text"
+            value={value}
+            onChange={(e) => handleTextChange(e.target.value)}
+            placeholder="dd/mm/yyyy"
+            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 pr-8 text-center"
+          />
           <input
             type="date"
             ref={hiddenRef}
-            className="absolute inset-0 opacity-0 cursor-pointer"
-            value={value.split("/").reverse().join("-")}
-            max={maxDate ? maxDate.split("/").reverse().join("-") : undefined}
+            className="absolute opacity-0 pointer-events-none w-0 h-0"
+            max={
+              maxDate
+                ? (() => {
+                    const [d, m, y] = maxDate.split("/");
+                    return `${y}-${m}-${d}`;
+                  })()
+                : undefined
+            }
             onChange={handlePickerChange}
           />
+          <button
+            type="button"
+            onClick={() => {
+              try {
+                hiddenRef.current?.showPicker();
+              } catch {
+                hiddenRef.current?.focus();
+              }
+            }}
+            className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-blue-500"
+          >
+            <Calendar size={14} />
+          </button>
         </div>
         <button
           type="button"
           onClick={() => shift(1)}
-          className="p-2 rounded-xl border border-gray-200 hover:bg-gray-100 transition text-gray-600 flex-shrink-0"
+          className="p-2 rounded-lg border border-gray-300 hover:bg-gray-100 transition text-gray-600 flex-shrink-0"
         >
-          <ChevronRight size={16} />
+          <ChevronRight size={15} />
         </button>
         {showTodayBadge && isToday && (
-          <span className="px-2.5 py-1 text-xs font-semibold bg-gradient-to-r from-blue-100 to-blue-200 text-blue-700 rounded-full flex-shrink-0 shadow-sm">
+          <span className="px-2 py-1 text-xs font-medium bg-blue-100 text-blue-700 rounded-full flex-shrink-0">
             Today
           </span>
         )}
@@ -215,7 +202,7 @@ function DateNavigator({
   );
 }
 
-// ─── Modern DateRangePicker ──────────────────────────────────────────────────
+// ─── DateRangePicker ──────────────────────────────────────────────────────────
 function DateRangePicker({
   fromDate,
   setFromDate,
@@ -226,42 +213,44 @@ function DateRangePicker({
   label1,
   label2,
 }) {
+  const toggleRange = (checked) => {
+    setRangeEnabled(checked);
+    if (!checked) setToDate(fromDate);
+  };
+
   return (
     <div className="flex flex-wrap items-end gap-4">
       <DateNavigator
         value={fromDate}
         onChange={setFromDate}
-        label={label1 || "From Date"}
+        label={label1 || "Date (dd/mm/yyyy)"}
       />
       <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer select-none pb-0.5">
         <input
           type="checkbox"
           checked={rangeEnabled}
-          onChange={(e) => {
-            setRangeEnabled(e.target.checked);
-            if (!e.target.checked) setToDate(fromDate);
-          }}
-          className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+          onChange={(e) => toggleRange(e.target.checked)}
+          className="w-4 h-4 rounded border-gray-300"
         />
-        <span className="text-xs font-medium">Date range</span>
+        Date range
       </label>
       {rangeEnabled && (
         <DateNavigator
           value={toDate}
           onChange={setToDate}
-          label={label2 || "To Date"}
+          label={label2 || "To Date (dd/mm/yyyy)"}
         />
       )}
     </div>
   );
 }
 
-// ─── Modern SearchBar ────────────────────────────────────────────────────────
+// ─── SearchBar ────────────────────────────────────────────────────────────────
 function SearchBar({ value, onChange, placeholder = "Search..." }) {
   return (
     <div className="relative">
       <Search
-        size="16"
+        size={15}
         className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"
       />
       <input
@@ -269,15 +258,15 @@ function SearchBar({ value, onChange, placeholder = "Search..." }) {
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        className="w-full pl-9 pr-8 py-2.5 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all bg-white shadow-sm"
+        className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
       />
       {value && (
         <button
           type="button"
           onClick={() => onChange("")}
-          className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
         >
-          <X size={14} />
+          <X size={13} />
         </button>
       )}
     </div>
@@ -302,7 +291,7 @@ function StatusSelect({ value, onChange, disabled, readOnly }) {
   if (readOnly) {
     return (
       <span
-        className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold border shadow-sm ${STATUS_STYLES[value] || STATUS_STYLES[""]}`}
+        className={`text-xs font-semibold px-2 py-1 rounded-full border ${STATUS_STYLES[value] || STATUS_STYLES[""]}`}
       >
         {value || "—"}
       </span>
@@ -313,7 +302,7 @@ function StatusSelect({ value, onChange, disabled, readOnly }) {
       value={value || ""}
       onChange={(e) => onChange(e.target.value)}
       disabled={disabled}
-      className={`text-xs font-semibold rounded-lg border px-2.5 py-1.5 focus:ring-2 focus:ring-blue-500/20 focus:outline-none disabled:opacity-60 cursor-pointer transition bg-white ${STATUS_STYLES[value] || STATUS_STYLES[""]}`}
+      className={`text-xs font-semibold rounded-md border px-2 py-1 focus:ring-2 focus:ring-blue-400 focus:outline-none disabled:opacity-60 cursor-pointer transition ${STATUS_STYLES[value] || STATUS_STYLES[""]}`}
     >
       {STATUS_OPTIONS.map((s) => (
         <option key={s} value={s}>
@@ -325,6 +314,7 @@ function StatusSelect({ value, onChange, disabled, readOnly }) {
 }
 
 function TimeInput({ value, onChange, placeholder, disabled, readOnly }) {
+  // readOnly mode: plain text display (unchanged)
   if (readOnly) {
     return (
       <span className="text-xs text-gray-500">
@@ -332,6 +322,7 @@ function TimeInput({ value, onChange, placeholder, disabled, readOnly }) {
       </span>
     );
   }
+  // Edit mode: use the TimePicker popover
   return (
     <TimePicker
       value={value || ""}
@@ -350,35 +341,6 @@ function StatusDot({ isDirty, isSaved, isSaving, isVirtual }) {
     return <Circle size={14} className="text-amber-500 fill-amber-400" />;
   if (isVirtual) return <Circle size={14} className="text-gray-300" />;
   return <CheckCircle2 size={14} className="text-gray-300" />;
-}
-
-// ─── Modern Action Button Group ──────────────────────────────────────────────
-function ActionButtonGroup({ children, className = "" }) {
-  return (
-    <div className={`flex flex-wrap gap-2 mb-6 ${className}`}>
-      {children}
-    </div>
-  );
-}
-
-function ActionButton({ icon: Icon, children, onClick, disabled, variant = "primary" }) {
-  const variants = {
-    primary: "bg-blue-600 hover:bg-blue-700 text-white",
-    secondary: "bg-gray-600 hover:bg-gray-700 text-white",
-    success: "bg-green-600 hover:bg-green-700 text-white",
-    danger: "bg-red-600 hover:bg-red-700 text-white",
-    outline: "bg-white border border-gray-200 text-gray-700 hover:bg-gray-50",
-  };
-  return (
-    <button
-      onClick={onClick}
-      disabled={disabled}
-      className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-sm ${variants[variant]}`}
-    >
-      {Icon && <Icon size={16} />}
-      {children}
-    </button>
-  );
 }
 
 // ─── OT & Deduction Edit Modal ────────────────────────────────────────────────
@@ -496,48 +458,52 @@ function OTDeductionEditModal({
   const title = type === "ot" ? "Overtime (OT)" : "Deductions";
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col animate-in zoom-in-95 duration-200">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-          <div className="flex items-center gap-2">
-            <div className={`p-1.5 rounded-lg ${type === "ot" ? "bg-blue-100" : "bg-red-100"}`}>
-              {type === "ot" ? <TrendingUp size={16} className="text-blue-600" /> : <TrendingDown size={16} className="text-red-600" />}
-            </div>
-            <h2 className="text-lg font-bold text-gray-800">{title}</h2>
-          </div>
-          <button onClick={onClose} className="p-1 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col">
+        <div className="flex items-center justify-between px-6 py-4 border-b">
+          <h2 className="text-lg font-bold text-gray-800">{title}</h2>
+          <button
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-600"
+          >
             <X size={20} />
           </button>
         </div>
         <div className="px-6 pt-4">
-          <div className="bg-gradient-to-r from-blue-50 to-indigo-50/50 rounded-xl px-4 py-3 mb-4 border border-blue-100">
-            <p className="text-sm font-semibold text-blue-800">{record?.empName}</p>
-            <p className="text-xs text-blue-600 mt-0.5">
+          <div className="bg-blue-50 rounded-lg px-4 py-3 mb-4">
+            <p className="text-sm font-semibold text-blue-800">
+              {record?.empName}
+            </p>
+            <p className="text-xs text-blue-600">
               ID: {record?.empNumber} · {record?.department} · {date}
             </p>
           </div>
         </div>
         <div className="px-6 pb-5 space-y-4 overflow-auto flex-1">
           {type === "ot" && !isHybrid && (
-            <div className="border rounded-xl p-4 bg-gray-50/50 space-y-3">
-              <p className="text-sm font-semibold text-gray-700 flex items-center gap-2">
-                <TrendingUp size={14} className="text-blue-500" /> Add Overtime
+            <div className="border rounded-lg p-3 bg-gray-50 space-y-2">
+              <p className="text-sm font-semibold text-gray-700">
+                Overtime (OT)
               </p>
               <div className="grid grid-cols-2 gap-2">
                 <select
                   value={otDraft.type}
-                  onChange={(e) => setOtDraft((prev) => ({ ...prev, type: e.target.value }))}
-                  className="border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white"
+                  onChange={(e) =>
+                    setOtDraft((prev) => ({ ...prev, type: e.target.value }))
+                  }
+                  className="border border-gray-300 rounded-lg px-3 py-2 text-sm"
                 >
-                  <option value="calc">Calculated (Hours × Rate)</option>
+                  <option value="calc">Calculated</option>
                   <option value="manual">Manual Amount</option>
                 </select>
                 <input
                   type="text"
                   placeholder="Reason"
                   value={otDraft.reason}
-                  onChange={(e) => setOtDraft((prev) => ({ ...prev, reason: e.target.value }))}
-                  className="border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white"
+                  onChange={(e) =>
+                    setOtDraft((prev) => ({ ...prev, reason: e.target.value }))
+                  }
+                  className="border border-gray-300 rounded-lg px-3 py-2 text-sm"
                 />
                 {otDraft.type === "manual" ? (
                   <input
@@ -545,8 +511,13 @@ function OTDeductionEditModal({
                     min="0"
                     placeholder="Amount"
                     value={otDraft.amount}
-                    onChange={(e) => setOtDraft((prev) => ({ ...prev, amount: e.target.value }))}
-                    className="border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white col-span-2"
+                    onChange={(e) =>
+                      setOtDraft((prev) => ({
+                        ...prev,
+                        amount: e.target.value,
+                      }))
+                    }
+                    className="border border-gray-300 rounded-lg px-3 py-2 text-sm col-span-2"
                   />
                 ) : (
                   <>
@@ -556,17 +527,27 @@ function OTDeductionEditModal({
                       step="0.5"
                       placeholder="Hours"
                       value={otDraft.hours}
-                      onChange={(e) => setOtDraft((prev) => ({ ...prev, hours: e.target.value }))}
-                      className="border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white"
+                      onChange={(e) =>
+                        setOtDraft((prev) => ({
+                          ...prev,
+                          hours: e.target.value,
+                        }))
+                      }
+                      className="border border-gray-300 rounded-lg px-3 py-2 text-sm"
                     />
                     <select
                       value={otDraft.rate}
-                      onChange={(e) => setOtDraft((prev) => ({ ...prev, rate: e.target.value }))}
-                      className="border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white"
+                      onChange={(e) =>
+                        setOtDraft((prev) => ({
+                          ...prev,
+                          rate: e.target.value,
+                        }))
+                      }
+                      className="border border-gray-300 rounded-lg px-3 py-2 text-sm"
                     >
-                      <option value="1">1.0x (Regular)</option>
-                      <option value="1.5">1.5x (Time & Half)</option>
-                      <option value="2">2.0x (Double Time)</option>
+                      <option value="1">1.0x</option>
+                      <option value="1.5">1.5x</option>
+                      <option value="2">2.0x</option>
                     </select>
                   </>
                 )}
@@ -574,97 +555,107 @@ function OTDeductionEditModal({
               <button
                 type="button"
                 onClick={addOT}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-blue-700 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition"
+                className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-blue-700 bg-blue-50 border border-blue-200 rounded-lg"
               >
-                <Plus size={12} /> Add OT Entry
+                <Plus size={12} /> Add OT
               </button>
-              {otDetails.length > 0 && (
-                <div className="space-y-1.5 mt-3">
-                  <p className="text-xs font-semibold text-gray-500">Current OT Entries</p>
-                  {otDetails.map((entry, idx) => (
-                    <div key={`ot-${idx}`} className="flex justify-between items-center text-xs bg-white border rounded-lg px-3 py-2">
-                      <span>
-                        {entry.type === "manual"
-                          ? `PKR ${entry.amount}`
-                          : `${entry.hours}h × ${entry.rate}x`}{" "}
-                        — {entry.reason}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => removeOT(idx)}
-                        className="text-red-500 hover:text-red-700 transition"
-                      >
-                        <Trash2 size={12} />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
+              <div className="space-y-1">
+                {otDetails.map((entry, idx) => (
+                  <div
+                    key={`ot-${idx}`}
+                    className="flex justify-between text-xs bg-white border rounded px-2 py-1"
+                  >
+                    <span>
+                      {entry.type === "manual"
+                        ? `PKR ${entry.amount}`
+                        : `${entry.hours}h × ${entry.rate}x`}{" "}
+                      — {entry.reason}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => removeOT(idx)}
+                      className="text-red-600 hover:text-red-800"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
           {type === "deduction" && !isHybrid && (
-            <div className="border rounded-xl p-4 bg-gray-50/50 space-y-3">
-              <p className="text-sm font-semibold text-gray-700 flex items-center gap-2">
-                <TrendingDown size={14} className="text-red-500" /> Add Deduction
-              </p>
+            <div className="border rounded-lg p-3 bg-gray-50 space-y-2">
+              <p className="text-sm font-semibold text-gray-700">Deductions</p>
               <div className="grid grid-cols-2 gap-2">
                 <input
                   type="number"
                   min="0"
                   placeholder="Amount"
                   value={deductionDraft.amount}
-                  onChange={(e) => setDeductionDraft((prev) => ({ ...prev, amount: e.target.value }))}
-                  className="border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white"
+                  onChange={(e) =>
+                    setDeductionDraft((prev) => ({
+                      ...prev,
+                      amount: e.target.value,
+                    }))
+                  }
+                  className="border border-gray-300 rounded-lg px-3 py-2 text-sm"
                 />
                 <input
                   type="text"
                   placeholder="Reason"
                   value={deductionDraft.reason}
-                  onChange={(e) => setDeductionDraft((prev) => ({ ...prev, reason: e.target.value }))}
-                  className="border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white"
+                  onChange={(e) =>
+                    setDeductionDraft((prev) => ({
+                      ...prev,
+                      reason: e.target.value,
+                    }))
+                  }
+                  className="border border-gray-300 rounded-lg px-3 py-2 text-sm"
                 />
               </div>
               <button
                 type="button"
                 onClick={addDeduction}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-red-700 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 transition"
+                className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-red-700 bg-red-50 border border-red-200 rounded-lg"
               >
                 <Plus size={12} /> Add Deduction
               </button>
-              {deductionDetails.length > 0 && (
-                <div className="space-y-1.5 mt-3">
-                  <p className="text-xs font-semibold text-gray-500">Current Deductions</p>
-                  {deductionDetails.map((entry, idx) => (
-                    <div key={`d-${idx}`} className="flex justify-between items-center text-xs bg-white border rounded-lg px-3 py-2">
-                      <span>PKR {entry.amount} — {entry.reason}</span>
-                      <button
-                        type="button"
-                        onClick={() => removeDeduction(idx)}
-                        className="text-red-500 hover:text-red-700 transition"
-                      >
-                        <Trash2 size={12} />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
+              <div className="space-y-1">
+                {deductionDetails.map((entry, idx) => (
+                  <div
+                    key={`d-${idx}`}
+                    className="flex justify-between text-xs bg-white border rounded px-2 py-1"
+                  >
+                    <span>
+                      PKR {entry.amount} — {entry.reason}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => removeDeduction(idx)}
+                      className="text-red-600 hover:text-red-800"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
         </div>
-        <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-100 bg-gray-50/50 rounded-b-2xl">
+        <div className="flex justify-end gap-3 px-6 py-4 border-t bg-gray-50 rounded-b-2xl">
           <button
             onClick={onClose}
             disabled={saving}
-            className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition disabled:opacity-50"
+            className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition disabled:opacity-50"
           >
             Cancel
           </button>
           <button
             onClick={() => persist()}
             disabled={saving}
-            className="flex items-center gap-2 px-5 py-2 text-sm font-medium text-white bg-gradient-to-r from-blue-600 to-blue-700 rounded-xl hover:from-blue-700 hover:to-blue-800 transition shadow-md disabled:opacity-50"
+            className="flex items-center gap-2 px-5 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition disabled:opacity-50"
           >
-            <Save size={15} /> {saving ? "Saving..." : "Save Changes"}
+            <Save size={15} /> {saving ? "Saving..." : "Save"}
           </button>
         </div>
       </div>
@@ -695,8 +686,17 @@ function AttendanceFormModal({
     deductionDetails: isEdit ? record?.financials?.deductionDetails || [] : [],
     otDetails: isEdit ? record?.financials?.otDetails || [] : [],
   });
-  const [deductionDraft, setDeductionDraft] = useState({ amount: "", reason: "" });
-  const [otDraft, setOtDraft] = useState({ type: "calc", amount: "", hours: "", rate: "1.5", reason: "" });
+  const [deductionDraft, setDeductionDraft] = useState({
+    amount: "",
+    reason: "",
+  });
+  const [otDraft, setOtDraft] = useState({
+    type: "calc",
+    amount: "",
+    hours: "",
+    rate: "1.5",
+    reason: "",
+  });
   const [employees, setEmployees] = useState([]);
   const [loadingEmp, setLoadingEmp] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -720,6 +720,7 @@ function AttendanceFormModal({
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
 
+    // When employee selection changes, update left date constraint
     if (name === "empId") {
       const emp = employees.find((e) => e._id === value);
       if (emp?.leftBusiness?.isLeft && emp?.leftBusiness?.leftDate) {
@@ -741,11 +742,16 @@ function AttendanceFormModal({
 
   const addDeduction = () => {
     const amount = parseFloat(deductionDraft.amount);
-    if (!amount || amount < 0) return toast.error("Enter a valid deduction amount");
-    if (!deductionDraft.reason.trim()) return toast.error("Deduction reason is required");
+    if (!amount || amount < 0)
+      return toast.error("Enter a valid deduction amount");
+    if (!deductionDraft.reason.trim())
+      return toast.error("Deduction reason is required");
     setForm((prev) => ({
       ...prev,
-      deductionDetails: [...prev.deductionDetails, { amount, reason: deductionDraft.reason.trim() }],
+      deductionDetails: [
+        ...prev.deductionDetails,
+        { amount, reason: deductionDraft.reason.trim() },
+      ],
     }));
     setDeductionDraft({ amount: "", reason: "" });
   };
@@ -757,7 +763,10 @@ function AttendanceFormModal({
       if (!amount || amount < 0) return toast.error("Enter a valid OT amount");
       setForm((prev) => ({
         ...prev,
-        otDetails: [...prev.otDetails, { type: "manual", amount, reason: otDraft.reason.trim() }],
+        otDetails: [
+          ...prev.otDetails,
+          { type: "manual", amount, reason: otDraft.reason.trim() },
+        ],
       }));
     } else {
       const hours = parseFloat(otDraft.hours);
@@ -765,10 +774,19 @@ function AttendanceFormModal({
       if (!hours || hours <= 0) return toast.error("Enter valid OT hours");
       setForm((prev) => ({
         ...prev,
-        otDetails: [...prev.otDetails, { type: "calc", hours, rate, reason: otDraft.reason.trim() }],
+        otDetails: [
+          ...prev.otDetails,
+          { type: "calc", hours, rate, reason: otDraft.reason.trim() },
+        ],
       }));
     }
-    setOtDraft({ type: "calc", amount: "", hours: "", rate: "1.5", reason: "" });
+    setOtDraft({
+      type: "calc",
+      amount: "",
+      hours: "",
+      rate: "1.5",
+      reason: "",
+    });
   };
 
   const removeDetail = async (key, index) => {
@@ -786,7 +804,8 @@ function AttendanceFormModal({
           inTime: form.inTime || null,
           outTime: form.outTime || null,
           outNextDay: form.outNextDay || false,
-          deductionDetails: key === "deductionDetails" ? updated : form.deductionDetails,
+          deductionDetails:
+            key === "deductionDetails" ? updated : form.deductionDetails,
           otDetails: key === "otDetails" ? updated : form.otDetails,
         },
         { headers: authHeader() },
@@ -794,7 +813,9 @@ function AttendanceFormModal({
       toast.success("Removed and saved");
       onSuccess();
     } catch (err) {
-      toast.error(err.response?.data?.message || "Failed to save after removal");
+      toast.error(
+        err.response?.data?.message || "Failed to save after removal",
+      );
     }
   };
 
@@ -821,7 +842,9 @@ function AttendanceFormModal({
         const [fd, fm, fy] = form.date.split("/").map(Number);
         const [ld, lm, ly] = selectedEmpLeftDate.split("/").map(Number);
         if (new Date(fy, fm - 1, fd) > new Date(ly, lm - 1, ld)) {
-          return toast.error("Cannot add attendance after employee's last working date");
+          return toast.error(
+            "Cannot add attendance after employee's last working date",
+          );
         }
       }
 
@@ -835,7 +858,9 @@ function AttendanceFormModal({
           outTime: form.outTime || null,
           outNextDay: form.outNextDay || false,
           otDetails: form.otDetails,
-          ...(isEdit || form.deductionDetails.length > 0 ? { deductionDetails: form.deductionDetails } : {}),
+          ...(isEdit || form.deductionDetails.length > 0
+            ? { deductionDetails: form.deductionDetails }
+            : {}),
         },
         { headers: authHeader() },
       );
@@ -852,42 +877,39 @@ function AttendanceFormModal({
   const showTimes = ["Present", "Late"].includes(form.status);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col animate-in zoom-in-95 duration-200">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-          <div className="flex items-center gap-2">
-            <div className="p-1.5 rounded-lg bg-blue-100">
-              <Calendar size={16} className="text-blue-600" />
-            </div>
-            <h2 className="text-lg font-bold text-gray-800">
-              {isEdit ? "Edit Attendance Record" : "Add Attendance Record"}
-            </h2>
-          </div>
-          <button onClick={onClose} className="p-1 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col">
+        <div className="flex items-center justify-between px-6 py-4 border-b">
+          <h2 className="text-lg font-bold text-gray-800">
+            {isEdit ? "Edit Attendance Record" : "Add Attendance Record"}
+          </h2>
+          <button
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-600"
+          >
             <X size={20} />
           </button>
         </div>
-        <div className="px-6 py-5 space-y-5 overflow-auto flex-1">
+        <div className="px-6 py-5 space-y-4 overflow-auto flex-1">
           {!isEdit && (
             <div>
-              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
-                Select Employee <span className="text-red-500">*</span>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Employee *
               </label>
               {loadingEmp ? (
-                <div className="flex items-center gap-2 text-sm text-gray-400">
-                  <Loader2 size={14} className="animate-spin" /> Loading employees...
-                </div>
+                <p className="text-sm text-gray-400">Loading employees...</p>
               ) : (
                 <select
                   name="empId"
                   value={form.empId}
                   onChange={handleChange}
-                  className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 text-sm shadow-sm"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500"
                 >
                   <option value="">-- Select Employee --</option>
                   {employees.map((emp) => (
                     <option key={emp._id} value={emp._id}>
-                      {emp.employeeNumber} — {emp.firstName} {emp.lastName} ({emp.department})
+                      {emp.employeeNumber} — {emp.firstName} {emp.lastName} (
+                      {emp.department})
                     </option>
                   ))}
                 </select>
@@ -895,16 +917,18 @@ function AttendanceFormModal({
             </div>
           )}
           {isEdit && (
-            <div className="bg-gradient-to-r from-blue-50 to-indigo-50/50 rounded-xl px-4 py-3 border border-blue-100">
-              <p className="text-sm font-semibold text-blue-800">{record?.empName}</p>
-              <p className="text-xs text-blue-600 mt-0.5">
+            <div className="bg-blue-50 rounded-lg px-4 py-3">
+              <p className="text-sm font-semibold text-blue-800">
+                {record?.empName}
+              </p>
+              <p className="text-xs text-blue-600">
                 ID: {record?.empNumber} · {record?.department}
               </p>
             </div>
           )}
           <div>
-            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
-              Date <span className="text-red-500">*</span>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Date *
             </label>
             <DateNavigator
               value={form.date}
@@ -913,117 +937,135 @@ function AttendanceFormModal({
             />
           </div>
           <div>
-            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
-              Status <span className="text-red-500">*</span>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Status *
             </label>
             <select
               name="status"
               value={form.status}
               onChange={handleChange}
-              className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 text-sm shadow-sm"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500"
             >
               <option value="Present">Present</option>
               <option value="Late">Late</option>
               <option value="Absent">Absent</option>
               <option value="Leave">Leave</option>
-              <option value="NCNS">NCNS</option>
             </select>
           </div>
           {showTimes && (
             <>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
                     In Time
                   </label>
                   <TimePicker
                     value={form.inTime}
-                    onChange={(val) => setForm((prev) => ({ ...prev, inTime: val }))}
+                    onChange={(val) =>
+                      setForm((prev) => ({ ...prev, inTime: val }))
+                    }
                     placeholder="09:00"
                     disabled={saving}
+                    className="w-full"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
                     Out Time
                   </label>
                   <TimePicker
                     value={form.outTime}
-                    onChange={(val) => setForm((prev) => ({ ...prev, outTime: val }))}
+                    onChange={(val) =>
+                      setForm((prev) => ({ ...prev, outTime: val }))
+                    }
                     placeholder="17:00"
                     disabled={saving}
+                    className="w-full"
                   />
                 </div>
               </div>
-              <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer select-none">
+              <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer select-none">
                 <input
                   type="checkbox"
                   name="outNextDay"
                   checked={form.outNextDay}
                   onChange={handleChange}
-                  className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  className="w-4 h-4 rounded border-gray-300"
                 />
-                <span className="text-xs">Out time is next calendar day (night shift)</span>
+                Out time is next calendar day (night shift)
               </label>
             </>
           )}
           {currentUserRole !== "hybrid" && (
-            <div className="border rounded-xl p-4 bg-gray-50/50 space-y-3">
-              <p className="text-sm font-semibold text-gray-700 flex items-center gap-2">
-                <TrendingDown size={14} className="text-red-500" /> Deductions
-              </p>
+            <div className="border rounded-lg p-3 bg-gray-50 space-y-2">
+              <p className="text-sm font-semibold text-gray-700">Deductions</p>
               <div className="grid grid-cols-2 gap-2">
                 <input
                   type="number"
                   min="0"
                   placeholder="Amount"
                   value={deductionDraft.amount}
-                  onChange={(e) => setDeductionDraft((prev) => ({ ...prev, amount: e.target.value }))}
-                  className="border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white"
+                  onChange={(e) =>
+                    setDeductionDraft((prev) => ({
+                      ...prev,
+                      amount: e.target.value,
+                    }))
+                  }
+                  className="border border-gray-300 rounded-lg px-3 py-2 text-sm"
                 />
                 <input
                   type="text"
                   placeholder="Reason"
                   value={deductionDraft.reason}
-                  onChange={(e) => setDeductionDraft((prev) => ({ ...prev, reason: e.target.value }))}
-                  className="border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white"
+                  onChange={(e) =>
+                    setDeductionDraft((prev) => ({
+                      ...prev,
+                      reason: e.target.value,
+                    }))
+                  }
+                  className="border border-gray-300 rounded-lg px-3 py-2 text-sm"
                 />
               </div>
               <button
                 type="button"
                 onClick={addDeduction}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-red-700 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 transition"
+                className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-red-700 bg-red-50 border border-red-200 rounded-lg"
               >
                 <Plus size={12} /> Add Deduction
               </button>
-              {form.deductionDetails.length > 0 && (
-                <div className="space-y-1.5 mt-2">
-                  {form.deductionDetails.map((entry, idx) => (
-                    <div key={`d-${idx}`} className="flex justify-between items-center text-xs bg-white border rounded-lg px-3 py-2">
-                      <span>PKR {entry.amount} — {entry.reason}</span>
-                      <button
-                        type="button"
-                        onClick={() => removeDetail("deductionDetails", idx)}
-                        className="text-red-500 hover:text-red-700"
-                      >
-                        <Trash2 size={12} />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
+              <div className="space-y-1">
+                {form.deductionDetails.map((entry, idx) => (
+                  <div
+                    key={`d-${idx}`}
+                    className="flex justify-between text-xs bg-white border rounded px-2 py-1"
+                  >
+                    <span>
+                      PKR {entry.amount} — {entry.reason}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => removeDetail("deductionDetails", idx)}
+                      className="text-red-600 hover:text-red-800"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
           {currentUserRole !== "hybrid" && (
-            <div className="border rounded-xl p-4 bg-gray-50/50 space-y-3">
-              <p className="text-sm font-semibold text-gray-700 flex items-center gap-2">
-                <TrendingUp size={14} className="text-blue-500" /> Overtime (OT)
+            <div className="border rounded-lg p-3 bg-gray-50 space-y-2">
+              <p className="text-sm font-semibold text-gray-700">
+                Overtime (OT)
               </p>
               <div className="grid grid-cols-2 gap-2">
                 <select
                   value={otDraft.type}
-                  onChange={(e) => setOtDraft((prev) => ({ ...prev, type: e.target.value }))}
-                  className="border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white"
+                  onChange={(e) =>
+                    setOtDraft((prev) => ({ ...prev, type: e.target.value }))
+                  }
+                  className="border border-gray-300 rounded-lg px-3 py-2 text-sm"
                 >
                   <option value="calc">Calculated</option>
                   <option value="manual">Manual Amount</option>
@@ -1032,8 +1074,10 @@ function AttendanceFormModal({
                   type="text"
                   placeholder="Reason"
                   value={otDraft.reason}
-                  onChange={(e) => setOtDraft((prev) => ({ ...prev, reason: e.target.value }))}
-                  className="border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white"
+                  onChange={(e) =>
+                    setOtDraft((prev) => ({ ...prev, reason: e.target.value }))
+                  }
+                  className="border border-gray-300 rounded-lg px-3 py-2 text-sm"
                 />
                 {otDraft.type === "manual" ? (
                   <input
@@ -1041,8 +1085,13 @@ function AttendanceFormModal({
                     min="0"
                     placeholder="Amount"
                     value={otDraft.amount}
-                    onChange={(e) => setOtDraft((prev) => ({ ...prev, amount: e.target.value }))}
-                    className="border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white col-span-2"
+                    onChange={(e) =>
+                      setOtDraft((prev) => ({
+                        ...prev,
+                        amount: e.target.value,
+                      }))
+                    }
+                    className="border border-gray-300 rounded-lg px-3 py-2 text-sm col-span-2"
                   />
                 ) : (
                   <>
@@ -1052,13 +1101,23 @@ function AttendanceFormModal({
                       step="0.5"
                       placeholder="Hours"
                       value={otDraft.hours}
-                      onChange={(e) => setOtDraft((prev) => ({ ...prev, hours: e.target.value }))}
-                      className="border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white"
+                      onChange={(e) =>
+                        setOtDraft((prev) => ({
+                          ...prev,
+                          hours: e.target.value,
+                        }))
+                      }
+                      className="border border-gray-300 rounded-lg px-3 py-2 text-sm"
                     />
                     <select
                       value={otDraft.rate}
-                      onChange={(e) => setOtDraft((prev) => ({ ...prev, rate: e.target.value }))}
-                      className="border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white"
+                      onChange={(e) =>
+                        setOtDraft((prev) => ({
+                          ...prev,
+                          rate: e.target.value,
+                        }))
+                      }
+                      className="border border-gray-300 rounded-lg px-3 py-2 text-sm"
                     >
                       <option value="1">1.0x</option>
                       <option value="1.5">1.5x</option>
@@ -1070,48 +1129,50 @@ function AttendanceFormModal({
               <button
                 type="button"
                 onClick={addOT}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-blue-700 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition"
+                className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-blue-700 bg-blue-50 border border-blue-200 rounded-lg"
               >
                 <Plus size={12} /> Add OT
               </button>
-              {form.otDetails.length > 0 && (
-                <div className="space-y-1.5 mt-2">
-                  {form.otDetails.map((entry, idx) => (
-                    <div key={`ot-${idx}`} className="flex justify-between items-center text-xs bg-white border rounded-lg px-3 py-2">
-                      <span>
-                        {entry.type === "manual"
-                          ? `PKR ${entry.amount}`
-                          : `${entry.hours}h × ${entry.rate}x`}{" "}
-                        — {entry.reason}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => removeDetail("otDetails", idx)}
-                        className="text-red-500 hover:text-red-700"
-                      >
-                        <Trash2 size={12} />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
+              <div className="space-y-1">
+                {form.otDetails.map((entry, idx) => (
+                  <div
+                    key={`ot-${idx}`}
+                    className="flex justify-between text-xs bg-white border rounded px-2 py-1"
+                  >
+                    <span>
+                      {entry.type === "manual"
+                        ? `PKR ${entry.amount}`
+                        : `${entry.hours}h × ${entry.rate}x`}{" "}
+                      — {entry.reason}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => removeDetail("otDetails", idx)}
+                      className="text-red-600 hover:text-red-800"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
         </div>
-        <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-100 bg-gray-50/50 rounded-b-2xl">
+        <div className="flex justify-end gap-3 px-6 py-4 border-t bg-gray-50 rounded-b-2xl">
           <button
             onClick={onClose}
             disabled={saving}
-            className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition disabled:opacity-50"
+            className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition disabled:opacity-50"
           >
             Cancel
           </button>
           <button
             onClick={handleSubmit}
             disabled={saving}
-            className="flex items-center gap-2 px-5 py-2 text-sm font-medium text-white bg-gradient-to-r from-blue-600 to-blue-700 rounded-xl hover:from-blue-700 hover:to-blue-800 transition shadow-md disabled:opacity-50"
+            className="flex items-center gap-2 px-5 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition disabled:opacity-50"
           >
-            <Save size={15} /> {saving ? "Saving..." : isEdit ? "Update Record" : "Add Record"}
+            <Save size={15} />{" "}
+            {saving ? "Saving..." : isEdit ? "Update" : "Add Record"}
           </button>
         </div>
       </div>
@@ -1123,79 +1184,48 @@ function AttendanceFormModal({
 function DeleteConfirmModal({ record, onClose, onConfirm, deleting }) {
   useEscape(onClose);
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm animate-in zoom-in-95 duration-200">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-          <div className="flex items-center gap-2">
-            <div className="p-1.5 rounded-lg bg-red-100">
-              <Trash2 size={16} className="text-red-600" />
-            </div>
-            <h2 className="text-lg font-bold text-gray-800">Delete Record</h2>
-          </div>
-          <button onClick={onClose} className="p-1 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm">
+        <div className="flex items-center justify-between px-6 py-4 border-b">
+          <h2 className="text-lg font-bold text-gray-800">Delete Record</h2>
+          <button
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-600"
+          >
             <X size={20} />
           </button>
         </div>
         <div className="px-6 py-5">
-          <p className="text-sm text-gray-700 mb-1">Are you sure you want to delete the attendance record for:</p>
-          <p className="text-sm font-semibold text-gray-900 mt-2">{record?.empName}</p>
-          <p className="text-xs text-gray-500 mt-0.5">{record?.dateFormatted} · {record?.department}</p>
-          <div className="mt-4 bg-red-50 rounded-xl p-3 border border-red-200">
-            <p className="text-xs text-red-700 flex items-center gap-1.5">
-              <AlertCircle size={12} /> This action cannot be undone.
-            </p>
-          </div>
+          <p className="text-sm text-gray-700 mb-1">
+            Are you sure you want to delete the attendance record for:
+          </p>
+          <p className="text-sm font-semibold text-gray-900">
+            {record?.empName}
+          </p>
+          <p className="text-xs text-gray-500">
+            {record?.dateFormatted} · {record?.department}
+          </p>
+          <p className="text-xs text-red-600 mt-3">
+            This action cannot be undone.
+          </p>
         </div>
-        <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-100 bg-gray-50/50 rounded-b-2xl">
+        <div className="flex justify-end gap-3 px-6 py-4 border-t bg-gray-50 rounded-b-2xl">
           <button
             onClick={onClose}
             disabled={deleting}
-            className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition disabled:opacity-50"
+            className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50"
           >
             Cancel
           </button>
           <button
             onClick={onConfirm}
             disabled={deleting}
-            className="flex items-center gap-2 px-5 py-2 text-sm font-medium text-white bg-gradient-to-r from-red-600 to-red-700 rounded-xl hover:from-red-700 hover:to-red-800 transition shadow-md disabled:opacity-50"
+            className="flex items-center gap-2 px-5 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 disabled:opacity-50"
           >
-            <Trash2 size={15} /> {deleting ? "Deleting..." : "Delete Record"}
+            <Trash2 size={15} /> {deleting ? "Deleting..." : "Delete"}
           </button>
         </div>
       </div>
-    </div>
-  );
-}
-
-// ─── Modern Stats Panel ──────────────────────────────────────────────────────
-function StatsPanel({ savedCount, dirtyCount, totalEmployees, loading }) {
-  return (
-    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-      <StatCard
-        label="Total Employees"
-        value={totalEmployees}
-        icon={Users}
-        color="blue"
-      />
-      <StatCard
-        label="Saved Records"
-        value={savedCount}
-        icon={CheckCircle2}
-        color="green"
-      />
-      <StatCard
-        label="Unsaved Changes"
-        value={dirtyCount}
-        icon={AlertCircle}
-        color="orange"
-      />
-      <StatCard
-        label="Attendance Rate"
-        value={totalEmployees ? `${Math.round((savedCount / totalEmployees) * 100)}%` : "0%"}
-        icon={CalendarDays}
-        color="purple"
-        subtitle={`${savedCount} / ${totalEmployees} marked`}
-      />
     </div>
   );
 }
@@ -1205,6 +1235,7 @@ function StatsPanel({ savedCount, dirtyCount, totalEmployees, loading }) {
 // ═════════════════════════════════════════════════════════════════════════════
 
 function MarkTab({ userRole, isSuperAdmin, isAdmin, isHybrid }) {
+  // Single date only — no range in Mark tab
   const [markDate, setMarkDate] = useState(getTodayDate());
   const [rows, setRows] = useState([]);
   const [origRows, setOrigRows] = useState([]);
@@ -1218,6 +1249,7 @@ function MarkTab({ userRole, isSuperAdmin, isAdmin, isHybrid }) {
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleting, setDeleting] = useState(false);
 
+  // ── Load worksheet ──────────────────────────────────────────────────────────
   const loadWorksheet = useCallback(
     async (date) => {
       setLoading(true);
@@ -1488,6 +1520,7 @@ function MarkTab({ userRole, isSuperAdmin, isAdmin, isHybrid }) {
   const filt = filterRecords(rows, searchQuery);
   const colCount = 8 + (isHybrid ? 0 : 4) + (isAdmin ? 1 : 0);
 
+  // ── Desktop row ─────────────────────────────────────────────────────────────
   const renderDesktopRow = (row) => {
     const editable = canEdit(row);
     const isSaving = savingId === row.empId;
@@ -1495,9 +1528,9 @@ function MarkTab({ userRole, isSuperAdmin, isAdmin, isHybrid }) {
     const inPh = row.shiftStart || "09:00";
     const outPh = row.shiftEnd || "17:00";
     const rowBg = row.__dirty
-      ? "bg-amber-50/50"
+      ? "bg-amber-50"
       : row.__saved
-        ? "bg-green-50/50"
+        ? "bg-green-50"
         : row.__isVirtual
           ? "bg-gray-50/50"
           : "bg-white";
@@ -1505,9 +1538,9 @@ function MarkTab({ userRole, isSuperAdmin, isAdmin, isHybrid }) {
     return (
       <tr
         key={row.empId}
-        className={`border-b transition-all ${rowBg} hover:bg-blue-50/30 group`}
+        className={`border-b transition-colors ${rowBg} hover:bg-blue-50/20`}
       >
-        <td className="pl-4 pr-2 py-3 w-6">
+        <td className="pl-3 pr-1 py-2 w-6">
           <StatusDot
             isDirty={row.__dirty}
             isSaved={row.__saved}
@@ -1515,16 +1548,16 @@ function MarkTab({ userRole, isSuperAdmin, isAdmin, isHybrid }) {
             isVirtual={row.__isVirtual}
           />
         </td>
-        <td className="px-3 py-3 text-xs font-mono text-gray-600 whitespace-nowrap">
+        <td className="px-3 py-2 text-xs font-mono text-gray-600 whitespace-nowrap">
           {row.empNumber}
         </td>
-        <td className="px-3 py-3 text-sm font-medium text-gray-900 whitespace-nowrap">
+        <td className="px-3 py-2 text-sm font-medium text-gray-900 whitespace-nowrap">
           {row.empName}
         </td>
-        <td className="px-3 py-3 text-xs text-gray-500 whitespace-nowrap">
+        <td className="px-3 py-2 text-xs text-gray-500 whitespace-nowrap">
           {row.department}
         </td>
-        <td className="px-2 py-3">
+        <td className="px-2 py-2">
           <StatusSelect
             value={row.status}
             readOnly={!editable}
@@ -1532,7 +1565,7 @@ function MarkTab({ userRole, isSuperAdmin, isAdmin, isHybrid }) {
             onChange={(v) => handleStatusChange(row.empId, v)}
           />
         </td>
-        <td className="px-2 py-3">
+        <td className="px-2 py-2">
           {showTimes ? (
             <TimeInput
               value={row.inTime}
@@ -1545,7 +1578,7 @@ function MarkTab({ userRole, isSuperAdmin, isAdmin, isHybrid }) {
             <span className="text-xs text-gray-300">—</span>
           )}
         </td>
-        <td className="px-2 py-3">
+        <td className="px-2 py-2">
           {showTimes ? (
             editable ? (
               <div className="flex items-center gap-1">
@@ -1585,14 +1618,14 @@ function MarkTab({ userRole, isSuperAdmin, isAdmin, isHybrid }) {
           )}
         </td>
         {!isHybrid && (
-          <td className="px-3 py-3 text-right text-xs text-gray-600 whitespace-nowrap">
+          <td className="px-3 py-2 text-right text-xs text-gray-600 whitespace-nowrap">
             {row.__isVirtual && !row.__dirty
               ? "—"
               : (row.financials?.hoursWorked || 0).toLocaleString("en-PK")}
           </td>
         )}
         {!isHybrid && (
-          <td className="px-3 py-3 text-right text-xs whitespace-nowrap">
+          <td className="px-3 py-2 text-right text-xs whitespace-nowrap">
             {row.__isVirtual && !row.__saved ? (
               <span className="text-gray-300">—</span>
             ) : (
@@ -1619,7 +1652,7 @@ function MarkTab({ userRole, isSuperAdmin, isAdmin, isHybrid }) {
           </td>
         )}
         {!isHybrid && (
-          <td className="px-3 py-3 text-right text-xs whitespace-nowrap">
+          <td className="px-3 py-2 text-right text-xs whitespace-nowrap">
             {row.__isVirtual && !row.__saved ? (
               <span className="text-gray-300">—</span>
             ) : (
@@ -1646,7 +1679,7 @@ function MarkTab({ userRole, isSuperAdmin, isAdmin, isHybrid }) {
           </td>
         )}
         {!isHybrid && (
-          <td className="px-3 py-3 text-right text-xs font-semibold text-gray-700 whitespace-nowrap">
+          <td className="px-3 py-2 text-right text-xs font-semibold text-gray-700 whitespace-nowrap">
             {row.__isVirtual && !row.__dirty ? (
               <span className="text-gray-300">—</span>
             ) : (
@@ -1654,11 +1687,11 @@ function MarkTab({ userRole, isSuperAdmin, isAdmin, isHybrid }) {
             )}
           </td>
         )}
-        <td className="px-3 py-3 text-xs text-gray-400 whitespace-nowrap">
+        <td className="px-3 py-2 text-xs text-gray-400 whitespace-nowrap">
           {row.__isVirtual && !row.__saved ? "—" : row.lastModified || "—"}
         </td>
         {isAdmin && (
-          <td className="px-2 py-3">
+          <td className="px-2 py-2">
             {editable && (
               <div className="flex items-center justify-center gap-1 flex-nowrap">
                 <button
@@ -1667,8 +1700,8 @@ function MarkTab({ userRole, isSuperAdmin, isAdmin, isHybrid }) {
                   title={row.__dirty ? "Save row" : "No changes"}
                   className={`inline-flex items-center gap-1 px-2 py-1.5 text-xs font-medium rounded-lg transition ${
                     row.__dirty
-                      ? "text-white bg-blue-600 hover:bg-blue-700"
-                      : "text-gray-400 bg-gray-100 cursor-not-allowed"
+                      ? "text-white bg-blue-600 hover:bg-blue-700 border border-blue-600"
+                      : "text-gray-300 bg-gray-50 border border-gray-200 cursor-not-allowed"
                   } disabled:opacity-50`}
                 >
                   {isSaving ? (
@@ -1682,7 +1715,7 @@ function MarkTab({ userRole, isSuperAdmin, isAdmin, isHybrid }) {
                   <button
                     onClick={() => handleDiscard(row.empId)}
                     title="Discard changes"
-                    className="p-1.5 text-gray-500 hover:text-gray-700 bg-gray-100 rounded-lg transition"
+                    className="p-1.5 text-gray-400 hover:text-gray-600 bg-gray-50 border border-gray-200 rounded-lg transition"
                   >
                     <RotateCcw size={11} />
                   </button>
@@ -1693,7 +1726,7 @@ function MarkTab({ userRole, isSuperAdmin, isAdmin, isHybrid }) {
                       setDeleteTarget({ ...row, dateFormatted: markDate })
                     }
                     title="Delete record"
-                    className="p-1.5 text-red-500 hover:text-red-700 bg-red-50 rounded-lg transition"
+                    className="p-1.5 text-red-500 hover:text-red-700 bg-red-50 border border-red-200 rounded-lg transition"
                   >
                     <Trash2 size={12} />
                   </button>
@@ -1706,6 +1739,7 @@ function MarkTab({ userRole, isSuperAdmin, isAdmin, isHybrid }) {
     );
   };
 
+  // ── Mobile card ─────────────────────────────────────────────────────────────
   const renderMobileCard = (row) => {
     const editable = canEdit(row);
     const isSaving = savingId === row.empId;
@@ -1716,35 +1750,35 @@ function MarkTab({ userRole, isSuperAdmin, isAdmin, isHybrid }) {
     return (
       <div
         key={row.empId}
-        className={`border rounded-xl p-4 transition-all ${
+        className={`border rounded-xl p-3 transition-colors ${
           row.__dirty
-            ? "border-amber-300 bg-amber-50/50"
+            ? "border-amber-300 bg-amber-50"
             : row.__saved
-              ? "border-green-300 bg-green-50/50"
+              ? "border-green-300 bg-green-50"
               : row.__isVirtual
                 ? "border-gray-200 bg-gray-50"
                 : "border-gray-200 bg-white"
         }`}
       >
-        <div className="flex justify-between items-start mb-3">
+        <div className="flex justify-between items-start mb-2">
           <div>
             <p className="font-semibold text-gray-900 text-sm">{row.empName}</p>
-            <p className="text-xs text-gray-500 mt-0.5">
+            <p className="text-xs text-gray-500">
               #{row.empNumber} · {row.department}
             </p>
             {row.shiftStart && (
-              <p className="text-xs text-gray-400 mt-1">
+              <p className="text-xs text-gray-400">
                 Shift {row.shiftStart}–{row.shiftEnd}
               </p>
             )}
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
             {isAdmin && editable && !row.__isVirtual && (
               <button
                 onClick={() =>
                   setDeleteTarget({ ...row, dateFormatted: markDate })
                 }
-                className="p-1.5 text-red-400 hover:text-red-600 rounded-lg bg-white shadow-sm"
+                className="p-1 text-red-400 hover:text-red-600 rounded"
               >
                 <Trash2 size={13} />
               </button>
@@ -1758,7 +1792,7 @@ function MarkTab({ userRole, isSuperAdmin, isAdmin, isHybrid }) {
           </div>
         </div>
         {editable ? (
-          <div className="space-y-3">
+          <div className="space-y-2">
             <StatusSelect
               value={row.status}
               readOnly={false}
@@ -1766,7 +1800,7 @@ function MarkTab({ userRole, isSuperAdmin, isAdmin, isHybrid }) {
               onChange={(v) => handleStatusChange(row.empId, v)}
             />
             {showTimes && (
-              <div className="flex flex-wrap gap-2 items-center">
+              <div className="flex gap-2 items-center">
                 <input
                   type="text"
                   value={row.inTime || ""}
@@ -1775,7 +1809,7 @@ function MarkTab({ userRole, isSuperAdmin, isAdmin, isHybrid }) {
                   onChange={(e) =>
                     handleChange(row.empId, { inTime: e.target.value })
                   }
-                  className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 bg-white"
+                  className="flex-1 border border-gray-300 rounded-lg px-2 py-1.5 text-xs focus:ring-2 focus:ring-blue-400 placeholder:text-gray-300"
                 />
                 <input
                   type="text"
@@ -1785,9 +1819,9 @@ function MarkTab({ userRole, isSuperAdmin, isAdmin, isHybrid }) {
                   onChange={(e) =>
                     handleChange(row.empId, { outTime: e.target.value })
                   }
-                  className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 bg-white"
+                  className="flex-1 border border-gray-300 rounded-lg px-2 py-1.5 text-xs focus:ring-2 focus:ring-blue-400 placeholder:text-gray-300"
                 />
-                <label className="flex items-center gap-1 text-xs text-gray-500 cursor-pointer select-none whitespace-nowrap">
+                <label className="flex items-center gap-0.5 text-xs text-gray-500 cursor-pointer select-none">
                   <input
                     type="checkbox"
                     checked={row.outNextDay || false}
@@ -1795,17 +1829,17 @@ function MarkTab({ userRole, isSuperAdmin, isAdmin, isHybrid }) {
                     onChange={(e) =>
                       handleChange(row.empId, { outNextDay: e.target.checked })
                     }
-                    className="w-3.5 h-3.5 rounded"
+                    className="w-3.5 h-3.5"
                   />{" "}
-                  +1 day
+                  +1
                 </label>
               </div>
             )}
             {!isHybrid && !row.__isVirtual && (
-              <div className="flex items-center justify-between text-xs bg-white border rounded-lg px-3 py-2">
-                <span className="text-gray-600">
+              <div className="flex items-center justify-between text-xs text-gray-500 bg-white border rounded-lg px-2 py-1.5">
+                <span>
                   {(row.financials?.hoursWorked || 0).toFixed(2)}h ·{" "}
-                  <strong className="text-gray-900">{pkr(row.financials?.finalDayEarning)}</strong>
+                  <strong>{pkr(row.financials?.finalDayEarning)}</strong>
                 </span>
                 {isAdmin && editable && (
                   <div className="flex gap-1">
@@ -1816,7 +1850,7 @@ function MarkTab({ userRole, isSuperAdmin, isAdmin, isHybrid }) {
                           type: "ot",
                         })
                       }
-                      className="inline-flex items-center gap-0.5 px-2 py-1 text-xs text-blue-600 bg-blue-50 border border-blue-200 rounded hover:bg-blue-100"
+                      className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-xs text-blue-600 bg-blue-50 border border-blue-200 rounded hover:bg-blue-100"
                     >
                       <Pencil size={9} /> OT
                     </button>
@@ -1827,7 +1861,7 @@ function MarkTab({ userRole, isSuperAdmin, isAdmin, isHybrid }) {
                           type: "deduction",
                         })
                       }
-                      className="inline-flex items-center gap-0.5 px-2 py-1 text-xs text-red-600 bg-red-50 border border-red-200 rounded hover:bg-red-100"
+                      className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-xs text-red-600 bg-red-50 border border-red-200 rounded hover:bg-red-100"
                     >
                       <Pencil size={9} /> Ded
                     </button>
@@ -1836,43 +1870,39 @@ function MarkTab({ userRole, isSuperAdmin, isAdmin, isHybrid }) {
               </div>
             )}
             {isAdmin && (
-              <div className="flex gap-2 pt-1">
+              <div className="flex gap-2">
                 <button
                   onClick={() => handleSaveRow(row.empId)}
                   disabled={isSaving || !row.__dirty}
-                  className={`flex-1 flex items-center justify-center gap-1 py-2 rounded-lg text-sm font-medium transition ${
-                    row.__dirty
-                      ? "bg-blue-600 text-white hover:bg-blue-700"
-                      : "bg-gray-100 text-gray-400 cursor-not-allowed"
-                  } disabled:opacity-50`}
+                  className={`flex-1 flex items-center justify-center gap-1 py-1.5 rounded-lg text-xs font-medium ${row.__dirty ? "bg-blue-600 text-white" : "bg-gray-100 text-gray-400 cursor-not-allowed"} disabled:opacity-50`}
                 >
                   {isSaving ? (
-                    <Loader2 size={14} className="animate-spin" />
+                    <Loader2 size={12} className="animate-spin" />
                   ) : (
-                    <Save size={14} />
+                    <Save size={12} />
                   )}{" "}
                   Save
                 </button>
                 {row.__dirty && (
                   <button
                     onClick={() => handleDiscard(row.empId)}
-                    className="px-4 py-2 bg-gray-100 text-gray-600 rounded-lg text-sm border border-gray-200 hover:bg-gray-200"
+                    className="px-3 py-1.5 bg-gray-100 text-gray-600 rounded-lg text-xs border border-gray-200"
                   >
-                    <RotateCcw size={14} />
+                    <RotateCcw size={12} />
                   </button>
                 )}
               </div>
             )}
           </div>
         ) : (
-          <div className="mt-2 space-y-1">
+          <div className="mt-1 space-y-0.5">
             <span
               className={`inline-block px-2 py-0.5 rounded-full font-semibold border text-xs ${STATUS_STYLES[row.status] || STATUS_STYLES[""]}`}
             >
               {row.status || "—"}
             </span>
             {row.inTime && (
-              <p className="text-xs text-gray-500 mt-2">
+              <p className="text-xs text-gray-500">
                 In: {row.inTime} · Out: {safeTime(row.outTime)}
                 {row.outNextDay && row.outTime && (
                   <span className="ml-1 text-orange-500">(+1)</span>
@@ -1880,7 +1910,7 @@ function MarkTab({ userRole, isSuperAdmin, isAdmin, isHybrid }) {
               </p>
             )}
             {!isHybrid && (
-              <p className="text-xs font-medium text-gray-700 mt-1">
+              <p className="text-xs text-gray-500">
                 Earning: {pkr(row.financials?.finalDayEarning)}
               </p>
             )}
@@ -1892,110 +1922,124 @@ function MarkTab({ userRole, isSuperAdmin, isAdmin, isHybrid }) {
 
   return (
     <div>
-      <ActionButtonGroup>
+      <div className="flex gap-2 flex-wrap mb-4">
         {isAdmin && (
           <>
-            <ActionButton
-              icon={Plus}
+            <button
               onClick={() => setShowAddModal(true)}
               disabled={loading}
-              variant="primary"
+              className="flex items-center gap-2 px-3 md:px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition disabled:opacity-50 text-sm"
             >
-              Add Record
-            </ActionButton>
-            <ActionButton
-              icon={Download}
+              <Plus size={18} />
+              <span className="hidden sm:inline">Add Record</span>
+            </button>
+            <button
               onClick={() => setShowImport(true)}
               disabled={loading}
-              variant="success"
+              className="flex items-center gap-2 px-3 md:px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition disabled:opacity-50 text-sm"
             >
-              Import CSV
-            </ActionButton>
+              <Download size={18} />
+              <span className="hidden sm:inline">Import CSV</span>
+            </button>
           </>
         )}
-        <ActionButton
-          icon={Upload}
+        <button
           onClick={handleExport}
           disabled={loading || !rows.some((r) => !r.__isVirtual)}
-          variant="secondary"
+          className="flex items-center gap-2 px-3 md:px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition disabled:opacity-50 text-sm"
         >
-          Export
-        </ActionButton>
-        <ActionButton
-          icon={RefreshCw}
+          <Upload size={18} />
+          <span className="hidden sm:inline">Export</span>
+        </button>
+        <button
           onClick={() => loadWorksheet(markDate)}
           disabled={loading || savingAll}
-          variant="outline"
+          className="flex items-center gap-2 px-3 md:px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition disabled:opacity-50 text-sm"
         >
-          Refresh
-        </ActionButton>
-      </ActionButtonGroup>
+          <RefreshCw size={18} className={loading ? "animate-spin" : ""} />
+        </button>
+      </div>
 
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5 mb-6">
-        <div className="flex flex-wrap items-end justify-between gap-4">
+      {/* Date navigator — single date */}
+      <div className="bg-white rounded-lg shadow p-4 mb-4">
+        <div className="flex flex-wrap items-end gap-4">
           <DateNavigator
             value={markDate}
             onChange={setMarkDate}
-            label="Attendance Date"
+            label="Date (dd/mm/yyyy)"
             showTodayBadge
           />
-          <div className="flex items-center gap-3 text-sm">
-            <span className="text-gray-500">Total: {rows.length}</span>
-            <span className="text-green-600 font-medium">Saved: {savedCount}</span>
+          <div className="flex items-center gap-3 text-xs pb-1">
+            <span className="text-gray-500">{rows.length} employees</span>
+            <span className="text-green-600 font-medium">
+              {savedCount} saved
+            </span>
             {dirtyCount > 0 && (
               <span className="text-amber-600 font-medium">
-                Unsaved: {dirtyCount}
+                {dirtyCount} unsaved
               </span>
             )}
           </div>
         </div>
       </div>
 
-      <StatsPanel
-        totalEmployees={rows.length}
-        savedCount={savedCount}
-        dirtyCount={dirtyCount}
-        loading={loading}
-      />
-
-      <div className="flex flex-wrap items-center gap-3 mb-5">
-        <div className="flex-1 min-w-[240px]">
+      <div className="flex flex-wrap items-center gap-3 mb-4">
+        <div className="flex-1 min-w-[200px] max-w-sm">
           <SearchBar
             value={searchQuery}
             onChange={setSearchQuery}
-            placeholder="Search by name, ID, department, status..."
+            placeholder="Search name, ID, dept, status…"
           />
         </div>
-        {isAdmin && (
-          <ActionButton
-            icon={Save}
-            onClick={handleSaveAll}
-            disabled={savingAll || loading || dirtyCount === 0}
-            variant="primary"
-          >
-            Save All {dirtyCount > 0 ? `(${dirtyCount})` : ""}
-          </ActionButton>
-        )}
+        <div className="flex items-center gap-2 ml-auto">
+          <div className="hidden lg:flex items-center gap-3 text-xs text-gray-400 mr-1">
+            <span className="flex items-center gap-1">
+              <Circle size={10} className="text-amber-400 fill-amber-400" />{" "}
+              Unsaved
+            </span>
+            <span className="flex items-center gap-1">
+              <CheckCircle2 size={10} className="text-green-500" /> Saved
+            </span>
+          </div>
+          {isAdmin && (
+            <button
+              onClick={handleSaveAll}
+              disabled={savingAll || loading || dirtyCount === 0}
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition disabled:opacity-50 text-sm font-medium"
+            >
+              {savingAll ? (
+                <>
+                  <Loader2 size={15} className="animate-spin" /> Saving…
+                </>
+              ) : (
+                <>
+                  <Save size={15} /> Save All
+                  {dirtyCount > 0 ? ` (${dirtyCount})` : ""}
+                </>
+              )}
+            </button>
+          )}
+        </div>
       </div>
 
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+      <div className="bg-white rounded-lg shadow overflow-hidden">
         {loading ? (
-          <div className="p-16 text-center">
-            <div className="inline-block animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600 mb-4" />
+          <div className="p-12 text-center">
+            <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mb-4" />
             <p className="text-gray-600 font-medium">Loading employees…</p>
           </div>
         ) : rows.length === 0 ? (
-          <div className="p-16 text-center text-gray-500">
-            <AlertCircle className="mx-auto mb-4 text-gray-300" size={48} />
+          <div className="p-12 text-center text-gray-600">
+            <AlertCircle className="mx-auto mb-4 text-gray-400" size={48} />
             <p>No active employees found</p>
           </div>
         ) : (
           <>
-            <div className="hidden lg:block overflow-x-auto">
+            <div className="hidden md:block overflow-x-auto">
               <table className="w-full text-sm">
-                <thead className="bg-gray-50 border-b border-gray-200">
+                <thead className="bg-gray-100 border-b">
                   <tr>
-                    <th className="pl-4 pr-2 py-3 w-6" />
+                    <th className="pl-3 pr-1 py-3 w-6" />
                     {[
                       "Emp #",
                       "Name",
@@ -2006,7 +2050,7 @@ function MarkTab({ userRole, isSuperAdmin, isAdmin, isHybrid }) {
                     ].map((h) => (
                       <th
                         key={h}
-                        className="px-3 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap"
+                        className="px-3 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap"
                       >
                         {h}
                       </th>
@@ -2015,27 +2059,27 @@ function MarkTab({ userRole, isSuperAdmin, isAdmin, isHybrid }) {
                       ["Hours", "OT", "Deduction", "Earning"].map((h) => (
                         <th
                           key={h}
-                          className="px-3 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap"
+                          className="px-3 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap"
                         >
                           {h}
                         </th>
                       ))}
-                    <th className="px-3 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">
+                    <th className="px-3 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">
                       Modified
                     </th>
                     {isAdmin && (
-                      <th className="px-2 py-3 text-center text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                      <th className="px-2 py-3 text-center text-xs font-semibold text-gray-500 uppercase tracking-wide">
                         Actions
                       </th>
                     )}
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-100">
+                <tbody>
                   {filt.length === 0 ? (
                     <tr>
                       <td
                         colSpan={colCount}
-                        className="px-4 py-12 text-center text-gray-400 text-sm"
+                        className="px-4 py-10 text-center text-gray-400 text-sm"
                       >
                         No employees match your search
                       </td>
@@ -2046,9 +2090,9 @@ function MarkTab({ userRole, isSuperAdmin, isAdmin, isHybrid }) {
                 </tbody>
               </table>
             </div>
-            <div className="lg:hidden space-y-3 p-4">
+            <div className="md:hidden space-y-2 p-3">
               {filt.length === 0 ? (
-                <p className="text-center text-sm text-gray-400 py-8">
+                <p className="text-center text-sm text-gray-400 py-6">
                   No employees match your search
                 </p>
               ) : (
@@ -2123,6 +2167,7 @@ function ManageTab({ userRole, isSuperAdmin, isAdmin, isHybrid }) {
         toast.error("Authentication required");
         return;
       }
+      // When range is disabled, use fromDate as both start and end
       const effectiveToDate = rangeEnabled ? toDate : fromDate;
       const response = await axios.get(
         `/api/attendance/range?fromDate=${fromDate}&toDate=${effectiveToDate}`,
@@ -2248,8 +2293,6 @@ function ManageTab({ userRole, isSuperAdmin, isAdmin, isHybrid }) {
         return "bg-blue-100 text-blue-800";
       case "Absent":
         return "bg-red-100 text-red-800";
-      case "NCNS":
-        return "bg-gray-100 text-gray-700";
       default:
         return "bg-gray-100 text-gray-800";
     }
@@ -2259,49 +2302,48 @@ function ManageTab({ userRole, isSuperAdmin, isAdmin, isHybrid }) {
 
   return (
     <div>
-      <ActionButtonGroup>
+      <div className="flex gap-2 flex-wrap mb-6">
         {isAdmin && (
           <>
-            <ActionButton
-              icon={Plus}
+            <button
               onClick={() => setShowAddModal(true)}
               disabled={loading}
-              variant="primary"
+              className="flex items-center gap-2 px-3 md:px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition disabled:opacity-50 text-sm"
             >
-              Add Record
-            </ActionButton>
-            <ActionButton
-              icon={Download}
+              <Plus size={18} />
+              <span className="hidden sm:inline">Add Record</span>
+            </button>
+            <button
               onClick={() => setShowImportModal(true)}
               disabled={loading || refreshing}
-              variant="success"
+              className="flex items-center gap-2 px-3 md:px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition disabled:opacity-50 text-sm"
             >
-              Import CSV
-            </ActionButton>
+              <Download size={18} />
+              <span className="hidden sm:inline">Import CSV</span>
+            </button>
           </>
         )}
-        <ActionButton
-          icon={Upload}
+        <button
           onClick={handleExport}
           disabled={loading || !attendance.length}
-          variant="secondary"
+          className="flex items-center gap-2 px-3 md:px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition disabled:opacity-50 text-sm"
         >
-          Export
-        </ActionButton>
-        <ActionButton
-          icon={RefreshCw}
+          <Upload size={18} />
+          <span className="hidden sm:inline">Export</span>
+        </button>
+        <button
           onClick={() => {
             setRefreshing(true);
             fetchAttendance().finally(() => setRefreshing(false));
           }}
           disabled={loading || refreshing}
-          variant="outline"
+          className="flex items-center gap-2 px-3 md:px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition disabled:opacity-50 text-sm"
         >
-          Refresh
-        </ActionButton>
-      </ActionButtonGroup>
+          <RefreshCw size={18} className={refreshing ? "animate-spin" : ""} />
+        </button>
+      </div>
 
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5 mb-6">
+      <div className="bg-white rounded-lg shadow p-4 md:p-6 mb-6">
         <div className="flex flex-wrap items-end gap-4">
           <DateRangePicker
             fromDate={fromDate}
@@ -2310,24 +2352,24 @@ function ManageTab({ userRole, isSuperAdmin, isAdmin, isHybrid }) {
             setToDate={setToDate}
             rangeEnabled={rangeEnabled}
             setRangeEnabled={setRangeEnabled}
-            label1="From Date"
-            label2="To Date"
+            label1="From Date (dd/mm/yyyy)"
+            label2="To Date (dd/mm/yyyy)"
           />
           <button
             onClick={handleDateRangeChange}
             disabled={loading}
-            className="px-5 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition disabled:opacity-50 text-sm font-medium shadow-sm"
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition disabled:opacity-50 text-sm font-medium"
           >
-            {loading ? "Loading..." : "Apply Filter"}
+            {loading ? "Loading..." : "Apply"}
           </button>
-          <div className="text-sm text-gray-500 bg-gray-50 px-3 py-1.5 rounded-lg">
+          <div className="text-xs text-gray-600 p-2 bg-gray-50 rounded">
             Total: {attendance.length}
             {searchQuery && ` · Showing: ${filtered.length}`}
           </div>
         </div>
       </div>
 
-      <div className="mb-5">
+      <div className="mb-4">
         <SearchBar
           value={searchQuery}
           onChange={setSearchQuery}
@@ -2335,42 +2377,71 @@ function ManageTab({ userRole, isSuperAdmin, isAdmin, isHybrid }) {
         />
       </div>
 
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+      <div className="bg-white rounded-lg shadow overflow-hidden">
         {loading && !attendance.length ? (
-          <div className="p-16 text-center">
-            <div className="inline-block animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600 mb-4" />
-            <p className="text-gray-600 font-medium">Loading attendance data...</p>
+          <div className="p-12 text-center">
+            <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mb-4" />
+            <p className="text-gray-600 font-medium">
+              Loading attendance data...
+            </p>
           </div>
         ) : attendance.length === 0 ? (
-          <div className="p-16 text-center text-gray-500">
-            <AlertCircle className="mx-auto mb-4 text-gray-300" size={48} />
+          <div className="p-12 text-center text-gray-600">
+            <AlertCircle className="mx-auto mb-4 text-gray-400" size={48} />
             <p>No attendance records found for selected date range</p>
           </div>
         ) : (
           <>
-            <div className="hidden lg:block overflow-x-auto">
+            <div className="hidden md:block overflow-x-auto">
               <table className="w-full text-sm">
-                <thead className="bg-gray-50 border-b border-gray-200">
+                <thead className="bg-gray-100 border-b">
                   <tr>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Date</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Emp #</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Name</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Department</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
-                    <th className="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase tracking-wider">In</th>
-                    <th className="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase tracking-wider">Out</th>
-                    {!isHybrid && <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">Hours</th>}
-                    {!isHybrid && <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">OT</th>}
-                    {!isHybrid && <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">Deduction</th>}
-                    {!isHybrid && <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">Earning</th>}
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Modified</th>
-                    {isAdmin && <th className="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase tracking-wider">Actions</th>}
+                    <th className="px-4 py-3 text-left font-semibold">Date</th>
+                    <th className="px-4 py-3 text-left font-semibold">Emp #</th>
+                    <th className="px-4 py-3 text-left font-semibold">Name</th>
+                    <th className="px-4 py-3 text-left font-semibold">
+                      Department
+                    </th>
+                    <th className="px-4 py-3 text-left font-semibold">
+                      Status
+                    </th>
+                    <th className="px-4 py-3 text-center font-semibold">In</th>
+                    <th className="px-4 py-3 text-center font-semibold">Out</th>
+                    {!isHybrid && (
+                      <th className="px-4 py-3 text-right font-semibold">
+                        Hours
+                      </th>
+                    )}
+                    {!isHybrid && (
+                      <th className="px-4 py-3 text-right font-semibold">OT</th>
+                    )}
+                    {!isHybrid && (
+                      <th className="px-4 py-3 text-right font-semibold">
+                        Deduction
+                      </th>
+                    )}
+                    {!isHybrid && (
+                      <th className="px-4 py-3 text-right font-semibold">
+                        Earning
+                      </th>
+                    )}
+                    <th className="px-4 py-3 text-left font-semibold">
+                      Modified
+                    </th>
+                    {isAdmin && (
+                      <th className="px-4 py-3 text-center font-semibold">
+                        Actions
+                      </th>
+                    )}
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-100">
+                <tbody className="divide-y">
                   {filtered.length === 0 ? (
                     <tr>
-                      <td colSpan={13} className="px-4 py-12 text-center text-gray-400 text-sm">
+                      <td
+                        colSpan={13}
+                        className="px-4 py-8 text-center text-gray-500 text-sm"
+                      >
                         No records match your search
                       </td>
                     </tr>
@@ -2378,31 +2449,49 @@ function ManageTab({ userRole, isSuperAdmin, isAdmin, isHybrid }) {
                     filtered.map((record, idx) => {
                       const editable = canEditRecord(record);
                       return (
-                        <tr key={record._id || idx} className="hover:bg-gray-50/50 transition">
-                          <td className="px-4 py-3 text-sm">{record.dateFormatted}</td>
-                          <td className="px-4 py-3 font-mono text-xs text-gray-600">{record.empNumber}</td>
-                          <td className="px-4 py-3 font-medium text-gray-900">{record.empName}</td>
-                          <td className="px-4 py-3 text-sm text-gray-500">{record.department}</td>
+                        <tr
+                          key={record._id || idx}
+                          className="hover:bg-gray-50"
+                        >
+                          <td className="px-4 py-3">{record.dateFormatted}</td>
+                          <td className="px-4 py-3 font-mono text-xs">
+                            {record.empNumber}
+                          </td>
+                          <td className="px-4 py-3">{record.empName}</td>
+                          <td className="px-4 py-3">{record.department}</td>
                           <td className="px-4 py-3">
-                            <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${getStatusColor(record.status)}`}>
+                            <span
+                              className={`px-3 py-1 rounded-full text-xs font-semibold ${getStatusColor(record.status)}`}
+                            >
                               {record.status}
                             </span>
                           </td>
-                          <td className="px-4 py-3 text-center text-sm">{displayTime(record.inTime)}</td>
-                          <td className="px-4 py-3 text-center text-sm">
+                          <td className="px-4 py-3 text-center">
+                            {displayTime(record.inTime)}
+                          </td>
+                          <td className="px-4 py-3 text-center">
                             {displayTime(record.outTime)}
                             {record.outNextDay && record.outTime && (
-                              <span className="ml-1 text-xs text-orange-500 font-medium">(+1)</span>
+                              <span className="ml-1 text-xs text-orange-500 font-medium">
+                                (+1)
+                              </span>
                             )}
                           </td>
-                          {!isHybrid && <td className="px-4 py-3 text-right text-sm">{(record.financials?.hoursWorked || 0).toLocaleString("en-PK")}</td>}
+                          {!isHybrid && (
+                            <td className="px-4 py-3 text-right">
+                              {(record.financials?.hoursWorked || 0).toLocaleString("en-PK")}
+                            </td>
+                          )}
                           {!isHybrid && (
                             <td className="px-4 py-3 text-right">
                               <button
-                                onClick={() => setDetailsModal({ type: "ot", record })}
-                                className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-800 text-sm"
+                                onClick={() =>
+                                  setDetailsModal({ type: "ot", record })
+                                }
+                                className="inline-flex items-center gap-1 text-blue-700 hover:text-blue-900"
                               >
-                                PKR {(record.financials?.otAmount || 0).toLocaleString("en-PK")}
+                                PKR{" "}
+                                {(record.financials?.otAmount || 0).toLocaleString("en-PK")}{" "}
                                 <Eye size={12} />
                               </button>
                             </td>
@@ -2410,36 +2499,48 @@ function ManageTab({ userRole, isSuperAdmin, isAdmin, isHybrid }) {
                           {!isHybrid && (
                             <td className="px-4 py-3 text-right">
                               <button
-                                onClick={() => setDetailsModal({ type: "deduction", record })}
-                                className="inline-flex items-center gap-1 text-red-600 hover:text-red-800 text-sm"
+                                onClick={() =>
+                                  setDetailsModal({ type: "deduction", record })
+                                }
+                                className="inline-flex items-center gap-1 text-red-700 hover:text-red-900"
                               >
-                                PKR {(record.financials?.deduction || 0).toLocaleString("en-PK")}
+                                PKR{" "}
+                                {(record.financials?.deduction || 0).toLocaleString("en-PK")}{" "}
                                 <Eye size={12} />
                               </button>
                             </td>
                           )}
-                          {!isHybrid && <td className="px-4 py-3 text-right font-semibold text-gray-900">PKR {(record.financials?.finalDayEarning || 0).toLocaleString("en-PK")}</td>}
-                          <td className="px-4 py-3 text-xs text-gray-500">{record.lastModified || "--"}</td>
+                          {!isHybrid && (
+                            <td className="px-4 py-3 text-right font-semibold">
+                              PKR{" "}
+                              {(
+                                record.financials?.finalDayEarning || 0
+                              ).toLocaleString("en-PK")}
+                            </td>
+                          )}
+                          <td className="px-4 py-3 text-xs text-gray-600">
+                            {record.lastModified || "--"}
+                          </td>
                           {isAdmin && (
                             <td className="px-4 py-3 text-center">
                               <div className="flex items-center justify-center gap-1">
                                 <button
-                                  onClick={() => editable && setEditRecord(record)}
+                                  onClick={() =>
+                                    editable && setEditRecord(record)
+                                  }
                                   disabled={!editable}
-                                  className={`inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-lg transition ${
-                                    editable ? "text-indigo-700 bg-indigo-50 border border-indigo-200 hover:bg-indigo-100" : "text-gray-400 bg-gray-100 cursor-not-allowed"
-                                  }`}
+                                  className={`inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-lg transition ${editable ? "text-indigo-700 bg-indigo-50 border border-indigo-200 hover:bg-indigo-100" : "text-gray-400 bg-gray-50 border border-gray-200 opacity-50 cursor-not-allowed"}`}
                                 >
-                                  <Pencil size={12} /> Edit
+                                  <Pencil size={13} /> Edit
                                 </button>
                                 <button
-                                  onClick={() => editable && setDeleteRecord(record)}
+                                  onClick={() =>
+                                    editable && setDeleteRecord(record)
+                                  }
                                   disabled={!editable}
-                                  className={`inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-lg transition ${
-                                    editable ? "text-red-700 bg-red-50 border border-red-200 hover:bg-red-100" : "text-gray-400 bg-gray-100 cursor-not-allowed"
-                                  }`}
+                                  className={`inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-lg transition ${editable ? "text-red-700 bg-red-50 border border-red-200 hover:bg-red-100" : "text-gray-400 bg-gray-50 border border-gray-200 opacity-50 cursor-not-allowed"}`}
                                 >
-                                  <Trash2 size={12} />
+                                  <Trash2 size={13} />
                                 </button>
                               </div>
                             </td>
@@ -2452,51 +2553,87 @@ function ManageTab({ userRole, isSuperAdmin, isAdmin, isHybrid }) {
               </table>
             </div>
 
-            <div className="lg:hidden space-y-3 p-4">
+            <div className="md:hidden space-y-3 p-4">
               {filtered.length === 0 ? (
-                <p className="text-center text-sm text-gray-500 py-8">No records match your search</p>
+                <p className="text-center text-sm text-gray-500 py-6">
+                  No records match your search
+                </p>
               ) : (
                 filtered.map((record, idx) => {
                   const editable = canEditRecord(record);
                   return (
-                    <div key={record._id || idx} className="border rounded-xl p-4 bg-white shadow-sm">
-                      <div className="flex justify-between items-start mb-3">
+                    <div
+                      key={record._id || idx}
+                      className="border rounded-lg p-4 bg-gray-50"
+                    >
+                      <div className="flex justify-between items-start mb-2">
                         <div>
-                          <p className="font-semibold text-gray-900">{record.empName}</p>
-                          <p className="text-xs text-gray-500 mt-0.5">#{record.empNumber}</p>
+                          <p className="font-semibold text-gray-900">
+                            {record.empName}
+                          </p>
+                          <p className="text-xs text-gray-600">
+                            #{record.empNumber}
+                          </p>
                         </div>
                         <div className="flex items-center gap-2">
-                          <span className={`px-2 py-1 rounded-full text-xs font-semibold ${getStatusColor(record.status)}`}>
+                          <span
+                            className={`px-2 py-1 rounded text-xs font-semibold ${getStatusColor(record.status)}`}
+                          >
                             {record.status}
                           </span>
                           {isAdmin && (
                             <>
                               <button
-                                onClick={() => editable && setEditRecord(record)}
+                                onClick={() =>
+                                  editable && setEditRecord(record)
+                                }
                                 disabled={!editable}
-                                className={`p-1.5 rounded-lg border ${editable ? "text-indigo-600 bg-indigo-50 border-indigo-200" : "text-gray-300 bg-gray-50 border-gray-200 cursor-not-allowed"}`}
+                                className={`p-1.5 rounded-lg border ${editable ? "text-indigo-600 bg-indigo-50 border-indigo-200" : "text-gray-300 bg-gray-50 border-gray-200 opacity-50 cursor-not-allowed"}`}
                               >
-                                <Pencil size={12} />
+                                <Pencil size={13} />
                               </button>
                               <button
-                                onClick={() => editable && setDeleteRecord(record)}
+                                onClick={() =>
+                                  editable && setDeleteRecord(record)
+                                }
                                 disabled={!editable}
-                                className={`p-1.5 rounded-lg border ${editable ? "text-red-600 bg-red-50 border-red-200" : "text-gray-300 bg-gray-50 border-gray-200 cursor-not-allowed"}`}
+                                className={`p-1.5 rounded-lg border ${editable ? "text-red-600 bg-red-50 border-red-200" : "text-gray-300 bg-gray-50 border-gray-200 opacity-50 cursor-not-allowed"}`}
                               >
-                                <Trash2 size={12} />
+                                <Trash2 size={13} />
                               </button>
                             </>
                           )}
                         </div>
                       </div>
                       <div className="space-y-1 text-sm">
-                        <p><span className="font-medium text-gray-600">Date:</span> {record.dateFormatted}</p>
-                        <p><span className="font-medium text-gray-600">Dept:</span> {record.department}</p>
-                        <p><span className="font-medium text-gray-600">In/Out:</span> {displayTime(record.inTime)} — {displayTime(record.outTime)}
-                          {record.outNextDay && record.outTime && <span className="ml-1 text-xs text-orange-500">(+1 day)</span>}
+                        <p>
+                          <span className="font-medium">Date:</span>{" "}
+                          {record.dateFormatted}
                         </p>
-                        {!isHybrid && <p><span className="font-medium text-gray-600">Earning:</span> <span className="font-semibold">PKR {(record.financials?.finalDayEarning || 0).toLocaleString("en-PK")}</span></p>}
-                        <p className="text-xs text-gray-400"><span className="font-medium">Modified:</span> {record.lastModified || "--"}</p>
+                        <p>
+                          <span className="font-medium">Dept:</span>{" "}
+                          {record.department}
+                        </p>
+                        <p>
+                          <span className="font-medium">In/Out:</span>{" "}
+                          {displayTime(record.inTime)} —{" "}
+                          {displayTime(record.outTime)}
+                          {record.outNextDay && record.outTime && (
+                            <span className="ml-1 text-xs text-orange-500">
+                              (+1 day)
+                            </span>
+                          )}
+                        </p>
+                        {!isHybrid && (
+                          <p>
+                            <span className="font-medium">Earning:</span> PKR{" "}
+                            {(record.financials?.finalDayEarning || 0).toLocaleString("en-PK")}
+                          </p>
+                        )}
+                        <p className="text-xs text-gray-500">
+                          <span className="font-medium">Modified:</span>{" "}
+                          {record.lastModified || "--"}
+                        </p>
                       </div>
                     </div>
                   );
@@ -2550,24 +2687,46 @@ function ManageTab({ userRole, isSuperAdmin, isAdmin, isHybrid }) {
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-md">
             <div className="flex items-center justify-between px-5 py-3 border-b">
               <h3 className="font-semibold text-gray-800">
-                {detailsModal.type === "ot" ? "OT Details" : "Deduction Details"} — {detailsModal.record.empName}
+                {detailsModal.type === "ot"
+                  ? "OT Details"
+                  : "Deduction Details"}{" "}
+                — {detailsModal.record.empName}
               </h3>
-              <button onClick={() => setDetailsModal(null)} className="text-gray-400 hover:text-gray-600">
+              <button
+                onClick={() => setDetailsModal(null)}
+                className="text-gray-400 hover:text-gray-600"
+              >
                 <X size={18} />
               </button>
             </div>
             <div className="p-4 space-y-2 max-h-80 overflow-auto">
               {(() => {
-                const entries = detailsModal.type === "ot"
-                  ? detailsModal.record.financials?.otDetails
-                  : detailsModal.record.financials?.deductionDetails;
-                if (!entries?.length) return <p className="text-sm text-gray-500">No detail entries found.</p>;
+                const entries =
+                  detailsModal.type === "ot"
+                    ? detailsModal.record.financials?.otDetails
+                    : detailsModal.record.financials?.deductionDetails;
+                if (!entries?.length)
+                  return (
+                    <p className="text-sm text-gray-500">
+                      No detail entries found.
+                    </p>
+                  );
                 return entries.map((entry, i) => (
-                  <div key={i} className="border rounded-lg p-2 text-sm bg-gray-50">
+                  <div
+                    key={i}
+                    className="border rounded-lg p-2 text-sm bg-gray-50"
+                  >
                     {detailsModal.type === "ot" ? (
-                      <p>{entry.type === "manual" ? `Amount: PKR ${entry.amount}` : `Hours: ${entry.hours} × ${entry.rate}x`} · {entry.reason}</p>
+                      <p>
+                        {entry.type === "manual"
+                          ? `Amount: PKR ${entry.amount}`
+                          : `Hours: ${entry.hours} × ${entry.rate}x`}{" "}
+                        · {entry.reason}
+                      </p>
                     ) : (
-                      <p>Amount: PKR {entry.amount} · {entry.reason}</p>
+                      <p>
+                        Amount: PKR {entry.amount} · {entry.reason}
+                      </p>
                     )}
                   </div>
                 ));
@@ -2580,64 +2739,43 @@ function ManageTab({ userRole, isSuperAdmin, isAdmin, isHybrid }) {
   );
 }
 
-// ─── Modern Root Component ────────────────────────────────────────────────────
+// ─── Root ─────────────────────────────────────────────────────────────────────
 export default function ManualAttendance() {
   const [activeTab, setActiveTab] = useState("manage");
   const userRole = getCurrentUserRole();
-  const isSuperAdmin = userRole === "superadmin" || userRole === "owner";
+  const isSuperAdmin = userRole === "superadmin"  || userRole === "owner";
   const isAdmin = userRole === "admin" || isSuperAdmin;
+  const isOwner = userRole === "owner";
   const isHybrid = userRole === "hybrid";
-
+  
   const tabProps = { userRole, isSuperAdmin, isAdmin, isHybrid };
 
   return (
-    <div className="p-4 md:p-6 max-w-[1600px] mx-auto">
+    <div className="p-4 md:p-6">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
-        <div>
-          <h1 className="text-2xl md:text-3xl font-bold text-gray-800 tracking-tight">
-            Manual Attendance
-          </h1>
-          <p className="text-sm text-gray-500 mt-1">
-            Track and manage employee attendance records
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-lg">
-            <button
-              onClick={() => setActiveTab("manage")}
-              className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all ${
-                activeTab === "manage"
-                  ? "bg-white text-gray-900 shadow-sm"
-                  : "text-gray-600 hover:text-gray-800"
-              }`}
-            >
-              <LayoutGrid size={16} />
-              Manage
-            </button>
-            <button
-              onClick={() => setActiveTab("mark")}
-              className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all ${
-                activeTab === "mark"
-                  ? "bg-white text-gray-900 shadow-sm"
-                  : "text-gray-600 hover:text-gray-800"
-              }`}
-            >
-              <CheckCircle2 size={16} />
-              Mark
-            </button>
-          </div>
-        </div>
+        <h1 className="text-2xl md:text-3xl font-bold text-gray-800">
+          Manual Attendance
+        </h1>
       </div>
-
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-        <div className="p-5 md:p-6">
-          {activeTab === "manage" ? (
-            <ManageTab {...tabProps} />
-          ) : (
-            <MarkTab {...tabProps} />
-          )}
-        </div>
+      <div className="flex gap-1 mb-6 bg-gray-100 p-1 rounded-lg w-fit">
+        <button
+          onClick={() => setActiveTab("manage")}
+          className={`px-5 py-2 rounded-md text-sm font-medium transition ${activeTab === "manage" ? "bg-white text-gray-900 shadow-sm" : "text-gray-600 hover:text-gray-800"}`}
+        >
+          Manage
+        </button>
+        <button
+          onClick={() => setActiveTab("mark")}
+          className={`px-5 py-2 rounded-md text-sm font-medium transition ${activeTab === "mark" ? "bg-white text-gray-900 shadow-sm" : "text-gray-600 hover:text-gray-800"}`}
+        >
+          Mark
+        </button>
       </div>
+      {activeTab === "manage" ? (
+        <ManageTab {...tabProps} />
+      ) : (
+        <MarkTab {...tabProps} />
+      )}
     </div>
   );
 }
