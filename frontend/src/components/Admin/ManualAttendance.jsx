@@ -675,6 +675,7 @@ function AttendanceFormModal({
   const isEdit = mode === "edit";
   const parseTime = (val) => (val && val !== "--" ? val : "");
   const [selectedEmpLeftDate, setSelectedEmpLeftDate] = useState(null);
+  const [selectedEmpShift, setSelectedEmpShift] = useState(null);
 
   const [form, setForm] = useState({
     empId: "",
@@ -732,6 +733,7 @@ function AttendanceFormModal({
       } else {
         setSelectedEmpLeftDate(null);
       }
+       setSelectedEmpShift(emp?.shift || null);
     }
 
     setForm((prev) => ({
@@ -896,9 +898,12 @@ function AttendanceFormModal({
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Employee *
               </label>
-              {loadingEmp ? (
-                <p className="text-sm text-gray-400">Loading employees...</p>
-              ) : (
+                         {loadingEmp ? (
+               <div className="flex items-center gap-2 text-sm text-gray-400">
+                 <Loader2 size={14} className="animate-spin" />
+                 <span>Loading employees...</span>
+               </div>
+             ) : (
                 <select
                   name="empId"
                   value={form.empId}
@@ -964,7 +969,7 @@ function AttendanceFormModal({
                     onChange={(val) =>
                       setForm((prev) => ({ ...prev, inTime: val }))
                     }
-                    placeholder="09:00"
+                    placeholder={selectedEmpShift?.start || (isEdit ? record?.shiftStart : null) || ""}
                     disabled={saving}
                     className="w-full"
                   />
@@ -978,7 +983,7 @@ function AttendanceFormModal({
                     onChange={(val) =>
                       setForm((prev) => ({ ...prev, outTime: val }))
                     }
-                    placeholder="17:00"
+                    placeholder={selectedEmpShift?.end || (isEdit ? record?.shiftEnd : null) || ""}
                     disabled={saving}
                     className="w-full"
                   />
@@ -1168,11 +1173,11 @@ function AttendanceFormModal({
           </button>
           <button
             onClick={handleSubmit}
-            disabled={saving}
+             disabled={saving || loadingEmp}
             className="flex items-center gap-2 px-5 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition disabled:opacity-50"
           >
             <Save size={15} />{" "}
-            {saving ? "Saving..." : isEdit ? "Update" : "Add Record"}
+            {saving ? "Saving..." : loadingEmp ? "Loading..." : isEdit ? "Update" : "Add Record"}
           </button>
         </div>
       </div>
