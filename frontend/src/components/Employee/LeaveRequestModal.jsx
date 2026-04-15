@@ -3,16 +3,16 @@ import axios from 'axios';
 import { X, Calendar } from 'lucide-react';
 import toast from 'react-hot-toast';
 
-export default function LeaveRequestModal({ onClose, onSubmit }) {
+export default function LeaveRequestModal({ onClose, onSubmit, initialDate = '' }) {
   const fromDateRef = useRef(null);
   const toDateRef = useRef(null);
 
-  const [formData, setFormData] = useState({
-    fromDate: '',
-    toDate: '',
-    leaveType: 'Holiday Leave',
-    reason: ''
-  });
+ const [formData, setFormData] = useState({
+  fromDate: initialDate,
+  toDate: initialDate,
+  leaveType: 'Holiday Leave',
+  reason: ''
+});
   const [loading, setLoading] = useState(false);
 
   const formatDateToDisplay = (dateStr) => {

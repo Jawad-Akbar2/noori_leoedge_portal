@@ -4,6 +4,7 @@ import { AlertCircle, Calendar, ClipboardList, FileEdit } from 'lucide-react';
 import LeaveRequestModal from './LeaveRequestModal';
 import CorrectionRequestModal from './CorrectionRequestModal';
 import toast from 'react-hot-toast';
+import { useLocation } from 'react-router-dom';
 
 // ── date helpers ──────────────────────────────────────────────────────────────
 
@@ -62,6 +63,7 @@ const typeBadge = (t) =>
 export default function MyRequests() {
   const fromDateRef = useRef(null);
   const toDateRef   = useRef(null);
+  const location = useLocation();
 
   // ── stored user (joiningDate lives here after validate-token on app load) ──
   const [user] = useState(() => {
@@ -90,6 +92,25 @@ export default function MyRequests() {
   // ── modal state ───────────────────────────────────────────────────────────
   const [showLeaveModal,      setShowLeaveModal]      = useState(false);
   const [showCorrectionModal, setShowCorrectionModal] = useState(false);
+  const [correctionInitialDate, setCorrectionInitialDate] = useState('');
+
+  useEffect(() => {
+  const params = new URLSearchParams(location.search);
+  const type = params.get('type');
+  const date = params.get('date'); // "dd/mm/yyyy"
+
+  if (type === 'correction') {
+    setCorrectionInitialDate(date || '');
+    setShowCorrectionModal(true);
+  } else if (type === 'leave') {
+  if (!leaveEligible) {
+    toast.error(`Leave available after ${daysUntilEligible} more day(s)`);
+  } else {
+    setCorrectionInitialDate(date || ''); // reuse same state OR create separate
+    setShowLeaveModal(true);
+  }
+}
+}, [location.search]); // only on query string change
 
   // ── fetch ─────────────────────────────────────────────────────────────────
   // FIX 4: single fetch function used by both the useEffect and the Refresh button.
@@ -382,16 +403,25 @@ export default function MyRequests() {
       {/* ── Modals ── */}
       {showLeaveModal && (
         <LeaveRequestModal
-          onClose={() => setShowLeaveModal(false)}
-          onSubmit={() => { setShowLeaveModal(false); handleRequestSubmitted(); }}
-        />
+  initialDate={correctionInitialDate}   // reuse or rename better
+  onClose={() => {
+    setShowLeaveModal(false);
+    setCorrectionInitialDate('');
+  }}
+  onSubmit={() => {
+    setShowLeaveModal(false);
+    setCorrectionInitialDate('');
+    handleRequestSubmitted();
+  }}
+/>
       )}
-      {showCorrectionModal && (
-        <CorrectionRequestModal
-          onClose={() => setShowCorrectionModal(false)}
-          onSubmit={() => { setShowCorrectionModal(false); handleRequestSubmitted(); }}
-        />
-      )}
+     {showCorrectionModal && (
+  <CorrectionRequestModal
+    initialDate={correctionInitialDate}   // ← new prop
+    onClose={() => { setShowCorrectionModal(false); setCorrectionInitialDate(''); }}
+    onSubmit={() => { setShowCorrectionModal(false); setCorrectionInitialDate(''); handleRequestSubmitted(); }}
+  />
+)}
     </div>
   );
 }

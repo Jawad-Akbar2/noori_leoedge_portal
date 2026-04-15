@@ -23,7 +23,10 @@ const SYSTEM_ROLES = ["superadmin", "owner"];
  *   admin caller      → employee only
  */
 const payrollFilter = (callerRole, extra = {}) => ({
-  role: callerRole === "superadmin" || callerRole === "owner" ? { $nin: ["superadmin", "owner"] } : "employee",
+  role:
+    callerRole === "superadmin" || callerRole === "owner"
+      ? { $nin: ["superadmin", "owner"] }
+      : "employee",
   status: { $in: ["Active", "Frozen"] },
   isArchived: false,
   isDeleted: false,
@@ -103,17 +106,24 @@ function calcEmployeeTotals(emp, records, workingDays) {
     0,
   );
 
-  let baseSalary;
-  if (emp.salaryType === "monthly" && emp.monthlySalary) {
-    // Pro-rate: paid days / total working days × monthly salary
-    baseSalary =
-      (emp.monthlySalary / Math.max(workingDays, 1)) *
-      (presentDays + leaveDays);
-  } else {
-    baseSalary = records.reduce((s, r) => s + n(r.financials?.basePay), 0);
-  }
+let baseSalary;
+if (emp.salaryType === "monthly" && emp.monthlySalary) {
+  // Rate per working day based on full month (26 days standard)
+  // then multiply by how many paid days in THIS range
+  const dailyRate = emp.monthlySalary / 22;
+  baseSalary = dailyRate * (presentDays + leaveDays);
+} else {
+  baseSalary = records.reduce((s, r) => s + n(r.financials?.basePay), 0);
+}
 
-  const netPayable = Math.max(0, baseSalary - totalDeduction + totalOt);
+  // ── netPayable: always sum the stored finalDayEarning ────────────────────
+  // finalDayEarning = max(0, basePay - deduction + otAmount) per day.
+  // It is recomputed on every save (pre-save hook) so it is always correct.
+  // Summing it avoids the monthly-vs-hourly base mismatch entirely.
+  const netPayable = records.reduce(
+    (s, r) => s + n(r.financials?.finalDayEarning),
+    0,
+  );
 
   return {
     empId: emp._id,
@@ -126,14 +136,14 @@ function calcEmployeeTotals(emp, records, workingDays) {
     presentDays,
     leaveDays,
     absentDays,
-      ncnsDays,
+    ncnsDays,
     lateDays,
     workingDays,
     baseSalary: round2(baseSalary),
     totalDeduction: round2(totalDeduction),
     totalOt: round2(totalOt),
     totalOtHours: round2(totalOtHours),
-    netPayable: round2(netPayable),
+    netPayable: round2(netPayable), // ← now from stored finalDayEarning
     recordCount: records.length,
   };
 }
@@ -223,14 +233,16 @@ router.get("/my/summary", employeeAuth, async (req, res) => {
         presentDays: totals.presentDays,
         lateDays: totals.lateDays,
         absentDays: totals.absentDays,
+
         leaveDays: totals.leaveDays,
-        baseSalary: totals.baseSalary,
+
+        baseSalary: totals.baseSalary, // pro-rated display figure
         totalDeduction: totals.totalDeduction,
         totalOtHours: totals.totalOtHours,
         totalOtAmount: totals.totalOt,
-        netSalary: totals.netPayable,
+        netSalary: totals.netPayable, // now = sum of finalDayEarning ✓
       },
-      dailyBreakdown,
+      dailyBreakdown, // each row's finalDayEarning will now sum to netSalary
     });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -315,12 +327,10 @@ router.post("/attendance-overview", adminAuth, async (req, res) => {
           if (record.status === "Leave") {
             status = "Leave";
             note = "Approved leave";
-          }
-           else if (record.status === "NCNS") {
+          } else if (record.status === "NCNS") {
             status = "NCNS";
             note = record.metadata?.notes || "No Call No Show";
-          } 
-          else if (record.status === "Absent") {
+          } else if (record.status === "Absent") {
             status = "Absent";
             note = record.metadata?.notes || "Absent";
           } else if (record.inOut?.in) {
@@ -409,7 +419,7 @@ router.post("/performance-overview", adminAuth, async (req, res) => {
       const leaveDays = records.filter((r) => r.status === "Leave").length;
       const absentDays = records.filter((r) => r.status === "Absent").length;
       const lateDays = records.filter((r) => r.status === "Late").length;
-        const ncnsDays = records.filter((r) => r.status === "NCNS").length;
+      const ncnsDays = records.filter((r) => r.status === "NCNS").length;
       const totalOtHours = records.reduce(
         (s, r) => s + n(r.financials?.otHours),
         0,

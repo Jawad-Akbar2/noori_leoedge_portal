@@ -32,13 +32,14 @@ import { useEscape } from "../../context/EscapeStack";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const PRIVILEGED_ROLES = ["admin", "superadmin", "owner"];
-const STATUS_OPTIONS = ["Present", "Late", "Absent", "Leave"];
+const STATUS_OPTIONS = ["Present", "Late", "Absent", "Leave", "NCNS"];
 const STATUS_STYLES = {
   Present: "bg-green-100  text-green-800  border-green-200",
-  Late: "bg-yellow-100 text-yellow-800 border-yellow-200",
-  Leave: "bg-blue-100   text-blue-800   border-blue-200",
-  Absent: "bg-red-100    text-red-800    border-red-200",
-  "": "bg-gray-100   text-gray-500   border-gray-200",
+  Late:    "bg-yellow-100 text-yellow-800 border-yellow-200",
+  Leave:   "bg-blue-100   text-blue-800   border-blue-200",
+  Absent:  "bg-red-100    text-red-800    border-red-200",
+  NCNS:    "bg-purple-100 text-purple-800 border-purple-200",
+  "":      "bg-gray-100   text-gray-500   border-gray-200",
 };
 
 // ─── Auth helpers ─────────────────────────────────────────────────────────────
@@ -723,23 +724,31 @@ function AttendanceFormModal({
 
     // When employee selection changes, update left date constraint
     if (name === "empId") {
-      const emp = employees.find((e) => e._id === value);
-      if (emp?.leftBusiness?.isLeft && emp?.leftBusiness?.leftDate) {
-        const ld = new Date(emp.leftBusiness.leftDate);
-        const dd = String(ld.getDate()).padStart(2, "0");
-        const mm = String(ld.getMonth() + 1).padStart(2, "0");
-        const yyyy = ld.getFullYear();
-        setSelectedEmpLeftDate(`${dd}/${mm}/${yyyy}`);
-      } else {
-        setSelectedEmpLeftDate(null);
-      }
-       setSelectedEmpShift(emp?.shift || null);
-    }
-
-    setForm((prev) => ({
-      ...prev,
-      [name]: type === "checkbox" ? checked : value,
-    }));
+  const emp = employees.find((e) => e._id === value);
+  if (emp?.leftBusiness?.isLeft && emp?.leftBusiness?.leftDate) {
+    const ld = new Date(emp.leftBusiness.leftDate);
+    const dd = String(ld.getDate()).padStart(2, "0");
+    const mm = String(ld.getMonth() + 1).padStart(2, "0");
+    const yyyy = ld.getFullYear();
+    setSelectedEmpLeftDate(`${dd}/${mm}/${yyyy}`);
+  } else {
+    setSelectedEmpLeftDate(null);
+  }
+  const shift = emp?.shift || null;
+  setSelectedEmpShift(shift);
+  // Pre-populate form times with shift defaults so they're sent even if untouched
+  setForm((prev) => ({
+    ...prev,
+    [name]: value,
+    inTime: shift?.start || prev.inTime,
+    outTime: shift?.end || prev.outTime,
+  }));
+  return;
+}
+setForm((prev) => ({
+  ...prev,
+  [name]: type === "checkbox" ? checked : value,
+}));
   };
 
   const addDeduction = () => {
@@ -955,6 +964,7 @@ function AttendanceFormModal({
               <option value="Late">Late</option>
               <option value="Absent">Absent</option>
               <option value="Leave">Leave</option>
+              <option value="NCNS">NCNS (No Call No Show)</option>
             </select>
           </div>
           {showTimes && (
@@ -965,7 +975,7 @@ function AttendanceFormModal({
                     In Time
                   </label>
                   <TimePicker
-                    value={form.inTime}
+                    value={form.inTime || selectedEmpShift?.start || (isEdit ? record?.shiftStart : null) || ""}
                     onChange={(val) =>
                       setForm((prev) => ({ ...prev, inTime: val }))
                     }
@@ -979,7 +989,7 @@ function AttendanceFormModal({
                     Out Time
                   </label>
                   <TimePicker
-                    value={form.outTime}
+                    value={form.outTime || selectedEmpShift?.end || (isEdit ? record?.shiftEnd : null) || ""}
                     onChange={(val) =>
                       setForm((prev) => ({ ...prev, outTime: val }))
                     }
@@ -1255,6 +1265,26 @@ function MarkTab({ userRole, isSuperAdmin, isAdmin, isHybrid }) {
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleting, setDeleting] = useState(false);
 
+  const handleSetAllStatus = (status) => {
+  setRows((prev) =>
+    prev.map((r) => {
+      if (r.__dirty) return r; // skip manually edited rows
+
+      const clearTimes = !["Present", "Late"].includes(status);
+
+      return {
+        ...r,
+        status,
+        ...(clearTimes
+          ? { inTime: "", outTime: "", outNextDay: false }
+          : {}),
+        __dirty: true,
+        __saved: false,
+      };
+    })
+  );
+};
+
   // ── Load worksheet ──────────────────────────────────────────────────────────
   const loadWorksheet = useCallback(
     async (date) => {
@@ -1270,14 +1300,25 @@ function MarkTab({ userRole, isSuperAdmin, isAdmin, isHybrid }) {
         ]);
 
         let employees = empRes.data?.employees || [];
-        let saved = attRes.data?.attendance || [];
+let saved = attRes.data?.attendance || [];
+if (userRole === "admin") {
+  employees = employees.filter(
+    (e) => !PRIVILEGED_ROLES.includes(e.role),
+  );
+  saved = saved.filter((r) => !PRIVILEGED_ROLES.includes(r.empRole));
+}
 
-        if (userRole === "admin") {
-          employees = employees.filter(
-            (e) => !PRIVILEGED_ROLES.includes(e.role),
-          );
-          saved = saved.filter((r) => !PRIVILEGED_ROLES.includes(r.empRole));
-        }
+// Exclude employees who had already left before markDate
+const [md, mm, my] = date.split("/").map(Number);
+const worksheetDate = new Date(my, mm - 1, md);
+employees = employees.filter((emp) => {
+  if (!emp.leftBusiness?.isLeft || !emp.leftBusiness?.leftDate) return true;
+  const left = new Date(emp.leftBusiness.leftDate);
+  // Set to midnight to compare dates only
+  left.setHours(0, 0, 0, 0);
+  worksheetDate.setHours(0, 0, 0, 0);
+  return worksheetDate <= left;
+});
 
         const savedMap = {};
         for (const rec of saved) savedMap[resolveEmpId(rec.empId)] = rec;
@@ -1574,7 +1615,7 @@ function MarkTab({ userRole, isSuperAdmin, isAdmin, isHybrid }) {
         <td className="px-2 py-2">
           {showTimes ? (
             <TimeInput
-              value={row.inTime}
+              value={row.inTime || inPh}
               placeholder={inPh}
               disabled={isSaving}
               readOnly={!editable}
@@ -1589,7 +1630,7 @@ function MarkTab({ userRole, isSuperAdmin, isAdmin, isHybrid }) {
             editable ? (
               <div className="flex items-center gap-1">
                 <TimeInput
-                  value={row.outTime}
+                  value={row.outTime || outPh}
                   placeholder={outPh}
                   disabled={isSaving}
                   readOnly={false}
@@ -1809,7 +1850,7 @@ function MarkTab({ userRole, isSuperAdmin, isAdmin, isHybrid }) {
               <div className="flex gap-2 items-center">
                 <input
                   type="text"
-                  value={row.inTime || ""}
+                  value={row.inTime || inPh || ""}
                   placeholder={inPh}
                   disabled={isSaving}
                   onChange={(e) =>
@@ -1819,7 +1860,7 @@ function MarkTab({ userRole, isSuperAdmin, isAdmin, isHybrid }) {
                 />
                 <input
                   type="text"
-                  value={row.outTime || ""}
+                  value={row.outTime || outPh || ""}
                   placeholder={outPh}
                   disabled={isSaving}
                   onChange={(e) =>
@@ -2008,6 +2049,23 @@ function MarkTab({ userRole, isSuperAdmin, isAdmin, isHybrid }) {
             </span>
           </div>
           {isAdmin && (
+  <select
+    onChange={(e) => {
+      const val = e.target.value;
+      if (!val) return;
+      handleSetAllStatus(val);
+      e.target.value = ""; // reset dropdown
+    }}
+    className="px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white"
+  >
+    <option value="">Set All Status</option>
+    <option value="Present">Present</option>
+    <option value="Late">Late</option>
+    <option value="Absent">Absent</option>
+    <option value="Leave">Leave</option>
+  </select>
+)}
+          {isAdmin && (
             <button
               onClick={handleSaveAll}
               disabled={savingAll || loading || dirtyCount === 0}
@@ -2168,6 +2226,7 @@ function ManageTab({ userRole, isSuperAdmin, isAdmin, isHybrid }) {
 const [totalPages, setTotalPages] = useState(1);
 const [totalCount, setTotalCount] = useState(0);
 const LIMIT = 25;
+const [selectedRows, setSelectedRows] = useState(new Set());
 
 // Debounced search sent to API
 const [apiSearch, setApiSearch] = useState("");
@@ -2179,6 +2238,23 @@ const handleSearchChange = (val) => {
     setApiSearch(val);
     setPage(1);
   }, 400);
+};
+
+const toggleRow = (id) => {
+  setSelectedRows(prev => {
+    const newSet = new Set(prev);
+    if (newSet.has(id)) newSet.delete(id);
+    else newSet.add(id);
+    return newSet;
+  });
+};
+
+const toggleSelectAll = () => {
+  if (selectedRows.size === attendance.length) {
+    setSelectedRows(new Set());
+  } else {
+    setSelectedRows(new Set(attendance.map(r => r._id)));
+  }
 };
 
 const fetchAttendance = useCallback(async (targetPage = page) => {
@@ -2241,22 +2317,29 @@ const handleDateRangeChange = () => {
   };
 
   const handleDeleteConfirm = async () => {
-    if (!deleteRecord?._id) return;
-    setDeleting(true);
-    try {
-      const token = localStorage.getItem("token");
-      await axios.delete(`/api/attendance/${deleteRecord._id}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      toast.success("Record deleted successfully");
-      setDeleteRecord(null);
-      fetchAttendance();
-    } catch (err) {
-      toast.error(err.response?.data?.message || "Failed to delete record");
-    } finally {
-      setDeleting(false);
-    }
-  };
+  if (!deleteRecord?.ids?.length) return;
+
+  setDeleting(true);
+  try {
+    const token = localStorage.getItem("token");
+
+    await axios.post(
+      "/api/attendance/bulk-delete",
+      { ids: deleteRecord.ids },
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+
+    toast.success(`${deleteRecord.ids.length} record(s) deleted`);
+
+    setDeleteRecord(null);
+    setSelectedRows(new Set());
+    fetchAttendance();
+  } catch (err) {
+    toast.error(err.response?.data?.message || "Delete failed");
+  } finally {
+    setDeleting(false);
+  }
+};
 
   const handleExport = () => {
     if (!attendance.length) {
@@ -2393,8 +2476,17 @@ const handleDateRangeChange = () => {
   Total: {totalCount}
   {apiSearch && ` · Showing: ${attendance.length}`}
 </div>
+{selectedRows.size > 0 && (
+  <button
+  onClick={() => setDeleteRecord({ ids: [...selectedRows] })}
+    className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 text-sm"
+  >
+    Delete Selected ({selectedRows.size})
+  </button>
+)}
         </div>
       </div>
+      
 
       <div className="mb-4">
         <SearchBar
@@ -2423,6 +2515,13 @@ const handleDateRangeChange = () => {
               <table className="w-full text-sm">
                 <thead className="bg-gray-100 border-b">
                   <tr>
+                    <th className="px-4 py-3">
+  <input
+    type="checkbox"
+    checked={selectedRows.size === attendance.length && attendance.length > 0}
+    onChange={toggleSelectAll}
+  />
+</th>
                     <th className="px-4 py-3 text-left font-semibold">Date</th>
                     <th className="px-4 py-3 text-left font-semibold">Emp #</th>
                     <th className="px-4 py-3 text-left font-semibold">Name</th>
@@ -2476,10 +2575,18 @@ const handleDateRangeChange = () => {
                     filtered.map((record, idx) => {
                       const editable = canEditRecord(record);
                       return (
+                        
                         <tr
                           key={record._id || idx}
                           className="hover:bg-gray-50"
                         >
+                          <td className="px-4 py-3">
+  <input
+    type="checkbox"
+    checked={selectedRows.has(record._id)}
+    onChange={() => toggleRow(record._id)}
+  />
+</td>
                           <td className="px-4 py-3">{record.dateFormatted}</td>
                           <td className="px-4 py-3 font-mono text-xs">
                             {record.empNumber}
@@ -2561,9 +2668,9 @@ const handleDateRangeChange = () => {
                                   <Pencil size={13} /> Edit
                                 </button>
                                 <button
-                                  onClick={() =>
-                                    editable && setDeleteRecord(record)
-                                  }
+onClick={() =>
+  editable && setDeleteRecord({ ids: [record._id] })
+}
                                   disabled={!editable}
                                   className={`inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-lg transition ${editable ? "text-red-700 bg-red-50 border border-red-200 hover:bg-red-100" : "text-gray-400 bg-gray-50 border border-gray-200 opacity-50 cursor-not-allowed"}`}
                                 >
@@ -2620,9 +2727,9 @@ const handleDateRangeChange = () => {
                                 <Pencil size={13} />
                               </button>
                               <button
-                                onClick={() =>
-                                  editable && setDeleteRecord(record)
-                                }
+                             onClick={() =>
+  editable && setDeleteRecord({ ids: [record._id] })
+}
                                 disabled={!editable}
                                 className={`p-1.5 rounded-lg border ${editable ? "text-red-600 bg-red-50 border-red-200" : "text-gray-300 bg-gray-50 border-gray-200 opacity-50 cursor-not-allowed"}`}
                               >

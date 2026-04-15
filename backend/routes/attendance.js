@@ -309,6 +309,84 @@ function applyShiftBasedPairing(shiftStart, punchTimes) {
   const outNextDay = toMin(outEntry.time) < toMin(inEntry.time);
   return { inTime: inEntry.time, outTime: outEntry.time, outNextDay };
 }
+
+// ─────────────────────────────────────────────
+// POST /api/attendance/bulk-delete
+// ─────────────────────────────────────────────
+router.post("/bulk-delete", adminAuth, async (req, res) => {
+  try {
+    const { ids } = req.body;
+
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "ids array is required",
+      });
+    }
+
+    if (ids.length > 500) {
+      return res.status(400).json({
+        success: false,
+        message: "Maximum 500 records per request",
+      });
+    }
+
+    // Fetch records with role check
+    const records = await AttendanceLog.find({
+      _id: { $in: ids },
+      isDeleted: { $ne: true },
+    }).populate({
+      path: "empId",
+      select: "role",
+      match: { role: { $nin: ["superadmin"] } },
+    });
+
+    const allowedIds = [];
+
+    for (const r of records) {
+      if (!r.empId) continue;
+
+      if (
+        req.userRole === "admin" &&
+        r.empId.role !== "employee"
+      ) {
+        continue;
+      }
+
+      allowedIds.push(r._id);
+    }
+
+    if (allowedIds.length === 0) {
+      return res.status(403).json({
+        success: false,
+        message: "No records allowed to delete",
+      });
+    }
+
+    await AttendanceLog.updateMany(
+      { _id: { $in: allowedIds } },
+      {
+        $set: {
+          isDeleted: true,
+          "metadata.deletedBy": req.userId,
+          "metadata.deletedAt": new Date(),
+          "metadata.lastModifiedAt": new Date(),
+        },
+      }
+    );
+
+    return res.json({
+      success: true,
+      message: `${allowedIds.length} record(s) deleted`,
+    });
+  } catch (err) {
+    res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+});
+
 // ═════════════════════════════════════════════════════════════════════════════
 // ─── POST /api/attendance/import-csv
 // ═════════════════════════════════════════════════════════════════════════════

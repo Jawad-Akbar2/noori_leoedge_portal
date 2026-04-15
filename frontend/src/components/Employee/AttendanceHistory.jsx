@@ -170,10 +170,15 @@ export default function AttendanceHistory() {
     setActiveFilters((prev) => ({ ...prev, [key]: !prev[key] }));
 
   // FIX 5: use navigate instead of window.location.href
-  const goToRequest = (type, date) => {
-    localStorage.setItem("selectedDate", date);
-    navigate(`/employee/requests?type=${type}`);
-  };
+ const goToRequest = (type, date) => {
+  // date is already "dd/mm/yyyy" from the API
+  navigate(`/employee/requests?type=${type}&date=${encodeURIComponent(date)}`);
+};
+
+const toISO = (ddmmyyyy) => {
+  const [d, m, y] = ddmmyyyy.split('/');
+  return `${y}-${m}-${d}`;
+};
 
   // ─────────────────────────────────────────────────────────────────────────
 
@@ -377,7 +382,7 @@ export default function AttendanceHistory() {
                           <div className="absolute right-4 top-10 w-44 bg-white rounded-lg shadow-lg z-40 border border-gray-200">
                             <button
                               onClick={() => {
-                                goToRequest("leave", record.date);
+                                goToRequest("leave", toISO(record.date));
                                 setOpenMenuId(null);
                               }}
                               className="w-full px-4 py-2.5 text-left text-sm hover:bg-gray-50 border-b border-gray-100"
@@ -386,7 +391,7 @@ export default function AttendanceHistory() {
                             </button>
                             <button
                               onClick={() => {
-                                goToRequest("correction", record.date);
+                                goToRequest("correction", toISO(record.date));
                                 setOpenMenuId(null);
                               }}
                               className="w-full px-4 py-2.5 text-left text-sm hover:bg-gray-50"
@@ -464,7 +469,7 @@ export default function AttendanceHistory() {
                     <div className="mt-3 grid grid-cols-2 gap-2">
                       <button
                         onClick={() => {
-                          goToRequest("leave", record.date);
+                          goToRequest("leave", toISO(record.date));
                           setOpenMenuId(null);
                         }}
                         className="px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm hover:bg-gray-50 text-center"
@@ -473,7 +478,7 @@ export default function AttendanceHistory() {
                       </button>
                       <button
                         onClick={() => {
-                          goToRequest("correction", record.date);
+                          goToRequest("correction", toISO(record.date));
                           setOpenMenuId(null);
                         }}
                         className="px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm hover:bg-gray-50 text-center"

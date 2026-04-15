@@ -12,11 +12,11 @@ const formatDateToDisplay = (dateStr) => {
   return `${d}/${m}/${y}`;
 };
 
-export default function CorrectionRequestModal({ onClose, onSubmit }) {
+export default function CorrectionRequestModal({ onClose, onSubmit ,  initialDate = ''}) {
   const dateInputRef = useRef(null);
 
   const [formData, setFormData] = useState({
-    date:             '',
+    date:             initialDate,
     // FIX 1: field names corrected to match what the API expects
     correctedInTime:  '',   // was: fromTime
     correctedOutTime: '',   // was: toTime
