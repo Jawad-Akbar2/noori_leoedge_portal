@@ -293,7 +293,14 @@ function applyShiftBasedPairing(shiftStart, punchTimes) {
   const inEntry = normalised.find(
     (p) => p.norm >= shiftStartMin && p.norm <= windowEnd,
   );
-  if (!inEntry) return { inTime: null, outTime: null, outNextDay: false };
+  // AFTER
+  if (!inEntry) {
+    // No punch within the 14-hour window — use the closest punch as inTime anyway
+    const fallback = normalised[0];
+    return fallback
+      ? { inTime: fallback.time, outTime: null, outNextDay: false }
+      : { inTime: null, outTime: null, outNextDay: false };
+  }
   const outEntry = normalised.find(
     (p) => p.norm > inEntry.norm && p.norm <= windowEnd,
   );
@@ -428,7 +435,6 @@ router.post(
             continue;
           }
 
-      
           // Find OUT that belongs to this shift (within 14-hour window from shift start)
           let todayOut = null;
 
@@ -444,52 +450,67 @@ router.post(
             const prevDay = addDaysUTC(shiftDate, -1);
 
             const prevExisting = await AttendanceLog.findOne({
-  empId: employee._id,
-  date: prevDay,
-  isDeleted: false,
-});
+              empId: employee._id,
+              date: prevDay,
+              isDeleted: false,
+            });
 
+            const prevIn = prevExisting?.inOut?.in || null;
 
-const prevIn = prevExisting?.inOut?.in || null;
+            // ✅ define status FIRST
+            const status = prevIn
+              ? isLate(prevIn, employee.shift.start)
+                ? "Late"
+                : "Present"
+              : "Present";
 
-// ✅ define status FIRST
-const status = prevIn
-  ? (isLate(prevIn, employee.shift.start) ? "Late" : "Present")
-  : "Present";
+            // ✅ fix overwrite issue also
+            const finalOut = latestTime(prevExisting?.inOut?.out, todayOut);
 
-// ✅ fix overwrite issue also
-const finalOut = latestTime(prevExisting?.inOut?.out, todayOut);
+            const prevFinancials = buildFinancials({
+              status,
+              inTime: prevIn,
+              outTime: finalOut,
+              outNextDay: true,
+              shift: employee.shift,
+              hourlyRate: effectiveHourlyRate(employee, 26),
+              salaryType: employee.salaryType,
 
-const prevFinancials = buildFinancials({
-  status,
-  inTime: prevIn,
-  outTime: finalOut,
-  outNextDay: true,
-  shift: employee.shift,
-  hourlyRate: effectiveHourlyRate(employee, 26),
-  salaryType: employee.salaryType,
-
-  // ✅ preserve OT
-  otHours: prevExisting?.financials?.otHours || 0,
-  otAmount: prevExisting?.financials?.otAmount || 0,
-  otMultiplier: prevExisting?.financials?.otMultiplier || 1,
-  otDetails: prevExisting?.financials?.otDetails || [],
-});
+              // ✅ preserve OT
+              otHours: prevExisting?.financials?.otHours || 0,
+              otAmount: prevExisting?.financials?.otAmount || 0,
+              otMultiplier: prevExisting?.financials?.otMultiplier || 1,
+              otDetails: prevExisting?.financials?.otDetails || [],
+            });
             // 🔥 ALWAYS update previous day
             await AttendanceLog.findOneAndUpdate(
               { empId: employee._id, date: prevDay },
               {
-              $set: {
- "inOut.out": finalOut,
-  "inOut.outNextDay": true,
-  financials: prevFinancials,
-},
+                $set: {
+                  empNumber: employee.employeeNumber,
+                  empName: `${employee.firstName} ${employee.lastName}`,
+                  department: employee.department,
+                  shift: {
+                    start: employee.shift.start,
+                    end: employee.shift.end,
+                    isNightShift: true,
+                  },
+                  hourlyRate: effectiveHourlyRate(employee, 26),
+                  salaryType: employee.salaryType,
+
+                  "inOut.out": finalOut,
+                  "inOut.outNextDay": true,
+
+                  status,
+                  financials: prevFinancials,
+                },
                 $setOnInsert: {
                   empId: employee._id,
                   date: prevDay,
                   "inOut.in": null,
                 },
               },
+
               { upsert: true },
             );
 
@@ -518,7 +539,8 @@ const prevFinancials = buildFinancials({
                 : "Present",
               inTime: todayIn,
               outTime: mergedOut,
-              outNextDay: mergedOut ? true : false,
+              // outNextDay: mergedOut ? true : false,
+              outNextDay: mergedOut ? toMin(mergedOut) < toMin(todayIn) : false,
               shift: employee.shift,
               hourlyRate: effectiveHourlyRate(employee, 26),
               salaryType: employee.salaryType,
@@ -528,16 +550,27 @@ const prevFinancials = buildFinancials({
               { empId: employee._id, date: shiftDate },
               {
                 $set: {
+                  empNumber: employee.employeeNumber,
+                  empName: `${employee.firstName} ${employee.lastName}`,
+                  department: employee.department,
+                  shift: {
+                    start: employee.shift.start,
+                    end: employee.shift.end,
+                    isNightShift: true,
+                  },
+                  hourlyRate: effectiveHourlyRate(employee, 26),
+                  salaryType: employee.salaryType,
+
                   "inOut.in": todayIn,
+                  "inOut.out": mergedOut || null,
+                  "inOut.outNextDay": mergedOut ? true : false,
+
                   financials,
                   status: isLate(todayIn, employee.shift.start)
                     ? "Late"
                     : "Present",
+
                   "metadata.lastModifiedAt": new Date(),
-                },
-                $setOnInsert: {
-                  "inOut.out": null,
-                  "inOut.outNextDay": false,
                 },
               },
               { upsert: true },
@@ -557,6 +590,8 @@ const prevFinancials = buildFinancials({
         const punchTimes = rows.map((r) => r.time).filter(Boolean);
         const merged = mergeTimes(rows);
         let inTime, outTime, outNextDay;
+        const shiftDate = startOfDay(date);
+
         if (merged.inTime || merged.outTime) {
           inTime = merged.inTime;
           outTime = merged.outTime;
@@ -578,10 +613,14 @@ const prevFinancials = buildFinancials({
             type: "WARN",
             message: `  ⚠️ No punches found within 14-h shift window`,
           });
+        // AFTER
         let status = "Absent";
         if (inTime || outTime) {
-          status =
-            inTime && isLate(inTime, employee.shift.start) ? "Late" : "Present";
+          // Single punch (only in or only out) still counts as Present/Late
+          const timeForLateCheck = inTime || outTime;
+          status = isLate(timeForLateCheck, employee.shift.start)
+            ? "Late"
+            : "Present";
         }
         const rate = effectiveHourlyRate(employee, 26);
         const financials = buildFinancials({
@@ -603,6 +642,7 @@ const prevFinancials = buildFinancials({
             message: `    ⚠️ Deduction: ${d.type} — PKR ${d.amount} (${d.reason})`,
           }),
         );
+
         try {
           const existing = await AttendanceLog.findOne({
             empId: employee._id,
@@ -749,36 +789,62 @@ const prevFinancials = buildFinancials({
 // ═════════════════════════════════════════════════════════════════════════════
 router.get("/range", adminAuth, async (req, res) => {
   try {
-    const { fromDate, toDate } = req.query;
+    const { fromDate, toDate, page = 1, limit = 50, search = "" } = req.query;
     if (!fromDate || !toDate)
       return res
         .status(400)
         .json({ success: false, message: "fromDate and toDate required" });
+
     const from = parseDDMMYYYY(fromDate);
     const to = parseDDMMYYYY(toDate);
     if (!from || !to)
-      return res
-        .status(400)
-        .json({
-          success: false,
-          message: "Invalid date format. Use dd/mm/yyyy",
-        });
+      return res.status(400).json({
+        success: false,
+        message: "Invalid date format. Use dd/mm/yyyy",
+      });
+
     to.setHours(23, 59, 59, 999);
+
+    const pageNum = Math.max(1, parseInt(page));
+    const limitNum = Math.min(200, Math.max(1, parseInt(limit)));
+    const skip = (pageNum - 1) * limitNum;
+
     const populateRoleMatch =
       req.userRole === "superadmin"
         ? { role: { $nin: ["superadmin"] } }
         : { role: "employee" };
-    const records = await AttendanceLog.find({
+
+    // Build base query
+    const baseQuery = {
       date: { $gte: from, $lte: to },
       isDeleted: false,
-    })
-      .populate({
-        path: "empId",
-        select: "firstName lastName email employeeNumber shift role",
-        match: populateRoleMatch,
-      })
-      .sort({ date: -1, empNumber: 1 })
-      .lean();
+    };
+
+    // If searching, add text filters on denormalised fields
+    if (search.trim()) {
+      const rx = new RegExp(search.trim(), "i");
+      baseQuery.$or = [
+        { empNumber: rx },
+        { empName: rx },
+        { department: rx },
+        { status: rx },
+      ];
+    }
+
+    const [records, totalCount] = await Promise.all([
+      AttendanceLog.find(baseQuery)
+        .populate({
+          path: "empId",
+          select: "firstName lastName email employeeNumber shift role",
+          match: populateRoleMatch,
+        })
+        .sort({ date: -1, empNumber: 1 })
+        .skip(skip)
+        .limit(limitNum)
+        .lean(),
+      AttendanceLog.countDocuments(baseQuery),
+    ]);
+
     const attendance = records
       .filter((r) => r.empId != null)
       .map((r) => ({
@@ -798,7 +864,17 @@ router.get("/range", adminAuth, async (req, res) => {
           : "--",
         lastModifiedRaw: r.metadata?.lastModifiedAt || null,
       }));
-    return res.json({ success: true, attendance, total: attendance.length });
+
+    return res.json({
+      success: true,
+      attendance,
+      pagination: {
+        total: totalCount,
+        page: pageNum,
+        limit: limitNum,
+        totalPages: Math.ceil(totalCount / limitNum),
+      },
+    });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
@@ -816,12 +892,10 @@ router.post("/worksheet", adminAuth, async (req, res) => {
     const start = parseDDMMYYYY(fromDate);
     const end = parseDDMMYYYY(toDate);
     if (!start || !end || isNaN(start) || isNaN(end))
-      return res
-        .status(400)
-        .json({
-          success: false,
-          message: "Invalid date format. Use dd/mm/yyyy",
-        });
+      return res.status(400).json({
+        success: false,
+        message: "Invalid date format. Use dd/mm/yyyy",
+      });
     const daySpan = Math.round((end - start) / 86_400_000);
     if (daySpan > 93)
       return res
@@ -941,12 +1015,10 @@ router.post("/save-row", adminAuth, async (req, res) => {
       deductionDetails: manualDeductionDetails,
     } = req.body;
     if (!empId || !date || !status)
-      return res
-        .status(400)
-        .json({
-          success: false,
-          message: "empId, date, and status are required",
-        });
+      return res.status(400).json({
+        success: false,
+        message: "empId, date, and status are required",
+      });
     const roleFilter =
       req.userRole === "superadmin"
         ? { role: { $nin: ["superadmin"] } }
@@ -957,33 +1029,26 @@ router.post("/save-row", adminAuth, async (req, res) => {
       isDeleted: false,
     });
     if (!employee)
-      return res
-        .status(404)
-        .json({
-          success: false,
-          message:
-            "Employee not found or you do not have permission to edit this account",
-        });
+      return res.status(404).json({
+        success: false,
+        message:
+          "Employee not found or you do not have permission to edit this account",
+      });
     const dateObj = parseDDMMYYYY(date);
     if (!dateObj || isNaN(dateObj))
-      return res
-        .status(400)
-        .json({
-          success: false,
-          message: "Invalid date (dd/mm/yyyy required)",
-        });
+      return res.status(400).json({
+        success: false,
+        message: "Invalid date (dd/mm/yyyy required)",
+      });
     dateObj.setHours(0, 0, 0, 0);
     if (employee.leftBusiness?.isLeft && employee.leftBusiness?.leftDate) {
       const leftDate = new Date(employee.leftBusiness.leftDate);
       leftDate.setHours(0, 0, 0, 0);
       if (dateObj > leftDate)
-        return res
-          .status(400)
-          .json({
-            success: false,
-            message:
-              "Cannot add attendance after employee has left the business",
-          });
+        return res.status(400).json({
+          success: false,
+          message: "Cannot add attendance after employee has left the business",
+        });
     }
     const isNightShift =
       toMin(employee.shift.end) < toMin(employee.shift.start);
@@ -1129,20 +1194,16 @@ router.delete("/:id", adminAuth, async (req, res) => {
         .status(404)
         .json({ success: false, message: "Record not found" });
     if (!record.empId)
-      return res
-        .status(403)
-        .json({
-          success: false,
-          message: "You do not have permission to delete this record",
-        });
+      return res.status(403).json({
+        success: false,
+        message: "You do not have permission to delete this record",
+      });
     if (req.userRole === "admin" && record.empId?.role !== "employee")
-      return res
-        .status(403)
-        .json({
-          success: false,
-          message:
-            "Admins can only delete attendance records for employee-role accounts",
-        });
+      return res.status(403).json({
+        success: false,
+        message:
+          "Admins can only delete attendance records for employee-role accounts",
+      });
     await AttendanceLog.updateOne(
       { _id: id },
       {
@@ -1169,19 +1230,15 @@ router.post("/bulk-save", adminAuth, async (req, res) => {
   try {
     const { rows, forceOverride = false } = req.body;
     if (!Array.isArray(rows) || rows.length === 0)
-      return res
-        .status(400)
-        .json({
-          success: false,
-          message: "rows array is required and must not be empty",
-        });
+      return res.status(400).json({
+        success: false,
+        message: "rows array is required and must not be empty",
+      });
     if (rows.length > 500)
-      return res
-        .status(400)
-        .json({
-          success: false,
-          message: "Maximum 500 rows per bulk-save request",
-        });
+      return res.status(400).json({
+        success: false,
+        message: "Maximum 500 rows per bulk-save request",
+      });
     const roleFilter =
       req.userRole === "superadmin"
         ? { role: { $nin: ["superadmin"] } }

@@ -24,7 +24,7 @@ export async function uploadCSVFile(file) {
 
     const { data } = await apiClient.post('/attendance/import-csv', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
-      timeout: 60_000   // large files can take a while
+      timeout: 1200_000   // large files can take a while
     });
 
     return {

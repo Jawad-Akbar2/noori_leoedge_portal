@@ -1248,6 +1248,7 @@ function MarkTab({ userRole, isSuperAdmin, isAdmin, isHybrid }) {
   const [savingId, setSavingId] = useState(null);
   const [savingAll, setSavingAll] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+
   const [showAddModal, setShowAddModal] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const [otDedModal, setOtDedModal] = useState(null);
@@ -1263,7 +1264,7 @@ function MarkTab({ userRole, isSuperAdmin, isAdmin, isHybrid }) {
           axios.get("/api/employees?includeFrozen=true", {
             headers: authHeader(),
           }),
-          axios.get(`/api/attendance/range?fromDate=${date}&toDate=${date}`, {
+          axios.get(`/api/attendance/range?fromDate=${date}&toDate=${date}&limit=1000`, {
             headers: authHeader(),
           }),
         ]);
@@ -2163,54 +2164,75 @@ function ManageTab({ userRole, isSuperAdmin, isAdmin, isHybrid }) {
   const [deleteRecord, setDeleteRecord] = useState(null);
   const [deleting, setDeleting] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+    const [page, setPage] = useState(1);
+const [totalPages, setTotalPages] = useState(1);
+const [totalCount, setTotalCount] = useState(0);
+const LIMIT = 25;
 
-  const fetchAttendance = useCallback(async () => {
-    setLoading(true);
-    try {
-      const token = localStorage.getItem("token");
-      if (!token) {
-        toast.error("Authentication required");
-        return;
-      }
-      // When range is disabled, use fromDate as both start and end
-      const effectiveToDate = rangeEnabled ? toDate : fromDate;
-      const response = await axios.get(
-        `/api/attendance/range?fromDate=${fromDate}&toDate=${effectiveToDate}`,
-        { headers: { Authorization: `Bearer ${token}` } },
-      );
-      let records = response.data?.attendance || [];
-      if (userRole === "admin")
-        records = records.filter((r) => !PRIVILEGED_ROLES.includes(r.empRole));
-      setAttendance(records);
-    } catch (error) {
-      if (error.response?.status === 401)
-        toast.error("Unauthorized. Please login again.");
-      else if (error.response?.status === 403)
-        toast.error("You do not have permission.");
-      else toast.error("Failed to load attendance data");
-      setAttendance([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [fromDate, toDate, rangeEnabled, userRole]);
+// Debounced search sent to API
+const [apiSearch, setApiSearch] = useState("");
+const searchDebounceRef = useRef(null);
+const handleSearchChange = (val) => {
+  setSearchQuery(val);
+  clearTimeout(searchDebounceRef.current);
+  searchDebounceRef.current = setTimeout(() => {
+    setApiSearch(val);
+    setPage(1);
+  }, 400);
+};
 
-  useEffect(() => {
-    fetchAttendance();
-  }, [fetchAttendance]);
+const fetchAttendance = useCallback(async (targetPage = page) => {
+  setLoading(true);
+  try {
+    const token = localStorage.getItem("token");
+    if (!token) { toast.error("Authentication required"); return; }
 
-  const handleDateRangeChange = () => {
-    const from = parseDate(fromDate);
-    const effectiveTo = rangeEnabled ? parseDate(toDate) : from;
-    if (!from || !effectiveTo) {
-      toast.error("Invalid date format. Use dd/mm/yyyy");
-      return;
-    }
-    if (from > effectiveTo) {
-      toast.error("From date cannot be after to date");
-      return;
-    }
-    fetchAttendance();
-  };
+    const effectiveToDate = rangeEnabled ? toDate : fromDate;
+    const params = new URLSearchParams({
+      fromDate,
+      toDate: effectiveToDate,
+      page: targetPage,
+      limit: LIMIT,
+      ...(apiSearch.trim() ? { search: apiSearch.trim() } : {}),
+    });
+
+    const response = await axios.get(`/api/attendance/range?${params}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+
+    let records = response.data?.attendance || [];
+    const pagination = response.data?.pagination || {};
+
+    if (userRole === "admin")
+      records = records.filter((r) => !PRIVILEGED_ROLES.includes(r.empRole));
+
+    setAttendance(records);
+    setTotalCount(pagination.total || 0);
+    setTotalPages(pagination.totalPages || 1);
+  } catch (error) {
+    if (error.response?.status === 401) toast.error("Unauthorized. Please login again.");
+    else if (error.response?.status === 403) toast.error("You do not have permission.");
+    else toast.error("Failed to load attendance data");
+    setAttendance([]);
+  } finally {
+    setLoading(false);
+  }
+}, [fromDate, toDate, rangeEnabled, userRole, apiSearch]);
+
+
+useEffect(() => {
+  fetchAttendance(page);
+}, [fromDate, toDate, rangeEnabled, userRole, page, apiSearch, fetchAttendance]);
+
+
+const handleDateRangeChange = () => {
+  const from = parseDate(fromDate);
+  const effectiveTo = rangeEnabled ? parseDate(toDate) : from;
+  if (!from || !effectiveTo) { toast.error("Invalid date format. Use dd/mm/yyyy"); return; }
+  if (from > effectiveTo) { toast.error("From date cannot be after to date"); return; }
+  setPage(1);
+  fetchAttendance(1);
+};
 
   const canEditRecord = (record) => {
     if (isSuperAdmin) return true;
@@ -2303,7 +2325,7 @@ function ManageTab({ userRole, isSuperAdmin, isAdmin, isHybrid }) {
     }
   };
 
-  const filtered = filterRecords(attendance, searchQuery);
+  const filtered = attendance; // already filtered by API
 
   return (
     <div>
@@ -2368,18 +2390,18 @@ function ManageTab({ userRole, isSuperAdmin, isAdmin, isHybrid }) {
             {loading ? "Loading..." : "Apply"}
           </button>
           <div className="text-xs text-gray-600 p-2 bg-gray-50 rounded">
-            Total: {attendance.length}
-            {searchQuery && ` · Showing: ${filtered.length}`}
-          </div>
+  Total: {totalCount}
+  {apiSearch && ` · Showing: ${attendance.length}`}
+</div>
         </div>
       </div>
 
       <div className="mb-4">
         <SearchBar
-          value={searchQuery}
-          onChange={setSearchQuery}
-          placeholder="Search by name, employee ID, department, status, or date..."
-        />
+  value={searchQuery}
+  onChange={handleSearchChange}   // ← was: setSearchQuery
+  placeholder="Search by name, employee ID, department, status, or date..."
+/>
       </div>
 
       <div className="bg-white rounded-lg shadow overflow-hidden">
@@ -2647,6 +2669,81 @@ function ManageTab({ userRole, isSuperAdmin, isAdmin, isHybrid }) {
             </div>
           </>
         )}
+            {/* Pagination */}
+{totalPages > 1 && (
+  <div className="flex items-center justify-between px-4 py-3 bg-white border-t mt-0 rounded-b-lg shadow">
+    <p className="text-xs text-gray-500">
+      Page <span className="font-medium">{page}</span> of{" "}
+      <span className="font-medium">{totalPages}</span> ·{" "}
+      <span className="font-medium">{totalCount}</span> total records
+    </p>
+    <div className="flex items-center gap-1">
+      <button
+        onClick={() => setPage(1)}
+        disabled={page === 1 || loading}
+        className="p-1.5 rounded border border-gray-300 text-gray-500 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition"
+        title="First page"
+      >
+        <ChevronLeft size={14} className="inline" />
+        <ChevronLeft size={14} className="inline -ml-2" />
+      </button>
+      <button
+        onClick={() => setPage((p) => Math.max(1, p - 1))}
+        disabled={page === 1 || loading}
+        className="p-1.5 rounded border border-gray-300 text-gray-500 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition"
+        title="Previous page"
+      >
+        <ChevronLeft size={14} />
+      </button>
+
+      {/* Page number pills */}
+      {Array.from({ length: totalPages }, (_, i) => i + 1)
+        .filter((p) => p === 1 || p === totalPages || Math.abs(p - page) <= 2)
+        .reduce((acc, p, idx, arr) => {
+          if (idx > 0 && p - arr[idx - 1] > 1)
+            acc.push("ellipsis-" + p);
+          acc.push(p);
+          return acc;
+        }, [])
+        .map((item) =>
+          String(item).startsWith("ellipsis") ? (
+            <span key={item} className="px-1 text-gray-400 text-xs">…</span>
+          ) : (
+            <button
+              key={item}
+              onClick={() => setPage(item)}
+              disabled={loading}
+              className={`min-w-[30px] h-[30px] rounded border text-xs font-medium transition ${
+                item === page
+                  ? "bg-blue-600 text-white border-blue-600"
+                  : "border-gray-300 text-gray-600 hover:bg-gray-100"
+              } disabled:opacity-60`}
+            >
+              {item}
+            </button>
+          )
+        )}
+
+      <button
+        onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+        disabled={page === totalPages || loading}
+        className="p-1.5 rounded border border-gray-300 text-gray-500 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition"
+        title="Next page"
+      >
+        <ChevronRight size={14} />
+      </button>
+      <button
+        onClick={() => setPage(totalPages)}
+        disabled={page === totalPages || loading}
+        className="p-1.5 rounded border border-gray-300 text-gray-500 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition"
+        title="Last page"
+      >
+        <ChevronRight size={14} className="inline" />
+        <ChevronRight size={14} className="inline -ml-2" />
+      </button>
+    </div>
+  </div>
+)}
       </div>
 
       {showImportModal && (
@@ -2740,6 +2837,7 @@ function ManageTab({ userRole, isSuperAdmin, isAdmin, isHybrid }) {
           </div>
         </div>
       )}
+  
     </div>
   );
 }

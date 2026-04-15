@@ -14,6 +14,7 @@ export default function CSVImportModal({ onClose, onSuccess }) {
   const [loading, setLoading] = useState(false);
   const [processingLog, setProcessingLog] = useState([]);
   const [importSummary, setImportSummary] = useState(null);
+  const isCompleted = importSummary || processingLog.length > 0 && !loading;
 
   // Auto-scroll to bottom of log
   useEffect(() => {
@@ -83,11 +84,6 @@ export default function CSVImportModal({ onClose, onSuccess }) {
       
       toast.success('CSV imported successfully!');
       
-      // Auto-close after 3 seconds
-      setTimeout(() => {
-        onSuccess();
-        onClose();
-      }, 3000);
     } else {
       const errorLogs = result.processingLog || [
         {
@@ -272,31 +268,61 @@ export default function CSVImportModal({ onClose, onSuccess }) {
 
         {/* Footer Buttons */}
         <div className="sticky bottom-0 bg-white border-t p-4 md:p-6 flex gap-3">
-          <button
-            onClick={onClose}
-            disabled={loading}
-            className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition font-medium disabled:opacity-50"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={handleUpload}
-            disabled={!selectedFile || loading}
-            className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium disabled:opacity-50 flex items-center justify-center gap-2"
-          >
-            {loading ? (
-              <>
-                <Loader size={18} className="animate-spin" />
-                Importing...
-              </>
-            ) : (
-              <>
-                <Upload size={18} />
-                Import CSV
-              </>
-            )}
-          </button>
-        </div>
+  {isCompleted ? (
+    <>
+      {/* Close Button */}
+      <button
+        onClick={onClose}
+        className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition font-medium"
+      >
+        Close
+      </button>
+
+      {/* Import Another */}
+      <button
+        onClick={() => {
+          setSelectedFile(null);
+          setProcessingLog([]);
+          setImportSummary(null);
+        }}
+        className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition font-medium flex items-center justify-center gap-2"
+      >
+        <Upload size={18} />
+        Import Another
+      </button>
+    </>
+  ) : (
+    <>
+      {/* Cancel */}
+      <button
+        onClick={onClose}
+        disabled={loading}
+        className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition font-medium disabled:opacity-50"
+      >
+        Cancel
+      </button>
+
+      {/* Import */}
+      <button
+        onClick={handleUpload}
+        disabled={!selectedFile || loading}
+        className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium disabled:opacity-50 flex items-center justify-center gap-2"
+      >
+        {loading ? (
+          <>
+            <Loader size={18} className="animate-spin" />
+            Importing...
+          </>
+        ) : (
+          <>
+            <Upload size={18} />
+            Import CSV
+          </>
+        )}
+      </button>
+    </>
+  )}
+</div>
       </div>
     </div>
   );
