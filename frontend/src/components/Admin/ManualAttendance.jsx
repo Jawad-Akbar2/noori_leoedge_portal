@@ -35,11 +35,11 @@ const PRIVILEGED_ROLES = ["admin", "superadmin", "owner"];
 const STATUS_OPTIONS = ["Present", "Late", "Absent", "Leave", "NCNS"];
 const STATUS_STYLES = {
   Present: "bg-green-100  text-green-800  border-green-200",
-  Late:    "bg-yellow-100 text-yellow-800 border-yellow-200",
-  Leave:   "bg-blue-100   text-blue-800   border-blue-200",
-  Absent:  "bg-red-100    text-red-800    border-red-200",
-  NCNS:    "bg-purple-100 text-purple-800 border-purple-200",
-  "":      "bg-gray-100   text-gray-500   border-gray-200",
+  Late: "bg-yellow-100 text-yellow-800 border-yellow-200",
+  Leave: "bg-blue-100   text-blue-800   border-blue-200",
+  Absent: "bg-red-100    text-red-800    border-red-200",
+  NCNS: "bg-purple-100 text-purple-800 border-purple-200",
+  "": "bg-gray-100   text-gray-500   border-gray-200",
 };
 
 // ─── Auth helpers ─────────────────────────────────────────────────────────────
@@ -724,31 +724,31 @@ function AttendanceFormModal({
 
     // When employee selection changes, update left date constraint
     if (name === "empId") {
-  const emp = employees.find((e) => e._id === value);
-  if (emp?.leftBusiness?.isLeft && emp?.leftBusiness?.leftDate) {
-    const ld = new Date(emp.leftBusiness.leftDate);
-    const dd = String(ld.getDate()).padStart(2, "0");
-    const mm = String(ld.getMonth() + 1).padStart(2, "0");
-    const yyyy = ld.getFullYear();
-    setSelectedEmpLeftDate(`${dd}/${mm}/${yyyy}`);
-  } else {
-    setSelectedEmpLeftDate(null);
-  }
-  const shift = emp?.shift || null;
-  setSelectedEmpShift(shift);
-  // Pre-populate form times with shift defaults so they're sent even if untouched
-  setForm((prev) => ({
-    ...prev,
-    [name]: value,
-    inTime: shift?.start || prev.inTime,
-    outTime: shift?.end || prev.outTime,
-  }));
-  return;
-}
-setForm((prev) => ({
-  ...prev,
-  [name]: type === "checkbox" ? checked : value,
-}));
+      const emp = employees.find((e) => e._id === value);
+      if (emp?.leftBusiness?.isLeft && emp?.leftBusiness?.leftDate) {
+        const ld = new Date(emp.leftBusiness.leftDate);
+        const dd = String(ld.getDate()).padStart(2, "0");
+        const mm = String(ld.getMonth() + 1).padStart(2, "0");
+        const yyyy = ld.getFullYear();
+        setSelectedEmpLeftDate(`${dd}/${mm}/${yyyy}`);
+      } else {
+        setSelectedEmpLeftDate(null);
+      }
+      const shift = emp?.shift || null;
+      setSelectedEmpShift(shift);
+      // Pre-populate form times with shift defaults so they're sent even if untouched
+      setForm((prev) => ({
+        ...prev,
+        [name]: value,
+        inTime: shift?.start || prev.inTime,
+        outTime: shift?.end || prev.outTime,
+      }));
+      return;
+    }
+    setForm((prev) => ({
+      ...prev,
+      [name]: type === "checkbox" ? checked : value,
+    }));
   };
 
   const addDeduction = () => {
@@ -907,12 +907,12 @@ setForm((prev) => ({
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Employee *
               </label>
-                         {loadingEmp ? (
-               <div className="flex items-center gap-2 text-sm text-gray-400">
-                 <Loader2 size={14} className="animate-spin" />
-                 <span>Loading employees...</span>
-               </div>
-             ) : (
+              {loadingEmp ? (
+                <div className="flex items-center gap-2 text-sm text-gray-400">
+                  <Loader2 size={14} className="animate-spin" />
+                  <span>Loading employees...</span>
+                </div>
+              ) : (
                 <select
                   name="empId"
                   value={form.empId}
@@ -975,11 +975,20 @@ setForm((prev) => ({
                     In Time
                   </label>
                   <TimePicker
-                    value={form.inTime || selectedEmpShift?.start || (isEdit ? record?.shiftStart : null) || ""}
+                    value={
+                      form.inTime ||
+                      selectedEmpShift?.start ||
+                      (isEdit ? record?.shiftStart : null) ||
+                      ""
+                    }
                     onChange={(val) =>
                       setForm((prev) => ({ ...prev, inTime: val }))
                     }
-                    placeholder={selectedEmpShift?.start || (isEdit ? record?.shiftStart : null) || ""}
+                    placeholder={
+                      selectedEmpShift?.start ||
+                      (isEdit ? record?.shiftStart : null) ||
+                      ""
+                    }
                     disabled={saving}
                     className="w-full"
                   />
@@ -989,11 +998,20 @@ setForm((prev) => ({
                     Out Time
                   </label>
                   <TimePicker
-                    value={form.outTime || selectedEmpShift?.end || (isEdit ? record?.shiftEnd : null) || ""}
+                    value={
+                      form.outTime ||
+                      selectedEmpShift?.end ||
+                      (isEdit ? record?.shiftEnd : null) ||
+                      ""
+                    }
                     onChange={(val) =>
                       setForm((prev) => ({ ...prev, outTime: val }))
                     }
-                    placeholder={selectedEmpShift?.end || (isEdit ? record?.shiftEnd : null) || ""}
+                    placeholder={
+                      selectedEmpShift?.end ||
+                      (isEdit ? record?.shiftEnd : null) ||
+                      ""
+                    }
                     disabled={saving}
                     className="w-full"
                   />
@@ -1183,11 +1201,17 @@ setForm((prev) => ({
           </button>
           <button
             onClick={handleSubmit}
-             disabled={saving || loadingEmp}
+            disabled={saving || loadingEmp}
             className="flex items-center gap-2 px-5 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition disabled:opacity-50"
           >
             <Save size={15} />{" "}
-            {saving ? "Saving..." : loadingEmp ? "Loading..." : isEdit ? "Update" : "Add Record"}
+            {saving
+              ? "Saving..."
+              : loadingEmp
+                ? "Loading..."
+                : isEdit
+                  ? "Update"
+                  : "Add Record"}
           </button>
         </div>
       </div>
@@ -1266,24 +1290,22 @@ function MarkTab({ userRole, isSuperAdmin, isAdmin, isHybrid }) {
   const [deleting, setDeleting] = useState(false);
 
   const handleSetAllStatus = (status) => {
-  setRows((prev) =>
-    prev.map((r) => {
-      if (r.__dirty) return r; // skip manually edited rows
+    setRows((prev) =>
+      prev.map((r) => {
+        if (r.__dirty) return r; // skip manually edited rows
 
-      const clearTimes = !["Present", "Late"].includes(status);
+        const clearTimes = !["Present", "Late"].includes(status);
 
-      return {
-        ...r,
-        status,
-        ...(clearTimes
-          ? { inTime: "", outTime: "", outNextDay: false }
-          : {}),
-        __dirty: true,
-        __saved: false,
-      };
-    })
-  );
-};
+        return {
+          ...r,
+          status,
+          ...(clearTimes ? { inTime: "", outTime: "", outNextDay: false } : {}),
+          __dirty: true,
+          __saved: false,
+        };
+      }),
+    );
+  };
 
   // ── Load worksheet ──────────────────────────────────────────────────────────
   const loadWorksheet = useCallback(
@@ -1294,31 +1316,35 @@ function MarkTab({ userRole, isSuperAdmin, isAdmin, isHybrid }) {
           axios.get("/api/employees?includeFrozen=true", {
             headers: authHeader(),
           }),
-          axios.get(`/api/attendance/range?fromDate=${date}&toDate=${date}&limit=1000`, {
-            headers: authHeader(),
-          }),
+          axios.get(
+            `/api/attendance/range?fromDate=${date}&toDate=${date}&limit=1000`,
+            {
+              headers: authHeader(),
+            },
+          ),
         ]);
 
         let employees = empRes.data?.employees || [];
-let saved = attRes.data?.attendance || [];
-if (userRole === "admin") {
-  employees = employees.filter(
-    (e) => !PRIVILEGED_ROLES.includes(e.role),
-  );
-  saved = saved.filter((r) => !PRIVILEGED_ROLES.includes(r.empRole));
-}
+        let saved = attRes.data?.attendance || [];
+        if (userRole === "admin") {
+          employees = employees.filter(
+            (e) => !PRIVILEGED_ROLES.includes(e.role),
+          );
+          saved = saved.filter((r) => !PRIVILEGED_ROLES.includes(r.empRole));
+        }
 
-// Exclude employees who had already left before markDate
-const [md, mm, my] = date.split("/").map(Number);
-const worksheetDate = new Date(my, mm - 1, md);
-employees = employees.filter((emp) => {
-  if (!emp.leftBusiness?.isLeft || !emp.leftBusiness?.leftDate) return true;
-  const left = new Date(emp.leftBusiness.leftDate);
-  // Set to midnight to compare dates only
-  left.setHours(0, 0, 0, 0);
-  worksheetDate.setHours(0, 0, 0, 0);
-  return worksheetDate <= left;
-});
+        // Exclude employees who had already left before markDate
+        const [md, mm, my] = date.split("/").map(Number);
+        const worksheetDate = new Date(my, mm - 1, md);
+        employees = employees.filter((emp) => {
+          if (!emp.leftBusiness?.isLeft || !emp.leftBusiness?.leftDate)
+            return true;
+          const left = new Date(emp.leftBusiness.leftDate);
+          // Set to midnight to compare dates only
+          left.setHours(0, 0, 0, 0);
+          worksheetDate.setHours(0, 0, 0, 0);
+          return worksheetDate <= left;
+        });
 
         const savedMap = {};
         for (const rec of saved) savedMap[resolveEmpId(rec.empId)] = rec;
@@ -2049,22 +2075,23 @@ employees = employees.filter((emp) => {
             </span>
           </div>
           {isAdmin && (
-  <select
-    onChange={(e) => {
-      const val = e.target.value;
-      if (!val) return;
-      handleSetAllStatus(val);
-      e.target.value = ""; // reset dropdown
-    }}
-    className="px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white"
-  >
-    <option value="">Set All Status</option>
-    <option value="Present">Present</option>
-    <option value="Late">Late</option>
-    <option value="Absent">Absent</option>
-    <option value="Leave">Leave</option>
-  </select>
-)}
+            <select
+              onChange={(e) => {
+                const val = e.target.value;
+                if (!val) return;
+                handleSetAllStatus(val);
+                e.target.value = "";
+              }}
+              className="px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white"
+            >
+              <option value="">Set All Status</option>
+              <option value="Present">Present</option>
+              <option value="Late">Late</option>
+              <option value="Absent">Absent</option>
+              <option value="Leave">Leave</option>
+              <option value="NCNS">NCNS</option>
+            </select>
+          )}
           {isAdmin && (
             <button
               onClick={handleSaveAll}
@@ -2222,93 +2249,115 @@ function ManageTab({ userRole, isSuperAdmin, isAdmin, isHybrid }) {
   const [deleteRecord, setDeleteRecord] = useState(null);
   const [deleting, setDeleting] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-    const [page, setPage] = useState(1);
-const [totalPages, setTotalPages] = useState(1);
-const [totalCount, setTotalCount] = useState(0);
-const LIMIT = 25;
-const [selectedRows, setSelectedRows] = useState(new Set());
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
+  const LIMIT = 25;
+  const [selectedRows, setSelectedRows] = useState(new Set());
 
-// Debounced search sent to API
-const [apiSearch, setApiSearch] = useState("");
-const searchDebounceRef = useRef(null);
-const handleSearchChange = (val) => {
-  setSearchQuery(val);
-  clearTimeout(searchDebounceRef.current);
-  searchDebounceRef.current = setTimeout(() => {
-    setApiSearch(val);
+  // Debounced search sent to API
+  const [apiSearch, setApiSearch] = useState("");
+  const searchDebounceRef = useRef(null);
+  const handleSearchChange = (val) => {
+    setSearchQuery(val);
+    clearTimeout(searchDebounceRef.current);
+    searchDebounceRef.current = setTimeout(() => {
+      setApiSearch(val);
+      setPage(1);
+    }, 400);
+  };
+
+  const toggleRow = (id) => {
+    setSelectedRows((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(id)) newSet.delete(id);
+      else newSet.add(id);
+      return newSet;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedRows.size === attendance.length) {
+      setSelectedRows(new Set());
+    } else {
+      setSelectedRows(new Set(attendance.map((r) => r._id)));
+    }
+  };
+
+  const fetchAttendance = useCallback(
+    async (targetPage = page) => {
+      setLoading(true);
+      try {
+        const token = localStorage.getItem("token");
+        if (!token) {
+          toast.error("Authentication required");
+          return;
+        }
+
+        const effectiveToDate = rangeEnabled ? toDate : fromDate;
+        const params = new URLSearchParams({
+          fromDate,
+          toDate: effectiveToDate,
+          page: targetPage,
+          limit: LIMIT,
+          ...(apiSearch.trim() ? { search: apiSearch.trim() } : {}),
+        });
+
+        const response = await axios.get(`/api/attendance/range?${params}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+
+        let records = response.data?.attendance || [];
+        const pagination = response.data?.pagination || {};
+
+        if (userRole === "admin")
+          records = records.filter(
+            (r) => !PRIVILEGED_ROLES.includes(r.empRole),
+          );
+
+        setAttendance(records);
+        setTotalCount(pagination.total || 0);
+        setTotalPages(pagination.totalPages || 1);
+      } catch (error) {
+        if (error.response?.status === 401)
+          toast.error("Unauthorized. Please login again.");
+        else if (error.response?.status === 403)
+          toast.error("You do not have permission.");
+        else toast.error("Failed to load attendance data");
+        setAttendance([]);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [fromDate, toDate, rangeEnabled, userRole, apiSearch],
+  );
+
+  useEffect(() => {
+    fetchAttendance(page);
+  }, [
+    fromDate,
+    toDate,
+    rangeEnabled,
+    userRole,
+    page,
+    apiSearch,
+    fetchAttendance,
+  ]);
+
+  const handleDateRangeChange = () => {
+    const from = parseDate(fromDate);
+    const effectiveTo = rangeEnabled ? parseDate(toDate) : from;
+    if (!from || !effectiveTo) {
+      toast.error("Invalid date format. Use dd/mm/yyyy");
+      return;
+    }
+    if (from > effectiveTo) {
+      toast.error("From date cannot be after to date");
+      return;
+    }
     setPage(1);
-  }, 400);
-};
-
-const toggleRow = (id) => {
-  setSelectedRows(prev => {
-    const newSet = new Set(prev);
-    if (newSet.has(id)) newSet.delete(id);
-    else newSet.add(id);
-    return newSet;
-  });
-};
-
-const toggleSelectAll = () => {
-  if (selectedRows.size === attendance.length) {
-    setSelectedRows(new Set());
-  } else {
-    setSelectedRows(new Set(attendance.map(r => r._id)));
-  }
-};
-
-const fetchAttendance = useCallback(async (targetPage = page) => {
-  setLoading(true);
-  try {
-    const token = localStorage.getItem("token");
-    if (!token) { toast.error("Authentication required"); return; }
-
-    const effectiveToDate = rangeEnabled ? toDate : fromDate;
-    const params = new URLSearchParams({
-      fromDate,
-      toDate: effectiveToDate,
-      page: targetPage,
-      limit: LIMIT,
-      ...(apiSearch.trim() ? { search: apiSearch.trim() } : {}),
-    });
-
-    const response = await axios.get(`/api/attendance/range?${params}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-
-    let records = response.data?.attendance || [];
-    const pagination = response.data?.pagination || {};
-
-    if (userRole === "admin")
-      records = records.filter((r) => !PRIVILEGED_ROLES.includes(r.empRole));
-
-    setAttendance(records);
-    setTotalCount(pagination.total || 0);
-    setTotalPages(pagination.totalPages || 1);
-  } catch (error) {
-    if (error.response?.status === 401) toast.error("Unauthorized. Please login again.");
-    else if (error.response?.status === 403) toast.error("You do not have permission.");
-    else toast.error("Failed to load attendance data");
-    setAttendance([]);
-  } finally {
-    setLoading(false);
-  }
-}, [fromDate, toDate, rangeEnabled, userRole, apiSearch]);
-
-
-useEffect(() => {
-  fetchAttendance(page);
-}, [fromDate, toDate, rangeEnabled, userRole, page, apiSearch, fetchAttendance]);
-
-
-const handleDateRangeChange = () => {
-  const from = parseDate(fromDate);
-  const effectiveTo = rangeEnabled ? parseDate(toDate) : from;
-  if (!from || !effectiveTo) { toast.error("Invalid date format. Use dd/mm/yyyy"); return; }
-  if (from > effectiveTo) { toast.error("From date cannot be after to date"); return; }
-  setPage(1);
-  fetchAttendance(1);
-};
+    fetchAttendance(1);
+  };
 
   const canEditRecord = (record) => {
     if (isSuperAdmin) return true;
@@ -2317,29 +2366,29 @@ const handleDateRangeChange = () => {
   };
 
   const handleDeleteConfirm = async () => {
-  if (!deleteRecord?.ids?.length) return;
+    if (!deleteRecord?.ids?.length) return;
 
-  setDeleting(true);
-  try {
-    const token = localStorage.getItem("token");
+    setDeleting(true);
+    try {
+      const token = localStorage.getItem("token");
 
-    await axios.post(
-      "/api/attendance/bulk-delete",
-      { ids: deleteRecord.ids },
-      { headers: { Authorization: `Bearer ${token}` } }
-    );
+      await axios.post(
+        "/api/attendance/bulk-delete",
+        { ids: deleteRecord.ids },
+        { headers: { Authorization: `Bearer ${token}` } },
+      );
 
-    toast.success(`${deleteRecord.ids.length} record(s) deleted`);
+      toast.success(`${deleteRecord.ids.length} record(s) deleted`);
 
-    setDeleteRecord(null);
-    setSelectedRows(new Set());
-    fetchAttendance();
-  } catch (err) {
-    toast.error(err.response?.data?.message || "Delete failed");
-  } finally {
-    setDeleting(false);
-  }
-};
+      setDeleteRecord(null);
+      setSelectedRows(new Set());
+      fetchAttendance();
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Delete failed");
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   const handleExport = () => {
     if (!attendance.length) {
@@ -2473,27 +2522,26 @@ const handleDateRangeChange = () => {
             {loading ? "Loading..." : "Apply"}
           </button>
           <div className="text-xs text-gray-600 p-2 bg-gray-50 rounded">
-  Total: {totalCount}
-  {apiSearch && ` · Showing: ${attendance.length}`}
-</div>
-{selectedRows.size > 0 && (
-  <button
-  onClick={() => setDeleteRecord({ ids: [...selectedRows] })}
-    className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 text-sm"
-  >
-    Delete Selected ({selectedRows.size})
-  </button>
-)}
+            Total: {totalCount}
+            {apiSearch && ` · Showing: ${attendance.length}`}
+          </div>
+          {selectedRows.size > 0 && (
+            <button
+              onClick={() => setDeleteRecord({ ids: [...selectedRows] })}
+              className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 text-sm"
+            >
+              Delete Selected ({selectedRows.size})
+            </button>
+          )}
         </div>
       </div>
-      
 
       <div className="mb-4">
         <SearchBar
-  value={searchQuery}
-  onChange={handleSearchChange}   // ← was: setSearchQuery
-  placeholder="Search by name, employee ID, department, status, or date..."
-/>
+          value={searchQuery}
+          onChange={handleSearchChange} // ← was: setSearchQuery
+          placeholder="Search by name, employee ID, department, status, or date..."
+        />
       </div>
 
       <div className="bg-white rounded-lg shadow overflow-hidden">
@@ -2516,12 +2564,15 @@ const handleDateRangeChange = () => {
                 <thead className="bg-gray-100 border-b">
                   <tr>
                     <th className="px-4 py-3">
-  <input
-    type="checkbox"
-    checked={selectedRows.size === attendance.length && attendance.length > 0}
-    onChange={toggleSelectAll}
-  />
-</th>
+                      <input
+                        type="checkbox"
+                        checked={
+                          selectedRows.size === attendance.length &&
+                          attendance.length > 0
+                        }
+                        onChange={toggleSelectAll}
+                      />
+                    </th>
                     <th className="px-4 py-3 text-left font-semibold">Date</th>
                     <th className="px-4 py-3 text-left font-semibold">Emp #</th>
                     <th className="px-4 py-3 text-left font-semibold">Name</th>
@@ -2575,18 +2626,17 @@ const handleDateRangeChange = () => {
                     filtered.map((record, idx) => {
                       const editable = canEditRecord(record);
                       return (
-                        
                         <tr
                           key={record._id || idx}
                           className="hover:bg-gray-50"
                         >
                           <td className="px-4 py-3">
-  <input
-    type="checkbox"
-    checked={selectedRows.has(record._id)}
-    onChange={() => toggleRow(record._id)}
-  />
-</td>
+                            <input
+                              type="checkbox"
+                              checked={selectedRows.has(record._id)}
+                              onChange={() => toggleRow(record._id)}
+                            />
+                          </td>
                           <td className="px-4 py-3">{record.dateFormatted}</td>
                           <td className="px-4 py-3 font-mono text-xs">
                             {record.empNumber}
@@ -2613,7 +2663,9 @@ const handleDateRangeChange = () => {
                           </td>
                           {!isHybrid && (
                             <td className="px-4 py-3 text-right">
-                              {(record.financials?.hoursWorked || 0).toLocaleString("en-PK")}
+                              {(
+                                record.financials?.hoursWorked || 0
+                              ).toLocaleString("en-PK")}
                             </td>
                           )}
                           {!isHybrid && (
@@ -2625,7 +2677,9 @@ const handleDateRangeChange = () => {
                                 className="inline-flex items-center gap-1 text-blue-700 hover:text-blue-900"
                               >
                                 PKR{" "}
-                                {(record.financials?.otAmount || 0).toLocaleString("en-PK")}{" "}
+                                {(
+                                  record.financials?.otAmount || 0
+                                ).toLocaleString("en-PK")}{" "}
                                 <Eye size={12} />
                               </button>
                             </td>
@@ -2639,7 +2693,9 @@ const handleDateRangeChange = () => {
                                 className="inline-flex items-center gap-1 text-red-700 hover:text-red-900"
                               >
                                 PKR{" "}
-                                {(record.financials?.deduction || 0).toLocaleString("en-PK")}{" "}
+                                {(
+                                  record.financials?.deduction || 0
+                                ).toLocaleString("en-PK")}{" "}
                                 <Eye size={12} />
                               </button>
                             </td>
@@ -2668,9 +2724,10 @@ const handleDateRangeChange = () => {
                                   <Pencil size={13} /> Edit
                                 </button>
                                 <button
-onClick={() =>
-  editable && setDeleteRecord({ ids: [record._id] })
-}
+                                  onClick={() =>
+                                    editable &&
+                                    setDeleteRecord({ ids: [record._id] })
+                                  }
                                   disabled={!editable}
                                   className={`inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-lg transition ${editable ? "text-red-700 bg-red-50 border border-red-200 hover:bg-red-100" : "text-gray-400 bg-gray-50 border border-gray-200 opacity-50 cursor-not-allowed"}`}
                                 >
@@ -2727,9 +2784,10 @@ onClick={() =>
                                 <Pencil size={13} />
                               </button>
                               <button
-                             onClick={() =>
-  editable && setDeleteRecord({ ids: [record._id] })
-}
+                                onClick={() =>
+                                  editable &&
+                                  setDeleteRecord({ ids: [record._id] })
+                                }
                                 disabled={!editable}
                                 className={`p-1.5 rounded-lg border ${editable ? "text-red-600 bg-red-50 border-red-200" : "text-gray-300 bg-gray-50 border-gray-200 opacity-50 cursor-not-allowed"}`}
                               >
@@ -2761,7 +2819,9 @@ onClick={() =>
                         {!isHybrid && (
                           <p>
                             <span className="font-medium">Earning:</span> PKR{" "}
-                            {(record.financials?.finalDayEarning || 0).toLocaleString("en-PK")}
+                            {(
+                              record.financials?.finalDayEarning || 0
+                            ).toLocaleString("en-PK")}
                           </p>
                         )}
                         <p className="text-xs text-gray-500">
@@ -2776,81 +2836,85 @@ onClick={() =>
             </div>
           </>
         )}
-            {/* Pagination */}
-{totalPages > 1 && (
-  <div className="flex items-center justify-between px-4 py-3 bg-white border-t mt-0 rounded-b-lg shadow">
-    <p className="text-xs text-gray-500">
-      Page <span className="font-medium">{page}</span> of{" "}
-      <span className="font-medium">{totalPages}</span> ·{" "}
-      <span className="font-medium">{totalCount}</span> total records
-    </p>
-    <div className="flex items-center gap-1">
-      <button
-        onClick={() => setPage(1)}
-        disabled={page === 1 || loading}
-        className="p-1.5 rounded border border-gray-300 text-gray-500 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition"
-        title="First page"
-      >
-        <ChevronLeft size={14} className="inline" />
-        <ChevronLeft size={14} className="inline -ml-2" />
-      </button>
-      <button
-        onClick={() => setPage((p) => Math.max(1, p - 1))}
-        disabled={page === 1 || loading}
-        className="p-1.5 rounded border border-gray-300 text-gray-500 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition"
-        title="Previous page"
-      >
-        <ChevronLeft size={14} />
-      </button>
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between px-4 py-3 bg-white border-t mt-0 rounded-b-lg shadow">
+            <p className="text-xs text-gray-500">
+              Page <span className="font-medium">{page}</span> of{" "}
+              <span className="font-medium">{totalPages}</span> ·{" "}
+              <span className="font-medium">{totalCount}</span> total records
+            </p>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setPage(1)}
+                disabled={page === 1 || loading}
+                className="p-1.5 rounded border border-gray-300 text-gray-500 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition"
+                title="First page"
+              >
+                <ChevronLeft size={14} className="inline" />
+                <ChevronLeft size={14} className="inline -ml-2" />
+              </button>
+              <button
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={page === 1 || loading}
+                className="p-1.5 rounded border border-gray-300 text-gray-500 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition"
+                title="Previous page"
+              >
+                <ChevronLeft size={14} />
+              </button>
 
-      {/* Page number pills */}
-      {Array.from({ length: totalPages }, (_, i) => i + 1)
-        .filter((p) => p === 1 || p === totalPages || Math.abs(p - page) <= 2)
-        .reduce((acc, p, idx, arr) => {
-          if (idx > 0 && p - arr[idx - 1] > 1)
-            acc.push("ellipsis-" + p);
-          acc.push(p);
-          return acc;
-        }, [])
-        .map((item) =>
-          String(item).startsWith("ellipsis") ? (
-            <span key={item} className="px-1 text-gray-400 text-xs">…</span>
-          ) : (
-            <button
-              key={item}
-              onClick={() => setPage(item)}
-              disabled={loading}
-              className={`min-w-[30px] h-[30px] rounded border text-xs font-medium transition ${
-                item === page
-                  ? "bg-blue-600 text-white border-blue-600"
-                  : "border-gray-300 text-gray-600 hover:bg-gray-100"
-              } disabled:opacity-60`}
-            >
-              {item}
-            </button>
-          )
+              {/* Page number pills */}
+              {Array.from({ length: totalPages }, (_, i) => i + 1)
+                .filter(
+                  (p) => p === 1 || p === totalPages || Math.abs(p - page) <= 2,
+                )
+                .reduce((acc, p, idx, arr) => {
+                  if (idx > 0 && p - arr[idx - 1] > 1)
+                    acc.push("ellipsis-" + p);
+                  acc.push(p);
+                  return acc;
+                }, [])
+                .map((item) =>
+                  String(item).startsWith("ellipsis") ? (
+                    <span key={item} className="px-1 text-gray-400 text-xs">
+                      …
+                    </span>
+                  ) : (
+                    <button
+                      key={item}
+                      onClick={() => setPage(item)}
+                      disabled={loading}
+                      className={`min-w-[30px] h-[30px] rounded border text-xs font-medium transition ${
+                        item === page
+                          ? "bg-blue-600 text-white border-blue-600"
+                          : "border-gray-300 text-gray-600 hover:bg-gray-100"
+                      } disabled:opacity-60`}
+                    >
+                      {item}
+                    </button>
+                  ),
+                )}
+
+              <button
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                disabled={page === totalPages || loading}
+                className="p-1.5 rounded border border-gray-300 text-gray-500 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition"
+                title="Next page"
+              >
+                <ChevronRight size={14} />
+              </button>
+              <button
+                onClick={() => setPage(totalPages)}
+                disabled={page === totalPages || loading}
+                className="p-1.5 rounded border border-gray-300 text-gray-500 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition"
+                title="Last page"
+              >
+                <ChevronRight size={14} className="inline" />
+                <ChevronRight size={14} className="inline -ml-2" />
+              </button>
+            </div>
+          </div>
         )}
-
-      <button
-        onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-        disabled={page === totalPages || loading}
-        className="p-1.5 rounded border border-gray-300 text-gray-500 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition"
-        title="Next page"
-      >
-        <ChevronRight size={14} />
-      </button>
-      <button
-        onClick={() => setPage(totalPages)}
-        disabled={page === totalPages || loading}
-        className="p-1.5 rounded border border-gray-300 text-gray-500 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition"
-        title="Last page"
-      >
-        <ChevronRight size={14} className="inline" />
-        <ChevronRight size={14} className="inline -ml-2" />
-      </button>
-    </div>
-  </div>
-)}
       </div>
 
       {showImportModal && (
@@ -2944,7 +3008,6 @@ onClick={() =>
           </div>
         </div>
       )}
-  
     </div>
   );
 }
@@ -2953,11 +3016,11 @@ onClick={() =>
 export default function ManualAttendance() {
   const [activeTab, setActiveTab] = useState("manage");
   const userRole = getCurrentUserRole();
-  const isSuperAdmin = userRole === "superadmin"  || userRole === "owner";
+  const isSuperAdmin = userRole === "superadmin" || userRole === "owner";
   const isAdmin = userRole === "admin" || isSuperAdmin;
   const isOwner = userRole === "owner";
   const isHybrid = userRole === "hybrid";
-  
+
   const tabProps = { userRole, isSuperAdmin, isAdmin, isHybrid };
 
   return (
