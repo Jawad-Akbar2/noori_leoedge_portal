@@ -67,12 +67,12 @@ const buildInOut = (emp, lateMin = 0) => {
   return { inTime, outTime, outNextDay, hoursWorked };
 };
 
-/** Weighted random pick: { Present: 60, Late: 15, Absent: 15, Leave: 10 } */
+/** Weighted random pick: { Present: 60, Late: 15, Off Day: 15, Leave: 10 } */
 const randomStatus = () => {
   const r = Math.random() * 100;
   if (r < 60) return 'Present';
   if (r < 75) return 'Late';
-  if (r < 90) return 'Absent';
+  if (r < 90) return 'OffDay';
   if (r < 100) return 'NCNS';
   return 'Leave';
 };
@@ -156,7 +156,7 @@ const buildRecord = (emp, date) => {
 // ─── payroll & performance builders ──────────────────────────────────────────
 
 const buildPayrollAndPerf = (emp, records, periodStart, periodEnd, totalWorkingDays) => {
-  let presentDays = 0, lateDays = 0, absentDays = 0, leaveDays = 0, ncnsDays = 0;
+  let presentDays = 0, lateDays = 0, OffDayDays = 0, leaveDays = 0, ncnsDays = 0;
   let totalHoursWorked = 0, totalOtHours = 0;
   let totalBasePay = 0, totalDeduction = 0, totalOtAmount = 0;
 
@@ -165,7 +165,7 @@ const buildPayrollAndPerf = (emp, records, periodStart, periodEnd, totalWorkingD
   for (const r of records) {
     if      (r.status === 'Present') presentDays++;
     else if (r.status === 'Late')    { presentDays++; lateDays++; }
-    else if (r.status === 'Absent')  absentDays++;
+    else if (r.status === 'OffDay')  OffDayDays++;
     else if (r.status === 'Leave')   leaveDays++;
     else if (r.status === 'NCNS')   ncnsDays++;
 
@@ -211,7 +211,7 @@ const buildPayrollAndPerf = (emp, records, periodStart, periodEnd, totalWorkingD
     totalWorkingDays,
     presentDays,
     lateDays,
-    absentDays,
+    OffDayDays,
     leaveDays,
     ncnsDays,
     totalHoursWorked,
@@ -249,7 +249,7 @@ const buildPayrollAndPerf = (emp, records, periodStart, periodEnd, totalWorkingD
     totalWorkingDays,
     presentDays,
     lateDays,
-    absentDays,
+    OffDayDays,
     leaveDays,
     totalHoursWorked,
     totalOtHours,

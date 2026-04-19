@@ -29,7 +29,7 @@ const isoToDisplay = (isoStr) => {
 };
 
 /** PKR number formatter */
-const pkr = (val) => (val ?? 0).toLocaleString("en-PK");
+const pkr = (val) => (val ?? 0).toLocaleString("en-PK", { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 
 /** Default pay-period start: 18th of current (or prior) month */
 const defaultFromDate = () => {
@@ -257,8 +257,8 @@ export default function MySalary() {
                   color: "text-yellow-600",
                 },
                 {
-                  label: "Absent",
-                  value: summary.absentDays ?? "—",
+                  label: "Off Day",
+                  value: summary.OffDayDays ?? "—",
                   color: "text-red-500",
                 },
                 {
@@ -336,14 +336,14 @@ export default function MySalary() {
                                 ? "bg-yellow-100 text-yellow-700"
                                 : day.status === "Leave"
                                   ? "bg-blue-100 text-blue-700"
-                                  : day.status === "Absent"
+                                  : day.status === "OffDay"
                                     ? "bg-red-100 text-red-500"
                                     : day.status === "ncns"
                                       ? "bg-purple-100 text-purple-700"
                                       : "bg-gray-100 text-gray-600"
                           }`}
                         >
-                          {day.status ?? "Absent"}
+                          {day.status ?? "OffDay"}
                         </span>
                       </td>
                       <td className="px-4 py-3 text-gray-600">

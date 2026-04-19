@@ -193,7 +193,7 @@ async function getAttendanceStats(startOfToday, startOfWeek, startOfMonth) {
             _id:         null,
             present:     { $sum: { $cond: [{ $in: ['$status', ['Present', 'Late']] }, 1, 0] } },
             late:        { $sum: { $cond: [{ $eq: ['$status', 'Late']    }, 1, 0] } },
-            absent:      { $sum: { $cond: [{ $eq: ['$status', 'Absent'] }, 1, 0] } },
+            OffDay:      { $sum: { $cond: [{ $eq: ['$status', 'OffDay'] }, 1, 0] } },
             onLeave:     { $sum: { $cond: [{ $eq: ['$status', 'Leave']  }, 1, 0] } },
             ncns:        { $sum: { $cond: [{ $eq: ['$status', 'NCNS']  }, 1, 0] } },
             totalHours:  { $sum: '$financials.hoursWorked' },
@@ -210,7 +210,7 @@ async function getAttendanceStats(startOfToday, startOfWeek, startOfMonth) {
             _id:          null,
             totalPresent: { $sum: { $cond: [{ $in: ['$status', ['Present', 'Late']] }, 1, 0] } },
             totalLate:    { $sum: { $cond: [{ $eq: ['$status', 'Late']    }, 1, 0] } },
-            totalAbsent:  { $sum: { $cond: [{ $eq: ['$status', 'Absent'] }, 1, 0] } },
+            totalOffDay:  { $sum: { $cond: [{ $eq: ['$status', 'OffDay'] }, 1, 0] } },
             totalLeave:   { $sum: { $cond: [{ $eq: ['$status', 'Leave']  }, 1, 0] } },
             totalNcns:    { $sum: { $cond: [{ $eq: ['$status', 'NCNS']  }, 1, 0] } },
             totalOtHours: { $sum: '$financials.otHours' },
@@ -228,7 +228,7 @@ async function getAttendanceStats(startOfToday, startOfWeek, startOfMonth) {
             totalRecords:    { $sum: 1 },
             presentCount:    { $sum: { $cond: [{ $in: ['$status', ['Present', 'Late']] }, 1, 0] } },
             lateCount:       { $sum: { $cond: [{ $eq: ['$status', 'Late']    }, 1, 0] } },
-            absentCount:     { $sum: { $cond: [{ $eq: ['$status', 'Absent'] }, 1, 0] } },
+            OffDayCount:     { $sum: { $cond: [{ $eq: ['$status', 'OffDay'] }, 1, 0] } },
             leaveCount:      { $sum: { $cond: [{ $eq: ['$status', 'Leave']  }, 1, 0] } },
             ncnsCount:       { $sum: { $cond: [{ $eq: ['$status', 'NCNS']  }, 1, 0] } },
             totalHours:      { $sum: '$financials.hoursWorked' },
@@ -299,7 +299,7 @@ async function getAttendanceStats(startOfToday, startOfWeek, startOfMonth) {
     ]);
 
   const td = todayStats[0] || {};
-  const todayTotal = (td.present || 0) + (td.absent || 0) + (td.onLeave || 0);
+  const todayTotal = (td.present || 0) + (td.OffDay || 0) + (td.onLeave || 0);
   const todayAttRate = todayTotal > 0
     ? parseFloat((((td.present || 0) / todayTotal) * 100).toFixed(2))
     : 0;
@@ -311,7 +311,7 @@ async function getAttendanceStats(startOfToday, startOfWeek, startOfMonth) {
     today: {
       present:        td.present   || 0,
       late:           td.late      || 0,
-      absent:         td.absent    || 0,
+      OffDay:         td.OffDay    || 0,
       onLeave:        td.onLeave   || 0,
       totalHours:     parseFloat((td.totalHours  || 0).toFixed(2)),
       totalOtHours:   parseFloat((td.totalOtHours|| 0).toFixed(2)),
@@ -320,7 +320,7 @@ async function getAttendanceStats(startOfToday, startOfWeek, startOfMonth) {
     thisWeek: {
       totalPresent: weekStats[0]?.totalPresent  || 0,
       totalLate:    weekStats[0]?.totalLate     || 0,
-      totalAbsent:  weekStats[0]?.totalAbsent   || 0,
+      totalOffDay:  weekStats[0]?.totalOffDay   || 0,
       totalLeave:   weekStats[0]?.totalLeave    || 0,
       totalOtHours: weekStats[0]?.totalOtHours  || 0,
       totalOtAmount:weekStats[0]?.totalOtAmount || 0,
@@ -328,7 +328,7 @@ async function getAttendanceStats(startOfToday, startOfWeek, startOfMonth) {
     thisMonth: {
       presentCount:    ms.presentCount    || 0,
       lateCount:       ms.lateCount       || 0,
-      absentCount:     ms.absentCount     || 0,
+      OffDayCount:     ms.OffDayCount     || 0,
       leaveCount:      ms.leaveCount      || 0,
       totalHours:      parseFloat((ms.totalHours      || 0).toFixed(2)),
       totalOtHours:    parseFloat((ms.totalOtHours    || 0).toFixed(2)),

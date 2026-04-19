@@ -202,7 +202,7 @@ router.post('/correction/:id/reject', adminAuth, async (req, res) => {
 
 /**
  * When a leave request is approved, upsert one AttendanceLog per leave day.
- * Existing records for those dates are only overwritten if they are 'Absent'
+ * Existing records for those dates are only overwritten if they are 'Off Day'
  * (don't clobber a Present/Late record with Leave).
  */
 async function applyLeaveToAttendance(leave, adminId) {

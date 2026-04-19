@@ -32,12 +32,12 @@ import { useEscape } from "../../context/EscapeStack";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const PRIVILEGED_ROLES = ["admin", "superadmin", "owner"];
-const STATUS_OPTIONS = ["Present", "Late", "Absent", "Leave", "NCNS"];
+const STATUS_OPTIONS = ["Present", "Late", "OffDay", "Leave", "NCNS"];
 const STATUS_STYLES = {
   Present: "bg-green-100  text-green-800  border-green-200",
   Late: "bg-yellow-100 text-yellow-800 border-yellow-200",
   Leave: "bg-blue-100   text-blue-800   border-blue-200",
-  Absent: "bg-red-100    text-red-800    border-red-200",
+  OffDay: "bg-red-100    text-red-800    border-red-200",
   NCNS: "bg-purple-100 text-purple-800 border-purple-200",
   "": "bg-gray-100   text-gray-500   border-gray-200",
 };
@@ -59,7 +59,7 @@ const authHeader = () => ({
 // ─── Pure helpers ─────────────────────────────────────────────────────────────
 const safeTime = (v) => (v && v !== "--" ? v : "--");
 const emptyTime = (v) => (v && v !== "--" ? v : "");
-const pkr = (v) => `PKR ${Number(v || 0).toLocaleString("en-PK")}`;
+const pkr = (v) => `PKR ${Number(v || 0).toLocaleString("en-PK", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
 const displayTime = (val) => (val && val !== "--" ? val : "--");
 
 function resolveEmpId(raw) {
@@ -444,17 +444,12 @@ function OTDeductionEditModal({
     });
   };
 
-  const removeDeduction = async (i) => {
-    const updated = deductionDetails.filter((_, x) => x !== i);
-    setDeductionDetails(updated);
-    await persist(otDetails, updated);
-  };
-
-  const removeOT = async (i) => {
-    const updated = otDetails.filter((_, x) => x !== i);
-    setOtDetails(updated);
-    await persist(updated, deductionDetails);
-  };
+  const removeDeduction = (i) => {
+  setDeductionDetails((prev) => prev.filter((_, x) => x !== i));
+};
+const removeOT = (i) => {
+  setOtDetails((prev) => prev.filter((_, x) => x !== i));
+};
 
   const title = type === "ot" ? "Overtime (OT)" : "Deductions";
 
@@ -678,16 +673,17 @@ function AttendanceFormModal({
   const [selectedEmpLeftDate, setSelectedEmpLeftDate] = useState(null);
   const [selectedEmpShift, setSelectedEmpShift] = useState(null);
 
-  const [form, setForm] = useState({
-    empId: "",
-    date: isEdit ? record?.dateFormatted || "" : getTodayDate(),
-    status: isEdit ? record?.status || "Present" : "Present",
-    inTime: isEdit ? parseTime(record?.inTime) : "",
-    outTime: isEdit ? parseTime(record?.outTime) : "",
-    outNextDay: isEdit ? record?.outNextDay || false : false,
-    deductionDetails: isEdit ? record?.financials?.deductionDetails || [] : [],
-    otDetails: isEdit ? record?.financials?.otDetails || [] : [],
-  });
+const [form, setForm] = useState({
+  empId: "",
+  date: isEdit ? record?.dateFormatted || "" : getTodayDate(),
+  status: isEdit ? record?.status || "Present" : "Present",
+  inTime: isEdit ? parseTime(record?.inTime) : "",
+  outTime: isEdit ? parseTime(record?.outTime) : "",
+  outNextDay: isEdit ? record?.outNextDay || false : false,
+  notes: isEdit ? record?.metadata?.notes || "" : "",   // ← ADD THIS
+  deductionDetails: isEdit ? record?.financials?.deductionDetails || [] : [],
+  otDetails: isEdit ? record?.financials?.otDetails || [] : [],
+});
   const [deductionDraft, setDeductionDraft] = useState({
     amount: "",
     reason: "",
@@ -860,21 +856,22 @@ function AttendanceFormModal({
       }
 
       await axios.post(
-        "/api/attendance/save-row",
-        {
-          empId: resolvedEmpId,
-          date: form.date,
-          status: form.status,
-          inTime: form.inTime || null,
-          outTime: form.outTime || null,
-          outNextDay: form.outNextDay || false,
-          otDetails: form.otDetails,
-          ...(isEdit || form.deductionDetails.length > 0
-            ? { deductionDetails: form.deductionDetails }
-            : {}),
-        },
-        { headers: authHeader() },
-      );
+  "/api/attendance/save-row",
+  {
+    empId: resolvedEmpId,
+    date: form.date,
+    status: form.status,
+    inTime: form.inTime || null,
+    outTime: form.outTime || null,
+    outNextDay: form.outNextDay || false,
+    otDetails: form.otDetails,
+    notes: form.notes || null,           // ← ADD THIS
+    ...(isEdit || form.deductionDetails.length > 0
+      ? { deductionDetails: form.deductionDetails }
+      : {}),
+  },
+  { headers: authHeader() },
+);
       toast.success(isEdit ? "Attendance updated" : "Attendance added");
       onSuccess();
       onClose();
@@ -962,7 +959,7 @@ function AttendanceFormModal({
             >
               <option value="Present">Present</option>
               <option value="Late">Late</option>
-              <option value="Absent">Absent</option>
+              <option value="OffDay">Off Day</option>
               <option value="Leave">Leave</option>
               <option value="NCNS">NCNS (No Call No Show)</option>
             </select>
@@ -1027,6 +1024,19 @@ function AttendanceFormModal({
                 />
                 Out time is next calendar day (night shift)
               </label>
+              <div>
+  <label className="block text-sm font-medium text-gray-700 mb-1">
+    Notes <span className="text-gray-400 font-normal">(optional)</span>
+  </label>
+  <textarea
+    value={form.notes}
+    onChange={(e) => setForm((prev) => ({ ...prev, notes: e.target.value }))}
+    placeholder="Additional info, remarks, corrections…"
+    rows={2}
+    disabled={saving}
+    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 resize-none disabled:opacity-60"
+  />
+</div>
             </>
           )}
           {currentUserRole !== "hybrid" && (
@@ -1374,7 +1384,7 @@ function MarkTab({ userRole, isSuperAdmin, isAdmin, isHybrid }) {
             empRole: emp.role,
             shiftStart: emp.shift?.start || null,
             shiftEnd: emp.shift?.end || null,
-            status: "Absent",
+            status: "OffDay",
             inTime: "",
             outTime: "",
             outNextDay: false,
@@ -1568,9 +1578,9 @@ function MarkTab({ userRole, isSuperAdmin, isAdmin, isHybrid }) {
         `"${r.inTime || ""}"`,
         `"${r.outTime || ""}"`,
         (r.financials?.hoursWorked || 0).toFixed(2),
-        (r.financials?.otAmount || 0).toLocaleString("en-PK"),
-        (r.financials?.deduction || 0).toLocaleString("en-PK"),
-        (r.financials?.finalDayEarning || 0).toLocaleString("en-PK"),
+        (r.financials?.otAmount || 0).toLocaleString("en-PK", { minimumFractionDigits: 0, maximumFractionDigits: 0 }),
+        (r.financials?.deduction || 0).toLocaleString("en-PK", { minimumFractionDigits: 0, maximumFractionDigits: 0 }),
+        (r.financials?.finalDayEarning || 0).toLocaleString("en-PK", { minimumFractionDigits: 0, maximumFractionDigits: 0 }),
         `"${r.lastModified || ""}"`,
       ].join(","),
     );
@@ -1694,7 +1704,7 @@ function MarkTab({ userRole, isSuperAdmin, isAdmin, isHybrid }) {
           <td className="px-3 py-2 text-right text-xs text-gray-600 whitespace-nowrap">
             {row.__isVirtual && !row.__dirty
               ? "—"
-              : (row.financials?.hoursWorked || 0).toLocaleString("en-PK")}
+              : (row.financials?.hoursWorked || 0).toLocaleString("en-PK", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
           </td>
         )}
         {!isHybrid && (
@@ -1704,7 +1714,7 @@ function MarkTab({ userRole, isSuperAdmin, isAdmin, isHybrid }) {
             ) : (
               <div className="flex items-center justify-end gap-1">
                 <span className="text-blue-700">
-                  {(row.financials?.otAmount || 0).toLocaleString("en-PK")}
+                  {(row.financials?.otAmount || 0).toLocaleString("en-PK", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
                 </span>
                 {editable && isAdmin && (
                   <button
@@ -1731,7 +1741,7 @@ function MarkTab({ userRole, isSuperAdmin, isAdmin, isHybrid }) {
             ) : (
               <div className="flex items-center justify-end gap-1">
                 <span className="text-red-700">
-                  {(row.financials?.deduction || 0).toLocaleString("en-PK")}
+                  {(row.financials?.deduction || 0).toLocaleString("en-PK", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
                 </span>
                 {editable && isAdmin && (
                   <button
@@ -2087,7 +2097,7 @@ function MarkTab({ userRole, isSuperAdmin, isAdmin, isHybrid }) {
               <option value="">Set All Status</option>
               <option value="Present">Present</option>
               <option value="Late">Late</option>
-              <option value="Absent">Absent</option>
+              <option value="OffDay">Off Day</option>
               <option value="Leave">Leave</option>
               <option value="NCNS">NCNS</option>
             </select>
@@ -2405,7 +2415,7 @@ function ManageTab({ userRole, isSuperAdmin, isAdmin, isHybrid }) {
         "Status",
         "In Time",
         "Out Time",
-        "Hours Worked",
+        // "Hours Worked",
         "OT Amount",
         "Total Deduction",
         "Daily Earning",
@@ -2422,10 +2432,10 @@ function ManageTab({ userRole, isSuperAdmin, isAdmin, isHybrid }) {
           `"${record.status || "--"}"`,
           `"${record.inTime ?? "--"}"`,
           `"${record.outTime ?? "--"}"`,
-          `"${record.financials?.hoursWorked?.toFixed(2) || "0"}"`,
-          `"${record.financials?.otAmount?.toLocaleString("en-PK") || "0"}"`,
-          `"${record.financials?.deduction?.toLocaleString("en-PK") || "0"}"`,
-          `"${record.financials?.finalDayEarning?.toLocaleString("en-PK") || "0"}"`,
+          // `"${record.financials?.hoursWorked?.toFixed(2) || "0"}"`,
+          `"${record.financials?.otAmount?.toLocaleString("en-PK", { minimumFractionDigits: 0, maximumFractionDigits: 0 }) || "0"}"`,
+          `"${record.financials?.deduction?.toLocaleString("en-PK", { minimumFractionDigits: 0, maximumFractionDigits: 0 }) || "0"}"`,
+          `"${record.financials?.finalDayEarning?.toLocaleString("en-PK", { minimumFractionDigits: 0, maximumFractionDigits: 0 }) || "0"}"`,
           `"${record.lastModified || "--"}"`,
         ].join(","),
       );
@@ -2450,7 +2460,7 @@ function ManageTab({ userRole, isSuperAdmin, isAdmin, isHybrid }) {
         return "bg-yellow-100 text-yellow-800";
       case "Leave":
         return "bg-blue-100 text-blue-800";
-      case "Absent":
+      case "OffDay":
         return "bg-red-100 text-red-800";
       default:
         return "bg-gray-100 text-gray-800";
@@ -2584,11 +2594,11 @@ function ManageTab({ userRole, isSuperAdmin, isAdmin, isHybrid }) {
                     </th>
                     <th className="px-4 py-3 text-center font-semibold">In</th>
                     <th className="px-4 py-3 text-center font-semibold">Out</th>
-                    {!isHybrid && (
+                    {/* {!isHybrid && (
                       <th className="px-4 py-3 text-right font-semibold">
                         Hours
                       </th>
-                    )}
+                    )} */}
                     {!isHybrid && (
                       <th className="px-4 py-3 text-right font-semibold">OT</th>
                     )}
@@ -2661,13 +2671,13 @@ function ManageTab({ userRole, isSuperAdmin, isAdmin, isHybrid }) {
                               </span>
                             )}
                           </td>
-                          {!isHybrid && (
+                          {/* {!isHybrid && (
                             <td className="px-4 py-3 text-right">
                               {(
                                 record.financials?.hoursWorked || 0
-                              ).toLocaleString("en-PK")}
+                              ).toLocaleString("en-PK", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
                             </td>
-                          )}
+                          )} */}
                           {!isHybrid && (
                             <td className="px-4 py-3 text-right">
                               <button
@@ -2679,7 +2689,7 @@ function ManageTab({ userRole, isSuperAdmin, isAdmin, isHybrid }) {
                                 PKR{" "}
                                 {(
                                   record.financials?.otAmount || 0
-                                ).toLocaleString("en-PK")}{" "}
+                                ).toLocaleString("en-PK", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}{" "}
                                 <Eye size={12} />
                               </button>
                             </td>
@@ -2695,7 +2705,7 @@ function ManageTab({ userRole, isSuperAdmin, isAdmin, isHybrid }) {
                                 PKR{" "}
                                 {(
                                   record.financials?.deduction || 0
-                                ).toLocaleString("en-PK")}{" "}
+                                ).toLocaleString("en-PK", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}{" "}
                                 <Eye size={12} />
                               </button>
                             </td>
@@ -2705,7 +2715,7 @@ function ManageTab({ userRole, isSuperAdmin, isAdmin, isHybrid }) {
                               PKR{" "}
                               {(
                                 record.financials?.finalDayEarning || 0
-                              ).toLocaleString("en-PK")}
+                              ).toLocaleString("en-PK", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
                             </td>
                           )}
                           <td className="px-4 py-3 text-xs text-gray-600">
@@ -2821,7 +2831,7 @@ function ManageTab({ userRole, isSuperAdmin, isAdmin, isHybrid }) {
                             <span className="font-medium">Earning:</span> PKR{" "}
                             {(
                               record.financials?.finalDayEarning || 0
-                            ).toLocaleString("en-PK")}
+                            ).toLocaleString("en-PK", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
                           </p>
                         )}
                         <p className="text-xs text-gray-500">

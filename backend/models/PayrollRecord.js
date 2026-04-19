@@ -13,7 +13,7 @@ import mongoose from 'mongoose';
  */
 const dailyBreakdownSchema = new mongoose.Schema({
   date:           { type: Date,   required: true },
-  status:         { type: String, enum: ['Present', 'Late', 'Leave', 'Absent', 'NCNS'] },
+  status:         { type: String, enum: ['Present', 'Late', 'Leave', 'OffDay', 'NCNS'] },
   inTime:         String,   // HH:mm
   outTime:        String,   // HH:mm
   hoursWorked:    { type: Number, default: 0 },
@@ -51,7 +51,7 @@ const payrollRecordSchema = new mongoose.Schema({
   totalWorkingDays:  { type: Number, default: 0 },  // scheduled days in period
   presentDays:       { type: Number, default: 0 },
   lateDays:          { type: Number, default: 0 },
-  absentDays:        { type: Number, default: 0 },
+  OffDayDays:        { type: Number, default: 0 },
   leaveDays:         { type: Number, default: 0 },
   ncnsDays:         { type: Number, default: 0 },
   totalHoursWorked:  { type: Number, default: 0 },

@@ -76,8 +76,8 @@ const attendanceLogSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ["Present", "Late", "Leave", "Absent", "NCNS"],
-      default: "Absent",
+      enum: ["Present", "Late", "Leave", "OffDay", "NCNS"],
+      default: "OffDay",
       index: true,
     },
 

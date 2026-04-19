@@ -210,7 +210,7 @@ export default function PayrollReports() {
           item.name.toLowerCase().includes(selectedEmployee.toLowerCase())
         );
 
-        const statusCount = { 'On-time': 0, Late: 0, Leave: 0, Absent: 0, ncns: 0 };
+        const statusCount = { 'On-time': 0, Late: 0, Leave: 0, OffDay: 0, ncns: 0 };
         filtered.forEach(item => {
           if (statusCount[item.type] !== undefined) statusCount[item.type]++;
         });
@@ -498,7 +498,7 @@ export default function PayrollReports() {
               <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500">Employee</th>
               <th className="px-4 py-3 text-center text-xs font-semibold text-gray-500">Score</th>
               <th className="px-4 py-3 text-center text-xs font-semibold text-gray-500">Present</th>
-              <th className="px-4 py-3 text-center text-xs font-semibold text-gray-500">Absent</th>
+              <th className="px-4 py-3 text-center text-xs font-semibold text-gray-500">Off Day</th>
               <th className="px-4 py-3 text-center text-xs font-semibold text-gray-500">Late</th>
               <th className="px-4 py-3 text-center text-xs font-semibold text-gray-500">Leave</th>
               <th className="px-4 py-3 text-center text-xs font-semibold text-gray-500">NCNS</th>
@@ -518,7 +518,7 @@ export default function PayrollReports() {
                   </span>
                 </td>
                 <td className="px-4 py-3 text-center text-green-600 font-medium">{emp.presentDays}</td>
-                <td className="px-4 py-3 text-center text-red-600 font-medium">{emp.absentDays}</td>
+                <td className="px-4 py-3 text-center text-red-600 font-medium">{emp.OffDayDays}</td>
                 <td className="px-4 py-3 text-center text-yellow-600 font-medium">{emp.lateDays}</td>
                 <td className="px-4 py-3 text-center text-blue-600 font-medium">{emp.leaveDays}</td>
                 <td className="px-4 py-3">
@@ -737,10 +737,10 @@ export default function PayrollReports() {
 
         {/* Totals */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-          <StatCard label="Total Base Salary" value={`PKR ${(salaryTotals.totalBaseSalary || 0).toLocaleString("en-PK")}`} icon={DollarSign} color="blue" />
-          <StatCard label="Total OT" value={`PKR ${(salaryTotals.totalOT || 0).toLocaleString("en-PK")}`} icon={TrendingUp} color="green" />
-          <StatCard label="Total Deductions" value={`PKR ${(salaryTotals.totalDeductions || 0).toLocaleString("en-PK")}`} icon={TrendingDown} color="red" />
-          <StatCard label="Total Net Payable" value={`PKR ${(salaryTotals.totalNetPayable || 0).toLocaleString("en-PK")}`} icon={Users} color="purple" />
+          <StatCard label="Total Base Salary" value={`PKR ${(salaryTotals.totalBaseSalary || 0).toLocaleString("en-PK", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`} icon={DollarSign} color="blue" />
+          <StatCard label="Total OT" value={`PKR ${(salaryTotals.totalOT || 0).toLocaleString("en-PK", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`} icon={TrendingUp} color="green" />
+          <StatCard label="Total Deductions" value={`PKR ${(salaryTotals.totalDeductions || 0).toLocaleString("en-PK", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`} icon={TrendingDown} color="red" />
+          <StatCard label="Total Net Payable" value={`PKR ${(salaryTotals.totalNetPayable || 0).toLocaleString("en-PK", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`} icon={Users} color="purple" />
         </div>
 
         {/* Search */}
@@ -786,10 +786,10 @@ export default function PayrollReports() {
                         <p className="font-medium text-gray-900">{emp.name}</p>
                         <p className="text-xs text-gray-500 mt-0.5">ID: {emp.empNumber}</p>
                       </td>
-                      <td className="px-4 py-3 text-right font-medium">PKR {emp.baseSalary.toLocaleString("en-PK")}</td>
-                      <td className="px-4 py-3 text-right text-red-600">PKR {emp.totalDeduction.toLocaleString("en-PK")}</td>
-                      <td className="px-4 py-3 text-right text-green-600">PKR {emp.totalOt.toLocaleString("en-PK")}</td>
-                      <td className="px-4 py-3 text-right font-semibold text-blue-600">PKR {emp.netPayable.toLocaleString("en-PK")}</td>
+                      <td className="px-4 py-3 text-right font-medium">PKR {emp.baseSalary.toLocaleString("en-PK", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</td>
+                      <td className="px-4 py-3 text-right text-red-600">PKR {emp.totalDeduction.toLocaleString("en-PK", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</td>
+                      <td className="px-4 py-3 text-right text-green-600">PKR {emp.totalOt.toLocaleString("en-PK", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</td>
+                      <td className="px-4 py-3 text-right font-semibold text-blue-600">PKR {emp.netPayable.toLocaleString("en-PK", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</td>
                       <td className="px-4 py-3 text-center">
                         <button
                           onClick={() => toggleEmployeeExpansion(emp.empId)}
@@ -832,9 +832,9 @@ export default function PayrollReports() {
                                     <td className="px-3 py-2 text-gray-600">{day.outTime || '--'}</td>
                                     <td className="px-3 py-2 text-right text-gray-600">{day.hoursWorked.toFixed(2)}</td>
                                     <td className="px-3 py-2 text-right text-gray-600">PKR {day.basePay.toLocaleString('en-PK')}</td>
-                                    <td className="px-3 py-2 text-right text-red-600">PKR {day.deduction.toLocaleString("en-PK")}</td>
-                                    <td className="px-3 py-2 text-right text-green-600">PKR {day.otAmount.toLocaleString("en-PK")}</td>
-                                    <td className="px-3 py-2 text-right font-semibold text-blue-600">PKR {day.finalDayEarning.toLocaleString("en-PK")}</td>
+                                    <td className="px-3 py-2 text-right text-red-600">PKR {day.deduction.toLocaleString("en-PK", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</td>
+                                    <td className="px-3 py-2 text-right text-green-600">PKR {day.otAmount.toLocaleString("en-PK", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</td>
+                                    <td className="px-3 py-2 text-right font-semibold text-blue-600">PKR {day.finalDayEarning.toLocaleString("en-PK", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</td>
                                   </tr>
                                 ))}
                               </tbody>

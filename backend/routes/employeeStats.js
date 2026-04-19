@@ -82,7 +82,7 @@ router.get('/employee', employeeAuth, async (req, res) => {
               totalDays:          { $sum: 1 },
               presentDays:        { $sum: { $cond: [{ $in: ['$status', ['Present', 'Late']] }, 1, 0] } },
               lateDays:           { $sum: { $cond: [{ $eq: ['$status', 'Late']    }, 1, 0] } },
-              absentDays:         { $sum: { $cond: [{ $eq: ['$status', 'Absent'] }, 1, 0] } },
+              OffDayDays:         { $sum: { $cond: [{ $eq: ['$status', 'OffDay'] }, 1, 0] } },
               leaveDays:          { $sum: { $cond: [{ $eq: ['$status', 'Leave']  }, 1, 0] } },
               ncnsDays:          { $sum: { $cond: [{ $eq: ['$status', 'NCNS']  }, 1, 0] } },
               totalHoursWorked:   { $sum: '$financials.hoursWorked'    },
@@ -105,7 +105,7 @@ router.get('/employee', employeeAuth, async (req, res) => {
               _id:          { year: { $year: '$date' }, month: { $month: '$date' } },
               presentDays:  { $sum: { $cond: [{ $in: ['$status', ['Present', 'Late']] }, 1, 0] } },
               lateDays:     { $sum: { $cond: [{ $eq: ['$status', 'Late']   }, 1, 0] } },
-              absentDays:   { $sum: { $cond: [{ $eq: ['$status', 'Absent']}, 1, 0] } },
+              OffDayDays:   { $sum: { $cond: [{ $eq: ['$status', 'OffDay']}, 1, 0] } },
               leaveDays:    { $sum: { $cond: [{ $eq: ['$status', 'Leave'] }, 1, 0] } },
               ncnsDays:    { $sum: { $cond: [{ $eq: ['$status', 'NCNS'] }, 1, 0] } },
               totalDays:    { $sum: 1 },
@@ -124,7 +124,7 @@ router.get('/employee', employeeAuth, async (req, res) => {
               _id:          null,
               presentDays:  { $sum: { $cond: [{ $in: ['$status', ['Present', 'Late']] }, 1, 0] } },
               lateDays:     { $sum: { $cond: [{ $eq: ['$status', 'Late']   }, 1, 0] } },
-              absentDays:   { $sum: { $cond: [{ $eq: ['$status', 'Absent']}, 1, 0] } },
+              OffDayDays:   { $sum: { $cond: [{ $eq: ['$status', 'OffDay']}, 1, 0] } },
               totalHours:   { $sum: '$financials.hoursWorked' },
               otHours:      { $sum: '$financials.otHours'     },
             },
@@ -158,7 +158,7 @@ router.get('/employee', employeeAuth, async (req, res) => {
       PayrollRecord.find({ ...BASE_PAY })
         .sort({ periodStart: -1 })
         .limit(6)
-        .select('periodLabel periodStart periodEnd netSalary baseSalary totalDeduction totalOtAmount totalOtHours totalHoursWorked presentDays lateDays absentDays leaveDays status')
+        .select('periodLabel periodStart periodEnd netSalary baseSalary totalDeduction totalOtAmount totalOtHours totalHoursWorked presentDays lateDays OffDayDays leaveDays status')
         .lean(),
 
       // ── 4. Leave stats ────────────────────────────────────────────────────
@@ -238,7 +238,7 @@ router.get('/employee', employeeAuth, async (req, res) => {
       PerformanceRecord.find({ ...BASE_PRF })
         .sort({ periodStart: -1 })
         .limit(6)
-        .select('periodLabel periodStart performanceScore attendanceRate punctualityRate rating totalOtHours presentDays lateDays absentDays totalWorkingDays')
+        .select('periodLabel periodStart performanceScore attendanceRate punctualityRate rating totalOtHours presentDays lateDays OffDayDays totalWorkingDays')
         .lean(),
 
       // ── 7. Recent 7 attendance records ────────────────────────────────────
@@ -261,7 +261,7 @@ router.get('/employee', employeeAuth, async (req, res) => {
     const currentPay   = currentPeriodPay[0] || {};
 
     // ── Compute attendance rate this month ────────────────────────────────────
-    const totalTracked = (monthSummary.presentDays || 0) + (monthSummary.absentDays || 0) + (monthSummary.leaveDays || 0);
+    const totalTracked = (monthSummary.presentDays || 0) + (monthSummary.OffDayDays || 0) + (monthSummary.leaveDays || 0);
     const attendanceRate = totalTracked > 0
       ? parseFloat((((monthSummary.presentDays + monthSummary.leaveDays) / totalTracked) * 100).toFixed(1))
       : 0;
@@ -310,7 +310,7 @@ router.get('/employee', employeeAuth, async (req, res) => {
           thisWeek: {
             presentDays: weekSummary.presentDays || 0,
             lateDays:    weekSummary.lateDays    || 0,
-            absentDays:  weekSummary.absentDays  || 0,
+            OffDayDays:  weekSummary.OffDayDays  || 0,
             totalHours:  parseFloat((weekSummary.totalHours || 0).toFixed(2)),
             otHours:     parseFloat((weekSummary.otHours    || 0).toFixed(2)),
           },
@@ -318,7 +318,7 @@ router.get('/employee', employeeAuth, async (req, res) => {
           thisMonth: {
             presentDays:      monthSummary.presentDays      || 0,
             lateDays:         monthSummary.lateDays         || 0,
-            absentDays:       monthSummary.absentDays       || 0,
+            OffDayDays:       monthSummary.OffDayDays       || 0,
             leaveDays:        monthSummary.leaveDays        || 0,
             totalHoursWorked: parseFloat((monthSummary.totalHoursWorked  || 0).toFixed(2)),
             totalOtHours:     parseFloat((monthSummary.totalOtHours      || 0).toFixed(2)),

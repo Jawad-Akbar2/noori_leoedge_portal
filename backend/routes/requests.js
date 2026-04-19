@@ -558,7 +558,7 @@ router.patch('/correction/:requestId/approve', adminAuth, async (req, res) => {
           isNightShift
         },
         hourlyRate: rate,
-        status:     'Absent'
+        status:     'OffDay'
       });
     }
 

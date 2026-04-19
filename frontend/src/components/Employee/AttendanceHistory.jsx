@@ -55,8 +55,8 @@ const STATUS_FILTERS = [
     off: "bg-gray-100 text-gray-500",
   },
   {
-    key: "Absent",
-    label: "Absent",
+    key: "OffDay",
+    label: "Off Day",
     on: "bg-red-100 text-red-700",
     off: "bg-gray-100 text-gray-500",
   },
@@ -79,7 +79,7 @@ const statusBadge = (status) => {
     Present: "bg-green-100 text-green-800",
     Late: "bg-yellow-100 text-yellow-800",
     Leave: "bg-blue-100 text-blue-800",
-    Absent: "bg-gray-100 text-gray-700",
+    OffDay: "bg-gray-100 text-gray-700",
     NCNS: "bg-gray-100 text-gray-700",
   };
   return map[status] ?? "bg-gray-100 text-gray-700";
@@ -137,7 +137,7 @@ export default function AttendanceHistory() {
         headers: { Authorization: `Bearer ${token}` },
       });
 
-      // dailyBreakdown already contains every day in the range (present + absent)
+      // dailyBreakdown already contains every day in the range (present + Off Day)
       // sorted ascending, with date already formatted as "dd/mm/yyyy" by the API
       const breakdown = response.data.dailyBreakdown ?? [];
       setAllRecords(breakdown);

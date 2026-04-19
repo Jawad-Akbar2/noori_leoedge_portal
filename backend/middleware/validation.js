@@ -70,8 +70,8 @@ export const validateEmployeeCreation = [
 
 export const validateAttendanceUpdate = [
   body('status')
-    .isIn(['Present', 'Late', 'Leave', 'Absent', 'NCNS'])
-    .withMessage('status must be Present | Late | Leave | Absent | NCNS'),
+    .isIn(['Present', 'Late', 'Leave', 'OffDay', 'NCNS'])
+    .withMessage('status must be Present | Late | Leave | OffDay | NCNS'),
 
   body('inTime')
     .optional({ nullable: true })

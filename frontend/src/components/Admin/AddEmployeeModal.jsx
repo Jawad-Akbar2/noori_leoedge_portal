@@ -191,7 +191,7 @@ export default function AddEmployeeModal({ onClose, onSave, currentUserRole }) {
       ((endMin - startMin) / 60) *
       22 *
       parseFloat(formData.hourlyRate)
-    ).toLocaleString("en-PK")
+    ).toLocaleString("en-PK", { minimumFractionDigits: 0, maximumFractionDigits: 0 })
                       
   };
 

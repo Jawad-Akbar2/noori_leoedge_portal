@@ -27,7 +27,7 @@ const performanceRecordSchema = new mongoose.Schema({
   totalWorkingDays: { type: Number, default: 0 },
   presentDays:      { type: Number, default: 0 },
   lateDays:         { type: Number, default: 0 },
-  absentDays:       { type: Number, default: 0 },
+  OffDayDays:       { type: Number, default: 0 },
   leaveDays:        { type: Number, default: 0 },
   ncnsDays:         { type: Number, default: 0 },
   totalHoursWorked: { type: Number, default: 0 },

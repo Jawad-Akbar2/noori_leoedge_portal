@@ -229,7 +229,7 @@ function buildFinancials({
       reason: "No Call No Show (200% deduction)",
     });
   }
-  if (status !== "Leave" && status !== "Absent" && status !== "NCNS") {
+  if (status !== "Leave" && status !== "OffDay" && status !== "NCNS") {
     const result = computeDeductions({
       inTime,
       outTime,
@@ -346,10 +346,7 @@ router.post("/bulk-delete", adminAuth, async (req, res) => {
     for (const r of records) {
       if (!r.empId) continue;
 
-      if (
-        req.userRole === "admin" &&
-        r.empId.role !== "employee"
-      ) {
+      if (req.userRole === "admin" && r.empId.role !== "employee") {
         continue;
       }
 
@@ -372,7 +369,7 @@ router.post("/bulk-delete", adminAuth, async (req, res) => {
           "metadata.deletedAt": new Date(),
           "metadata.lastModifiedAt": new Date(),
         },
-      }
+      },
     );
 
     return res.json({
@@ -692,7 +689,7 @@ router.post(
             message: `  ⚠️ No punches found within 14-h shift window`,
           });
         // AFTER
-        let status = "Absent";
+        let status = "OffDay";
         if (inTime || outTime) {
           // Single punch (only in or only out) still counts as Present/Late
           const timeForLateCheck = inTime || outTime;
@@ -1041,7 +1038,7 @@ router.post("/worksheet", adminAuth, async (req, res) => {
             shift: emp.shift,
             salaryType: emp.salaryType,
             hourlyRate: effectiveHourlyRate(emp, 26),
-            status: "Absent",
+            status: "OffDay",
             inOut: { in: null, out: null, outNextDay: false },
             financials: {
               hoursWorked: 0,
@@ -1091,6 +1088,7 @@ router.post("/save-row", adminAuth, async (req, res) => {
       otMultiplier,
       otDetails,
       deductionDetails: manualDeductionDetails,
+      notes,
     } = req.body;
     if (!empId || !date || !status)
       return res.status(400).json({
@@ -1235,6 +1233,7 @@ router.post("/save-row", adminAuth, async (req, res) => {
       source: "manual",
       lastUpdatedBy: req.userId,
       lastModifiedAt: new Date(),
+      ...(notes !== undefined ? { notes: notes || "" } : {}), // ← ADD THIS
     };
     await record.save();
     return res.json({
@@ -1362,7 +1361,7 @@ router.post("/bulk-save", adminAuth, async (req, res) => {
       if (!row.inOut?.outNextDay && inTime && outTime)
         resolvedOutNextDay = isNightShift && toMin(outTime) < toMin(inTime);
       const rate = effectiveHourlyRate(emp, 26);
-      const status = row.status || "Absent";
+      const status = row.status || "OffDay";
       const rowOtDetails = (
         Array.isArray(row.financials?.otDetails) ? row.financials.otDetails : []
       ).map((e) => ({ ...e, type: "manual" }));

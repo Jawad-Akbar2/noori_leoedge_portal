@@ -92,7 +92,7 @@ function calcEmployeeTotals(emp, records, workingDays) {
     (r) => r.status === "Present" || r.status === "Late",
   ).length;
   const leaveDays = records.filter((r) => r.status === "Leave").length;
-  const absentDays = records.filter((r) => r.status === "Absent").length;
+  const OffDayDays = records.filter((r) => r.status === "OffDay").length;
   const lateDays = records.filter((r) => r.status === "Late").length;
   const ncnsDays = records.filter((r) => r.status === "NCNS").length;
 
@@ -135,7 +135,7 @@ if (emp.salaryType === "monthly" && emp.monthlySalary) {
     monthlySalary: emp.monthlySalary || null,
     presentDays,
     leaveDays,
-    absentDays,
+    OffDayDays,
     ncnsDays,
     lateDays,
     workingDays,
@@ -232,7 +232,7 @@ router.get("/my/summary", employeeAuth, async (req, res) => {
         totalWorkingDays: workingDays,
         presentDays: totals.presentDays,
         lateDays: totals.lateDays,
-        absentDays: totals.absentDays,
+        OffDayDays: totals.OffDayDays,
 
         leaveDays: totals.leaveDays,
 
@@ -310,7 +310,7 @@ router.post("/attendance-overview", adminAuth, async (req, res) => {
       logMap[`${log.empId}_${log.date.toISOString().slice(0, 10)}`] = log;
     }
 
-    const statusCount = { "On-time": 0, Late: 0, Leave: 0, Absent: 0, NCNS: 0 };
+    const statusCount = { "On-time": 0, Late: 0, Leave: 0, OffDay: 0, NCNS: 0 };
     const detailedList = [];
 
     for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
@@ -319,7 +319,7 @@ router.post("/attendance-overview", adminAuth, async (req, res) => {
 
       for (const emp of employees) {
         const record = logMap[`${emp._id}_${iso}`];
-        let status = "Absent",
+        let status = "OffDay",
           delayMinutes = 0,
           note = "No record found";
 
@@ -330,9 +330,9 @@ router.post("/attendance-overview", adminAuth, async (req, res) => {
           } else if (record.status === "NCNS") {
             status = "NCNS";
             note = record.metadata?.notes || "No Call No Show";
-          } else if (record.status === "Absent") {
-            status = "Absent";
-            note = record.metadata?.notes || "Absent";
+          } else if (record.status === "OffDay") {
+            status = "OffDay";
+            note = record.metadata?.notes || "OffDay";
           } else if (record.inOut?.in) {
             if (isLate(record.inOut.in, record.shift?.start)) {
               const [ih, im] = record.inOut.in.split(":").map(Number);
@@ -417,7 +417,7 @@ router.post("/performance-overview", adminAuth, async (req, res) => {
         (r) => r.status === "Present" || r.status === "Late",
       ).length;
       const leaveDays = records.filter((r) => r.status === "Leave").length;
-      const absentDays = records.filter((r) => r.status === "Absent").length;
+      const OffDayDays = records.filter((r) => r.status === "OffDay").length;
       const lateDays = records.filter((r) => r.status === "Late").length;
       const ncnsDays = records.filter((r) => r.status === "NCNS").length;
       const totalOtHours = records.reduce(
@@ -448,7 +448,7 @@ router.post("/performance-overview", adminAuth, async (req, res) => {
         punctualityRate: round2(punctualityRate),
         presentDays,
         leaveDays,
-        absentDays,
+        OffDayDays,
         lateDays,
         ncnsDays,
         totalOtHours: round2(totalOtHours),
@@ -656,7 +656,7 @@ router.get("/employee-breakdown/:empId", adminAuth, async (req, res) => {
         netPayable: empTotals.netPayable,
         presentDays: empTotals.presentDays,
         leaveDays: empTotals.leaveDays,
-        absentDays: empTotals.absentDays,
+        OffDayDays: empTotals.OffDayDays,
         lateDays: empTotals.lateDays,
         workingDays,
       },
@@ -744,7 +744,7 @@ router.post("/export", adminAuth, async (req, res) => {
         "Working Days",
         "Present Days",
         "Leave Days",
-        "Absent Days",
+        "Off Days",
         "NCNS Days",
         "Late Days",
         "Base Salary",
@@ -762,7 +762,7 @@ router.post("/export", adminAuth, async (req, res) => {
           e.workingDays,
           e.presentDays,
           e.leaveDays,
-          e.absentDays,
+          e.OffDayDays,
           e.ncnsDays,
           e.lateDays,
           e.baseSalary,

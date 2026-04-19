@@ -30,7 +30,7 @@ export const DEPARTMENTS = [
 
 export const LEAVE_TYPES = ["Holiday Leave", "Sick Leave", "Casual Leave"];
 
-export const ATTENDANCE_STATUSES = ["Present", "Late", "Leave", "Absent", "NCNS"];
+export const ATTENDANCE_STATUSES = ["Present", "Late", "Leave", "OffDay", "NCNS"];
 
 export const OT_MULTIPLIERS = [
   { value: 1, label: "1×  (Regular)" },
@@ -65,7 +65,7 @@ export const STATUS_COLORS = {
   Present: "text-green-600  bg-green-50  border-green-200",
   Late: "text-yellow-600 bg-yellow-50 border-yellow-200",
   Leave: "text-blue-600   bg-blue-50   border-blue-200",
-  Absent: "text-red-600    bg-red-50    border-red-200",
+  OffDay: "text-red-600    bg-red-50    border-red-200",
   ncns: "text-gray-600   bg-gray-50   border-gray-200",
 
   // Requests
@@ -120,7 +120,7 @@ export const PAYROLL_CSV_COLUMNS = [
   { key: "workingDays", label: "Working Days" },
   { key: "presentDays", label: "Present Days" },
   { key: "leaveDays", label: "Leave Days" },
-  { key: "absentDays", label: "Absent Days" },
+  { key: "OffDayDays", label: "Off Days" },
   { key: "lateDays", label: "Late Days" },
   { key: "ncnsDays", label: "NCNS Days" },
   { key: "baseSalary", label: "Base Salary" },

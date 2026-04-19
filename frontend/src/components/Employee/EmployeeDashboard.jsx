@@ -153,7 +153,7 @@ const StatusBadge = ({ status }) => {
     Rejected: ["red",    "Rejected"],
     Present:  ["green",  "Present"],
     Late:     ["yellow", "Late"],
-    Absent:   ["red",    "Absent"],
+    OffDay:   ["red",    "OffDay"],
     Leave:    ["blue",   "Leave"],
     ncns:     ["gray",   "NCNS"],
   };
@@ -185,7 +185,7 @@ function TodayCard({ today }) {
     );
   }
 
-  const statusColor = { Present: C.emerald, Late: C.amber, Absent: C.rose, Leave: C.blue, ncns: C.gray }[today.status] || C.slate;
+  const statusColor = { Present: C.emerald, Late: C.amber, OffDay: C.rose, Leave: C.blue, ncns: C.gray }[today.status] || C.slate;
 
   return (
     <Card>
@@ -309,7 +309,7 @@ function AttendanceSection({ att, navigate }) {
     name: monthLabel(t._id),
     Present: t.presentDays,
     Late:    t.lateDays,
-    Absent:  t.absentDays,
+    OffDay:  t.OffDayDays,
     Hours:   parseFloat((t.hoursWorked || 0).toFixed(1)),
   }));
 
@@ -323,7 +323,7 @@ function AttendanceSection({ att, navigate }) {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-5">
         <KpiCard title="Present Days"   value={tm.presentDays}      icon={CheckCircle} accent={C.emerald} />
         <KpiCard title="Late Days"      value={tm.lateDays}         icon={AlertCircle} accent={C.amber}   />
-        <KpiCard title="Absent Days"    value={tm.absentDays}       icon={XCircle}     accent={C.rose}    />
+        <KpiCard title="Off Days"    value={tm.OffDayDays}       icon={XCircle}     accent={C.rose}    />
         <KpiCard title="Leave Days"     value={tm.leaveDays}        icon={Calendar}    accent={C.blue}    />
         <KpiCard title="NCNS Days"      value={tm.ncnsDays}         icon={Circle}      accent={C.gray}    />
       </div>
@@ -334,12 +334,12 @@ function AttendanceSection({ att, navigate }) {
           <Accent from={C.emerald} via={C.teal} to={C.cyan} />
           <P>
             <p className="text-xs text-gray-400 font-semibold mb-4 uppercase tracking-wider">This Month</p>
-            <StatusRow label="Present"  value={tm.presentDays} total={tm.presentDays + tm.absentDays + tm.leaveDays} color={C.emerald} />
+            <StatusRow label="Present"  value={tm.presentDays} total={tm.presentDays + tm.OffDayDays + tm.leaveDays} color={C.emerald} />
             <StatusRow label="Late"     value={tm.lateDays}    total={tm.presentDays || 1} color={C.amber}   />
-            <StatusRow label="Absent"   value={tm.absentDays}  total={tm.presentDays + tm.absentDays + tm.leaveDays} color={C.rose}    />
-            <StatusRow label="Leave"    value={tm.leaveDays}   total={tm.presentDays + tm.absentDays + tm.leaveDays} color={C.blue} 
+            <StatusRow label="Off Day"   value={tm.OffDayDays}  total={tm.presentDays + tm.OffDayDays + tm.leaveDays} color={C.rose}    />
+            <StatusRow label="Leave"    value={tm.leaveDays}   total={tm.presentDays + tm.OffDayDays + tm.leaveDays} color={C.blue} 
                />
-            <StatusRow label="NCNS"     value={tm.ncnsDays}  total={tm.presentDays + tm.absentDays + tm.leaveDays} color={C.gray} 
+            <StatusRow label="NCNS"     value={tm.ncnsDays}  total={tm.presentDays + tm.OffDayDays + tm.leaveDays} color={C.gray} 
                />
             <div className="mt-4 pt-4 border-t border-gray-100 grid grid-cols-2 gap-3 text-xs">
               {[
@@ -372,7 +372,7 @@ function AttendanceSection({ att, navigate }) {
                   <Legend wrapperStyle={{ fontSize: 11, color: "#94a3b8" }} />
                   <Bar dataKey="Present" fill={C.emerald} radius={[3,3,0,0]} stackId="a" />
                   <Bar dataKey="Late"    fill={C.amber}   radius={[3,3,0,0]} stackId="a" />
-                  <Bar dataKey="Absent"  fill={C.rose}    radius={[3,3,0,0]} stackId="a" />
+                  <Bar dataKey="OffDay"  fill={C.rose}    radius={[3,3,0,0]} stackId="a" />
                 </BarChart>
               </ResponsiveContainer>
             ) : (

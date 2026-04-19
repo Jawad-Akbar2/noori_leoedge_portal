@@ -785,7 +785,7 @@ const deleteProfilePicture = async () => {
       ((endMin - startMin) / 60) *
       22 *
       parseFloat(form.hourlyRate)
-    ).toLocaleString("en-PK");
+    ).toLocaleString("en-PK", { minimumFractionDigits: 0, maximumFractionDigits: 0 });
   };
 
   const SalaryRows = () => {
@@ -795,7 +795,7 @@ const deleteProfilePicture = async () => {
         <InfoBox label="Salary Type" value="Monthly" />
         <InfoBox
           label="Monthly Salary (PKR)"
-          value={employee.monthlySalary?.toLocaleString("en-PK")}
+          value={employee.monthlySalary?.toLocaleString("en-PK", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
         />
       </>
     ) : (
@@ -803,7 +803,7 @@ const deleteProfilePicture = async () => {
         <InfoBox label="Salary Type" value="Hourly" />
         <InfoBox
           label="Hourly Rate (PKR)"
-          value={employee.hourlyRate?.toLocaleString("en-PK")}
+          value={employee.hourlyRate?.toLocaleString("en-PK", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
         />
       </>
     );

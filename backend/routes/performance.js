@@ -32,13 +32,13 @@ const payrollFilter = (callerRole, extra = {}) => ({
 // ─── shared helper ────────────────────────────────────────────────────────────
 
 function computePerformance(employee, logs, periodStart, periodEnd, totalWorkingDays) {
-  let presentDays = 0, lateDays = 0, absentDays = 0, leaveDays = 0, ncnsDays = 0;
+  let presentDays = 0, lateDays = 0, OffDayDays = 0, leaveDays = 0, ncnsDays = 0;
   let totalHoursWorked = 0, totalOtHours = 0;
 
   for (const log of logs) {
     if      (log.status === 'Present') presentDays++;
     else if (log.status === 'Late')    { presentDays++; lateDays++; }
-    else if (log.status === 'Absent')  absentDays++;
+    else if (log.status === 'OffDay')  OffDayDays++;
     else if (log.status === 'Leave')   leaveDays++;
     else if (log.status === 'NCNS')    ncnsDays++;
 
@@ -76,7 +76,7 @@ function computePerformance(employee, logs, periodStart, periodEnd, totalWorking
     totalWorkingDays: totalWorkingDays || 0,
     presentDays,
     lateDays,
-    absentDays,
+    OffDayDays,
     leaveDays,
     ncnsDays,
     totalHoursWorked,
@@ -150,7 +150,7 @@ router.get('/summary', adminAuth, async (req, res) => {
       totalWorkingDays: r.totalWorkingDays,
       presentDays:      r.presentDays,
       lateDays:         r.lateDays,
-      absentDays:       r.absentDays,
+      OffDayDays:       r.OffDayDays, 
       leaveDays:        r.leaveDays,
       totalOtHours:     r.totalOtHours,
       attendanceRate:   r.attendanceRate,
@@ -281,7 +281,7 @@ router.get('/:empId', adminAuth, async (req, res) => {
         totalWorkingDays: record.totalWorkingDays,
         presentDays:      record.presentDays,
         lateDays:         record.lateDays,
-        absentDays:       record.absentDays,
+        OffDayDays:       record.OffDayDays,
         leaveDays:        record.leaveDays,
         totalHoursWorked: record.totalHoursWorked,
         totalOtHours:     record.totalOtHours,

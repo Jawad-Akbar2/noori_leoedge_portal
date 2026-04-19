@@ -404,8 +404,8 @@ function AttendanceSection({ data, navigate }) {
           accent={C.amber}
         />
         <KpiCard
-          title="Absent Today"
-          value={today.absent}
+          title="Off Today"
+          value={today.OffDay}
           icon={XCircle}
           accent={C.rose}
         />
@@ -435,7 +435,7 @@ function AttendanceSection({ data, navigate }) {
               value={thisMonth.presentCount}
               total={
                 thisMonth.presentCount +
-                thisMonth.absentCount +
+                thisMonth.OffDayCount +
                 thisMonth.leaveCount
               }
               color={C.emerald}
@@ -447,11 +447,11 @@ function AttendanceSection({ data, navigate }) {
               color={C.amber}
             />
             <StatusRow
-              label="Absent"
-              value={thisMonth.absentCount}
+              label="Off Day"
+              value={thisMonth.OffDayCount}
               total={
                 thisMonth.presentCount +
-                thisMonth.absentCount +
+                thisMonth.OffDayCount +
                 thisMonth.leaveCount
               }
               color={C.rose}
@@ -461,7 +461,7 @@ function AttendanceSection({ data, navigate }) {
               value={thisMonth.leaveCount}
               total={
                 thisMonth.presentCount +
-                thisMonth.absentCount +
+                thisMonth.OffDayCount +
                 thisMonth.leaveCount
               }
               color={C.blue}
@@ -472,7 +472,7 @@ function AttendanceSection({ data, navigate }) {
               value={thisMonth.ncnsCount}
               total={
                 thisMonth.presentCount +
-                thisMonth.absentCount +
+                thisMonth.OffDayCount +
                 thisMonth.leaveCount +
                 thisMonth.ncnsCount
               }

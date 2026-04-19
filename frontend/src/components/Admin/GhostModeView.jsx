@@ -33,7 +33,7 @@ import { useEscape } from "../../context/EscapeStack";
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
-const fmt = (n) => (n ?? 0).toLocaleString("en-PK");
+const fmt = (n) => (n ?? 0).toLocaleString("en-PK", { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 
 const toApiDate = (isoStr) => {
   if (!isoStr) return "";
@@ -64,7 +64,7 @@ const statusBadge = (status) =>
     Late: "bg-gradient-to-r from-yellow-100 to-yellow-200 text-yellow-800 border border-yellow-200/50",
     Leave:
       "bg-gradient-to-r from-blue-100 to-blue-200 text-blue-800 border border-blue-200/50",
-    Absent:
+    OffDay:
       "bg-gradient-to-r from-gray-100 to-gray-200 text-gray-600 border border-gray-200/50",
     ncns: "bg-gradient-to-r from-gray-100 to-gray-200 text-gray-600 border border-gray-200/50",
   })[status] ??
@@ -541,8 +541,8 @@ export default function GhostModeView({ employee, onClose }) {
                           icon={Calendar}
                         />
                         <InfoItem
-                          label="Absent Days"
-                          value={summaryData.absentDays}
+                          label="Off Days"
+                          value={summaryData.OffDayDays}
                           icon={AlertCircle}
                         />
                         <InfoItem
@@ -607,7 +607,7 @@ export default function GhostModeView({ employee, onClose }) {
                               <span
                                 className={`px-2 py-0.5 rounded-full text-xs font-semibold ${statusBadge(day.status)}`}
                               >
-                                {day.status ?? "Absent"}
+                                {day.status ?? "OffDay"}
                               </span>
                             </td>
                             <td className="px-4 py-2 text-gray-700">
@@ -659,8 +659,8 @@ export default function GhostModeView({ employee, onClose }) {
                       color: "yellow",
                     },
                     {
-                      label: "Absent",
-                      value: summaryData.absentDays,
+                      label: "Off Day",
+                      value: summaryData.OffDayDays,
                       color: "red",
                     },
                     {
@@ -758,7 +758,7 @@ export default function GhostModeView({ employee, onClose }) {
                               <span
                                 className={`px-2 py-0.5 rounded-full text-xs font-semibold ${statusBadge(day.status)}`}
                               >
-                                {day.status ?? "Absent"}
+                                {day.status ?? "OffDay"}
                               </span>
                             </td>
                             <td className="px-4 py-2.5 text-gray-600 font-mono text-xs">
