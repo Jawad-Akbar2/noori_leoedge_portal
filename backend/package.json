@@ -1,5 +1,5 @@
 {
-  "name": "hr-portal-backend",
+  "name": "noori-hr-portal-backend",
   "version": "1.0.0",
   "description": "HR Employee Portal Backend - MERN Stack with ES Modules",
   "main": "server.js",
