@@ -31,7 +31,7 @@ const shiftHours = (shift) => {
   return calcHours(shift.start, shift.end, isNight);
 };
 
-const effectiveHourlyRate = (emp, workingDaysInPeriod = 26) => {
+const effectiveHourlyRate = (emp, workingDaysInPeriod = 21) => {
   if (emp.salaryType === 'monthly' && emp.monthlySalary) {
     const scheduledHrsPerDay = shiftHours(emp.shift) || 8;
     return emp.monthlySalary / (workingDaysInPeriod * scheduledHrsPerDay);
@@ -413,7 +413,7 @@ router.patch('/leave/:requestId/approve', adminAuth, async (req, res) => {
 
     // ── upsert AttendanceLog for each leave day ───────────────────────────────
     const schedHours = shiftHours(employee.shift);
-    const rate       = effectiveHourlyRate(employee, 26);
+    const rate       = effectiveHourlyRate(employee, 21);
     const basePay    = schedHours * rate;
 
     const ops = affectedDates.map(iso => {
@@ -543,7 +543,7 @@ router.patch('/correction/:requestId/approve', adminAuth, async (req, res) => {
       : await AttendanceLog.findOne({ empId: correctionRequest.empId, date: dateObj });
 
     const isNightShift = toMin(employee.shift.end) < toMin(employee.shift.start);
-    const rate         = effectiveHourlyRate(employee, 26);
+    const rate         = effectiveHourlyRate(employee, 21);
 
     if (!record) {
       record = new AttendanceLog({

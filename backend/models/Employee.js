@@ -256,7 +256,7 @@ employeeSchema.methods.getDaysUntilLeaveEligible = function () {
 };
 
 employeeSchema.methods.getEffectiveHourlyRate = function (
-  workingDaysInPeriod = 26,
+  workingDaysInPeriod = 21,
   scheduledHoursPerDay = 8,
 ) {
   if (SYSTEM_ROLES.includes(this.role)) return null;

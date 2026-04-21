@@ -61,7 +61,8 @@ function isLate(inTime, shiftStart) {
   if (!inTime || !shiftStart) return false;
   return toMin(inTime) > toMin(shiftStart);
 }
-function effectiveHourlyRate(emp, workingDaysInPeriod = 26) {
+
+function effectiveHourlyRate(emp, workingDaysInPeriod = 21) {
   if (emp.salaryType === "monthly" && emp.monthlySalary) {
     const scheduledHrsPerDay = shiftHours(emp.shift) || 8;
     return emp.monthlySalary / (workingDaysInPeriod * scheduledHrsPerDay);
@@ -195,6 +196,7 @@ function buildFinancials({
   otMultiplier = 1,
   otDetails = [],
   otAmount = 0,
+  
 }) {
   const scheduledHrs = shiftHours(shift);
   let hoursWorked = 0,
@@ -207,8 +209,12 @@ function buildFinancials({
     hoursWorked = scheduledHrs;
     basePay = hoursWorked * hourlyRate;
   } else if ((status === "Present" || status === "Late") && inTime && outTime) {
-    hoursWorked = calcHours(inTime, outTime, outNextDay);
-    basePay = hoursWorked * hourlyRate;
+    const rawHours = calcHours(inTime, outTime, outNextDay);
+
+// ✅ FIX: cap hours to shift hours
+hoursWorked = Math.min(rawHours, scheduledHrs);
+
+basePay = hoursWorked * hourlyRate;
   } else if ((inTime && !outTime) || (!inTime && outTime)) {
     hoursWorked = scheduledHrs;
     basePay = hoursWorked * hourlyRate;
@@ -548,7 +554,7 @@ router.post(
               outTime: finalOut,
               outNextDay: true,
               shift: employee.shift,
-              hourlyRate: effectiveHourlyRate(employee, 26),
+              hourlyRate: effectiveHourlyRate(employee, 21),
               salaryType: employee.salaryType,
 
               // ✅ preserve OT
@@ -570,7 +576,7 @@ router.post(
                     end: employee.shift.end,
                     isNightShift: true,
                   },
-                  hourlyRate: effectiveHourlyRate(employee, 26),
+                  hourlyRate: effectiveHourlyRate(employee, 21),
                   salaryType: employee.salaryType,
 
                   "inOut.out": finalOut,
@@ -617,7 +623,7 @@ router.post(
               // outNextDay: mergedOut ? true : false,
               outNextDay: mergedOut ? toMin(mergedOut) < toMin(todayIn) : false,
               shift: employee.shift,
-              hourlyRate: effectiveHourlyRate(employee, 26),
+              hourlyRate: effectiveHourlyRate(employee, 21),
               salaryType: employee.salaryType,
             });
 
@@ -633,7 +639,7 @@ router.post(
                     end: employee.shift.end,
                     isNightShift: true,
                   },
-                  hourlyRate: effectiveHourlyRate(employee, 26),
+                  hourlyRate: effectiveHourlyRate(employee, 21),
                   salaryType: employee.salaryType,
 
                   "inOut.in": todayIn,
@@ -697,7 +703,7 @@ router.post(
             ? "Late"
             : "Present";
         }
-        const rate = effectiveHourlyRate(employee, 26);
+        const rate = effectiveHourlyRate(employee, 21);
         const financials = buildFinancials({
           status,
           inTime,
@@ -1037,7 +1043,7 @@ router.post("/worksheet", adminAuth, async (req, res) => {
             department: emp.department,
             shift: emp.shift,
             salaryType: emp.salaryType,
-            hourlyRate: effectiveHourlyRate(emp, 26),
+            hourlyRate: effectiveHourlyRate(emp, 21),
             status: "OffDay",
             inOut: { in: null, out: null, outNextDay: false },
             financials: {
@@ -1154,7 +1160,7 @@ router.post("/save-row", adminAuth, async (req, res) => {
           }))
           .filter((d) => d.reason && d.amount >= 0)
       : null;
-    const rate = effectiveHourlyRate(employee, 26);
+    const rate = effectiveHourlyRate(employee, 21);
     const existingRecord = await AttendanceLog.findOne({
       empId: employee._id,
       date: dateObj,
@@ -1360,7 +1366,7 @@ router.post("/bulk-save", adminAuth, async (req, res) => {
       let resolvedOutNextDay = Boolean(row.inOut?.outNextDay || row.outNextDay);
       if (!row.inOut?.outNextDay && inTime && outTime)
         resolvedOutNextDay = isNightShift && toMin(outTime) < toMin(inTime);
-      const rate = effectiveHourlyRate(emp, 26);
+      const rate = effectiveHourlyRate(emp, 21);
       const status = row.status || "OffDay";
       const rowOtDetails = (
         Array.isArray(row.financials?.otDetails) ? row.financials.otDetails : []

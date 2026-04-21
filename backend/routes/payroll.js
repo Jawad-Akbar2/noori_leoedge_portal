@@ -3,6 +3,7 @@
 import express from "express";
 import AttendanceLog from "../models/AttendanceLog.js";
 import Employee from "../models/Employee.js";
+import PayrollRecord from "../models/PayrollRecord.js";
 import { adminAuth, employeeAuth } from "../middleware/auth.js";
 import { buildDateRange, formatDate } from "../utils/dateUtils.js";
 import {
@@ -61,13 +62,14 @@ function shiftHours(shift) {
   return Math.max(0, diff / 60);
 }
 
-function effectiveHourlyRate(emp, workingDaysInPeriod = 26) {
+function effectiveHourlyRate(emp, workingDaysInPeriod = 21) {
   if (emp.salaryType === "monthly" && emp.monthlySalary) {
     const scheduledHrsPerDay = shiftHours(emp.shift) || 8;
     return emp.monthlySalary / (workingDaysInPeriod * scheduledHrsPerDay);
   }
   return emp.hourlyRate || 0;
 }
+
 
 function workingDaysBetween(start, end) {
   let count = 0;
@@ -87,7 +89,7 @@ function workingDaysBetween(start, end) {
  * OT and deductions are always taken from the stored financials
  * (they may have been manually adjusted by the admin on individual rows).
  */
-function calcEmployeeTotals(emp, records, workingDays) {
+function calcEmployeeTotals(emp, records, workingDays, totalBonus = 0) {
   const presentDays = records.filter(
     (r) => r.status === "Present" || r.status === "Late",
   ).length;
@@ -96,34 +98,44 @@ function calcEmployeeTotals(emp, records, workingDays) {
   const lateDays = records.filter((r) => r.status === "Late").length;
   const ncnsDays = records.filter((r) => r.status === "NCNS").length;
 
-  const totalDeduction = records.reduce(
-    (s, r) => s + n(r.financials?.deduction),
-    0,
-  );
-  const totalOt = records.reduce((s, r) => s + n(r.financials?.otAmount), 0);
   const totalOtHours = records.reduce(
     (s, r) => s + n(r.financials?.otHours),
     0,
   );
 
-let baseSalary;
-if (emp.salaryType === "monthly" && emp.monthlySalary) {
-  // Rate per working day based on full month (26 days standard)
-  // then multiply by how many paid days in THIS range
-  const dailyRate = emp.monthlySalary / 22;
-  baseSalary = dailyRate * (presentDays + leaveDays);
-} else {
-  baseSalary = records.reduce((s, r) => s + n(r.financials?.basePay), 0);
-}
+  const rawBase = records.reduce((s, r) => s + n(r.financials?.basePay), 0);
+
+
+  let baseSalary;
+  if (emp.salaryType === "monthly" && emp.monthlySalary) {
+    // Rate per working day based on full month (21 days standard)
+    // then multiply by how many paid days in THIS range
+    const dailyRate = emp.monthlySalary / 22;
+   baseSalary = rawBase;
+  } else {
+    baseSalary = records.reduce((s, r) => s + n(r.financials?.basePay), 0);
+  }
 
   // ── netPayable: always sum the stored finalDayEarning ────────────────────
   // finalDayEarning = max(0, basePay - deduction + otAmount) per day.
   // It is recomputed on every save (pre-save hook) so it is always correct.
   // Summing it avoids the monthly-vs-hourly base mismatch entirely.
-  const netPayable = records.reduce(
-    (s, r) => s + n(r.financials?.finalDayEarning),
+
+  const totalDeduction = records.reduce(
+    (s, r) => s + n(r.financials?.deduction),
     0,
   );
+
+  const totalOt = records.reduce((s, r) => s + n(r.financials?.otAmount), 0);
+
+  let netPayable;
+
+  if (emp.salaryType === "monthly" && emp.monthlySalary) {
+    const cappedBase = Math.min(rawBase, emp.monthlySalary);
+    netPayable = cappedBase - totalDeduction + totalOt + totalBonus;
+  } else {
+    netPayable = rawBase - totalDeduction + totalOt + totalBonus; // ✅ include bonus
+  }
 
   return {
     empId: emp._id,
@@ -145,6 +157,7 @@ if (emp.salaryType === "monthly" && emp.monthlySalary) {
     totalOtHours: round2(totalOtHours),
     netPayable: round2(netPayable), // ← now from stored finalDayEarning
     recordCount: records.length,
+    totalBonus: round2(totalBonus),
   };
 }
 
@@ -217,7 +230,16 @@ router.get("/my/summary", employeeAuth, async (req, res) => {
     }
 
     const workingDays = workingDaysBetween(start, end);
-    const totals = calcEmployeeTotals(emp, records, workingDays);
+    const payroll = await PayrollRecord.findOne({
+      empId: req.userId,
+      periodStart: start,
+      periodEnd: end,
+      isDeleted: false,
+    }).lean();
+
+    const totalBonus = payroll?.totalBonus || 0;
+
+    const totals = calcEmployeeTotals(emp, records, workingDays, totalBonus);
     const dailyBreakdown = buildDailyBreakdown(records);
 
     return res.json({
@@ -512,11 +534,22 @@ router.post("/salary-summary", adminAuth, async (req, res) => {
       (logsByEmp[key] ??= []).push(log);
     }
 
-    const summary = employees
-      .map((emp) =>
-        calcEmployeeTotals(emp, logsByEmp[String(emp._id)] || [], workingDays),
-      )
-      .sort((a, b) => a.name.localeCompare(b.name));
+    const summary = await Promise.all(
+      employees.map(async (emp) => {
+        const records = logsByEmp[String(emp._id)] || [];
+
+        const payroll = await PayrollRecord.findOne({
+          empId: emp._id,
+          periodStart: start,
+          periodEnd: end,
+          isDeleted: false,
+        }).lean();
+
+        const totalBonus = payroll?.totalBonus || 0;
+
+        return calcEmployeeTotals(emp, records, workingDays, totalBonus);
+      }),
+    );
 
     const totals = {
       totalBaseSalary: round2(summary.reduce((s, e) => s + e.baseSalary, 0)),
@@ -785,6 +818,26 @@ router.post("/export", adminAuth, async (req, res) => {
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
+});
+
+
+router.post("/update-bonus", adminAuth, async (req, res) => {
+  const { empId, periodStart, periodEnd, bonusDetails } = req.body;
+
+  const totalBonus = bonusDetails.reduce((s, b) => s + b.amount, 0);
+
+  const record = await PayrollRecord.findOneAndUpdate(
+    { empId, periodStart, periodEnd },
+    {
+      $set: {
+        bonusDetails,
+        totalBonus,
+      },
+    },
+    { upsert: true, new: true }
+  );
+
+  res.json({ success: true, record });
 });
 
 export default router;

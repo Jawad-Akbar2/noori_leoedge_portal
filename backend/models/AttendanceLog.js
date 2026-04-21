@@ -225,9 +225,11 @@ const attendanceLogSchema = new mongoose.Schema(
   },
 );
 
-// ─── Compound index: one record per employee per shift-start date ─────────────
-attendanceLogSchema.index({ empId: 1, date: 1 }, { unique: true });
 
+attendanceLogSchema.index({ date: 1, status: 1 });
+attendanceLogSchema.index({ empNumber: 1, date: 1 });
+
+// ─── Compound index: one record per employee per shift-start date ─────────────
 // ─── Pre-save: auto-detect night shift & recompute finalDayEarning ────────────
 attendanceLogSchema.pre("save", function (next) {
   // 1. Detect night shift (shift end is earlier than shift start)

@@ -31,6 +31,10 @@ const connectDB = async () => {
   console.log('✓ MongoDB connected');
 };
 
+(async () => {
+  await connectDB();
+})();
+
 mongoose.connection.on('disconnected', () => console.warn('⚠ MongoDB disconnected'));
 mongoose.connection.on('reconnected',  () => console.log('✓ MongoDB reconnected'));
 
@@ -58,6 +62,8 @@ app.use(async (req, res, next) => {
   }
 });
 
+
+
 // ── Routes ───────────────────────────────────────────────────────
 import authRoutes          from './routes/auth.js';
 import employeeRoutes      from './routes/employees.js';
@@ -69,6 +75,9 @@ import notificationRoutes  from './routes/notifications.js';
 import adminStatsRoutes    from './routes/adminStats.js';
 import employeeStatsRoutes from './routes/employeeStats.js';
 import errorHandler        from './middleware/errorHandler.js';
+
+// ── Scheduler ───────────────────────────────────────────────
+import "./schedulers/purgeLeftEmployees.js";
 
 app.use('/api/auth',           authRoutes);
 app.use('/api/employees',      employeeRoutes);

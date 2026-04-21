@@ -71,11 +71,11 @@ export function proRateSalary(monthlySalary, workedDays, totalWorkingDays) {
  * Used when salaryType === 'monthly' and per-hour deduction/OT needs computing.
  *
  * @param {number} monthlySalary
- * @param {number} workingDaysPerMonth — default 26 (Mon–Sat, no holidays)
+ * @param {number} workingDaysPerMonth — default 21 (Mon–Sat, no holidays)
  * @param {number} hoursPerDay         — scheduled shift hours, default 8
  * @returns {number}
  */
-export function monthlyToHourlyRate(monthlySalary, workingDaysPerMonth = 26, hoursPerDay = 8) {
+export function monthlyToHourlyRate(monthlySalary, workingDaysPerMonth = 21, hoursPerDay = 8) {
   return monthlySalary / (workingDaysPerMonth * hoursPerDay);
 }
 

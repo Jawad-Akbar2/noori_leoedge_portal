@@ -67,6 +67,23 @@ const payrollRecordSchema = new mongoose.Schema({
   totalOtHours:   { type: Number, default: 0, min: 0 },
   totalOtAmount:  { type: Number, default: 0, min: 0 },
 
+// ✅ ADD THIS
+totalBonus: { type: Number, default: 0, min: 0 },
+
+// Optional (recommended)
+bonusDetails: [
+  {
+    amount: { type: Number, required: true, min: 0 },
+    reason: { type: String, required: true, trim: true },
+    type: {
+      type: String,
+      enum: ["performance", "attendance", "manual"],
+      default: "manual",
+    },
+    createdAt: { type: Date, default: Date.now },
+  }
+],
+
   /**
    * netSalary = baseSalary - totalDeduction + totalOtAmount
    * Always recomputed on save.
@@ -108,10 +125,11 @@ payrollRecordSchema.index({ empId: 1, periodStart: 1, periodEnd: 1 }, { unique: 
 
 // ─── Auto-compute netSalary on save ──────────────────────────────────────────
 payrollRecordSchema.pre('save', function (next) {
-  this.netSalary =
-    (this.baseSalary || 0)
-    - (this.totalDeduction || 0)
-    + (this.totalOtAmount || 0);
+this.netSalary =
+  (this.baseSalary || 0)
+  - (this.totalDeduction || 0)
+  + (this.totalOtAmount || 0)
+  + (this.totalBonus || 0); // ✅ ADD THIS
 
   next();
 });
