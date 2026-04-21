@@ -1,21 +1,13 @@
 // models/AttendanceLog.js
-
 import mongoose from "mongoose";
 
 const deductionDetailSchema = new mongoose.Schema(
   {
-    amount: { type: Number, required: true, min: 0 },
-    reason: { type: String, required: true, trim: true },
+    amount:    { type: Number, required: true, min: 0 },
+    reason:    { type: String, required: true, trim: true },
     type: {
-      type: String,
-      enum: [
-        "late_login",
-        "early_logout",
-        "fixed_penalty",
-        "hourly_penalty",
-        "ncns_penalty",
-        "manual",
-      ],
+      type:    String,
+      enum:    ["late_login","early_logout","fixed_penalty","hourly_penalty","ncns_penalty","manual"],
       default: "manual",
     },
     createdAt: { type: Date, default: Date.now },
@@ -25,18 +17,18 @@ const deductionDetailSchema = new mongoose.Schema(
 
 const otDetailSchema = new mongoose.Schema(
   {
-    type: { type: String, enum: ["manual", "calc"], default: "manual" },
-    amount: { type: Number,  default: 0 },
-    hours: { type: Number,  default: 0 },
+    type:      { type: String, enum: ["manual", "calc"], default: "manual" },
+    amount:    { type: Number, default: 0 },
+    hours:     { type: Number, default: 0 },
     rate: {
-      type: Number,
+      type:    Number,
       default: 1,
       validate: {
         validator: (v) => [1, 1.5, 2].includes(v),
-        message: "rate must be 1, 1.5, or 2",
+        message:   "rate must be 1, 1.5, or 2",
       },
     },
-    reason: { type: String, required: true, trim: true },
+    reason:    { type: String, required: true, trim: true },
     createdAt: { type: Date, default: Date.now },
   },
   { _id: false },
@@ -44,192 +36,159 @@ const otDetailSchema = new mongoose.Schema(
 
 const attendanceLogSchema = new mongoose.Schema(
   {
-    /**
-     * For normal shifts: this is the calendar date of check-in.
-     * For night shifts: this is the calendar date when the shift STARTS
-     * (even if the employee checks out the next calendar day).
-     */
     date: {
-      type: Date,
+      type:     Date,
       required: true,
-      index: true,
+      index:    true,
     },
-
     empId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "Employee",
+      type:     mongoose.Schema.Types.ObjectId,
+      ref:      "Employee",
       required: true,
-      index: true,
+      index:    true,
     },
     empNumber: {
-      type: String,
+      type:     String,
       required: true,
-      index: true,
+      index:    true,
     },
-    empName: {
-      type: String,
-      required: true,
-    },
-    department: {
-      type: String,
-      required: true,
-    },
+    empName:    { type: String, required: true },
+    department: { type: String, required: true },
+
     status: {
-      type: String,
-      enum: ["Present", "Late", "Leave", "OffDay", "NCNS"],
+      type:    String,
+      enum:    ["Present","Late","Leave","OffDay","NCNS"],
       default: "OffDay",
-      index: true,
+      index:   true,
     },
 
     inOut: {
       in: {
         type: String,
         validate: {
-          validator: function (v) {
-            if (!v) return true;
-            return /^([0-1][0-9]|2[0-3]):[0-5][0-9]$/.test(v);
-          },
-          message: "Invalid time format (HH:mm expected)",
+          validator: (v) => !v || /^([0-1][0-9]|2[0-3]):[0-5][0-9]$/.test(v),
+          message:   "Invalid time format (HH:mm expected)",
         },
       },
       out: {
         type: String,
         validate: {
-          validator: function (v) {
-            if (!v) return true;
-            return /^([0-1][0-9]|2[0-3]):[0-5][0-9]$/.test(v);
-          },
-          message: "Invalid time format (HH:mm expected)",
+          validator: (v) => !v || /^([0-1][0-9]|2[0-3]):[0-5][0-9]$/.test(v),
+          message:   "Invalid time format (HH:mm expected)",
         },
       },
-      /**
-       * outNextDay: true means the "out" time belongs to the NEXT calendar day.
-       * Used for night-shift employees whose check-out crosses midnight.
-       * CSV import sets this automatically via the 14-hour window rule.
-       */
-      outNextDay: {
-        type: Boolean,
-        default: false,
-      },
+      outNextDay: { type: Boolean, default: false },
     },
 
     shift: {
-      start: { type: String, required: true }, // e.g. "22:00"
-      end: { type: String, required: true }, // e.g. "06:00" — can be next-day
-      /**
-       * isNightShift: true when shift.end < shift.start (crosses midnight).
-       * Computed and stored on save so queries can filter efficiently.
-       */
+      start:       { type: String, required: true },
+      end:         { type: String, required: true },
       isNightShift: { type: Boolean, default: false },
     },
-    salaryType: {
-      type: String,
-      enum: ["hourly", "monthly"],
-      required: true,
-    },
-    hourlyRate: {
-      // already exists — effective rate at time of log
-      type: Number,
-      required: true,
-      
-    },
+
+    salaryType: { type: String, enum: ["hourly", "monthly"], required: true },
+    hourlyRate:  { type: Number, required: true },
 
     financials: {
-      hoursWorked: {
-        type: Number,
-        default: 0,
-        
-      },
-      // Scheduled shift duration in hours (e.g. 8h for a 22:00–06:00 shift)
-      scheduledHours: {
-        type: Number,
-        default: 0,
-        
-      },
-      lateMinutes: { type: Number, default: 0, min: 0 }, // minutes after shift.start
-      earlyLogoutMinutes: { type: Number, default: 0, min: 0 }, // minutes before shift.end
-      basePay: {
-        type: Number,
-        default: 0,
-        
-      },
-      deduction: {
-        type: Number,
-        default: 0,
-        
-      },
-      deductionDetails: {
-        type: [deductionDetailSchema],
-        default: [],
-      },
-      otMultiplier: {
-        type: Number,
-        default: 1,
-        enum: [1, 1.5, 2],
-      },
-      otHours: {
-        type: Number,
-        default: 0,
-        
-      },
-      otAmount: {
-        type: Number,
-        default: 0,
-        
-      },
-      otDetails: {
-        type: [otDetailSchema],
-        default: [],
-      },
-      /**
-       * finalDayEarning = basePay - deduction + otAmount
-       * Always recomputed on save; do NOT set this manually.
-       */
-      finalDayEarning: {
-        type: Number,
-        default: 0,
-        
-      },
+      hoursWorked:         { type: Number, default: 0 },
+      scheduledHours:      { type: Number, default: 0 },
+      lateMinutes:         { type: Number, default: 0, min: 0 },
+      earlyLogoutMinutes:  { type: Number, default: 0, min: 0 },
+      basePay:             { type: Number, default: 0 },
+      deduction:           { type: Number, default: 0 },
+      deductionDetails:    { type: [deductionDetailSchema], default: [] },
+      otMultiplier:        { type: Number, default: 1, enum: [1, 1.5, 2] },
+      otHours:             { type: Number, default: 0 },
+      otAmount:            { type: Number, default: 0 },
+      otDetails:           { type: [otDetailSchema], default: [] },
+      finalDayEarning:     { type: Number, default: 0 },
     },
 
-    manualOverride: {
-      type: Boolean,
-      default: false,
-    },
+    manualOverride: { type: Boolean, default: false },
 
     metadata: {
       source: {
-        type: String,
-        enum: [
-          "system",
-          "manual",
-          "csv",
-          "correction_approval",
-          "leave_approval",
-        ],
+        type:    String,
+        enum:    ["system","manual","csv","correction_approval","leave_approval"],
         default: "system",
       },
-      notes: String,
-      lastUpdatedBy: mongoose.Schema.Types.ObjectId,
+      notes:          String,
+      lastUpdatedBy:  mongoose.Schema.Types.ObjectId,
       csvImportBatch: String,
-      lastModifiedAt: {
-        type: Date,
-        default: Date.now,
-      },
+      lastModifiedAt: { type: Date, default: Date.now },
     },
 
     isDeleted: { type: Boolean, default: false, index: true },
   },
-  {
-    timestamps: true, // adds createdAt + updatedAt automatically
-  },
+  { timestamps: true },
 );
 
+// ─── Compound indexes ─────────────────────────────────────────────────────────
 
+// Core uniqueness constraint: one log per employee per calendar date.
+// Enforced at the DB level — prevents duplicates even if application logic has
+// a bug. empId first (ObjectId = highest cardinality → fastest prune).
+attendanceLogSchema.index(
+  { empId: 1, date: 1 },
+  { unique: true, name: "idx_empId_date_unique" },
+);
+
+// Employee history queries filtered by status — e.g. "all Late logs for emp X
+// in March". Without this, MongoDB would hit the empId+date index then scan
+// all docs for the employee to filter status.
+attendanceLogSchema.index(
+  { empId: 1, date: 1, status: 1 },
+  { name: "idx_empId_date_status" },
+);
+
+// Already in schema — daily attendance reports, date-range scans by status.
 attendanceLogSchema.index({ date: 1, status: 1 });
+
+// Already in schema — HR lookups by employee number + date range.
 attendanceLogSchema.index({ empNumber: 1, date: 1 });
 
-// ─── Compound index: one record per employee per shift-start date ─────────────
+// Department daily rollup for payroll: "all logs for dept IT on 2025-06-01".
+// department has moderate cardinality (6 values in Employee) — still useful
+// because it eliminates full collection scans for department-scoped reports.
+attendanceLogSchema.index(
+  { department: 1, date: 1 },
+  { name: "idx_department_date" },
+);
+
+// Soft-delete safety prefix — every date-range scan should filter out deleted
+// docs. isDeleted first because it's boolean (2 values) and most docs are false;
+// the index quickly isolates the active set before scanning by date.
+attendanceLogSchema.index(
+  { isDeleted: 1, date: 1 },
+  { name: "idx_isDeleted_date" },
+);
+
+// ─── Sparse indexes ───────────────────────────────────────────────────────────
+// Sparse indexes skip documents where the field is null/missing/false, so they
+// stay tiny for fields that are only set on a small subset of records.
+
+// CSV import batch ID — only present on csv-sourced logs. Used for rollback
+// ("delete all logs from batch X") and import audits.
+attendanceLogSchema.index(
+  { "metadata.csvImportBatch": 1 },
+  { sparse: true, name: "idx_csvImportBatch_sparse" },
+);
+
+// Night shift flag — only true for a subset of employees. Payroll reports that
+// compute overnight-crossing hours query this to narrow scope quickly.
+attendanceLogSchema.index(
+  { "shift.isNightShift": 1, date: 1 },
+  { sparse: true, name: "idx_nightShift_date_sparse" },
+);
+
+// Manual overrides — only a small fraction of logs are manually corrected.
+// Audit queries ("show me all manual overrides this month") are fast without
+// a full collection scan.
+attendanceLogSchema.index(
+  { manualOverride: 1, date: 1 },
+  { sparse: true, name: "idx_manualOverride_date_sparse" },
+);
+
 // ─── Pre-save: auto-detect night shift & recompute finalDayEarning ────────────
 attendanceLogSchema.pre("save", function (next) {
   // 1. Detect night shift (shift end is earlier than shift start)

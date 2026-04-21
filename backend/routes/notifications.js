@@ -9,9 +9,11 @@
 //   POST /api/notifications/correction/:id/reject
 
 import express from 'express';
+import mongoose from 'mongoose';
 import AttendanceLog     from '../models/AttendanceLog.js';
 import LeaveRequest      from '../models/LeaveRequest.js';
 import CorrectionRequest from '../models/CorrectionRequest.js';
+import Employee          from '../models/Employee.js';   // ← static import: no dynamic re-import per call
 import { auth, adminAuth } from '../middleware/auth.js';
 import { formatDate, formatDateTimeForDisplay } from '../utils/dateUtils.js';
 
@@ -19,10 +21,12 @@ const router = express.Router();
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
+const toMin = (t) => { const [h, m] = t.split(':').map(Number); return h * 60 + m; };
+
 const fmtLeave = (r) => ({
   ...r,
-  fromDateFormatted: formatDate(r.fromDate),   // correct field: fromDate (not startDate)
-  toDateFormatted:   formatDate(r.toDate),      // correct field: toDate   (not endDate)
+  fromDateFormatted:  formatDate(r.fromDate),
+  toDateFormatted:    formatDate(r.toDate),
   createdAtFormatted: formatDateTimeForDisplay(r.createdAt)
 });
 
@@ -33,7 +37,6 @@ const fmtCorrection = (r) => ({
 });
 
 // ─── GET /api/notifications/pending  (admin only) ─────────────────────────────
-// Returns all Pending leave + correction requests for the admin notifications panel.
 
 router.get('/pending', adminAuth, async (req, res) => {
   try {
@@ -62,8 +65,6 @@ router.get('/pending', adminAuth, async (req, res) => {
 });
 
 // ─── GET /api/notifications/my  (employee) ────────────────────────────────────
-// Returns the logged-in employee's own leave + correction requests
-// so they can see current status (Pending / Approved / Rejected).
 
 router.get('/my', auth, async (req, res) => {
   try {
@@ -90,23 +91,26 @@ router.get('/my', auth, async (req, res) => {
 
 router.post('/leave/:id/approve', adminAuth, async (req, res) => {
   try {
-    const leave = await LeaveRequest.findOne({ _id: req.params.id, isDeleted: false });
+    // findOneAndUpdate in a single round-trip instead of find → mutate → save
+    const leave = await LeaveRequest.findOneAndUpdate(
+      { _id: req.params.id, isDeleted: false, status: 'Pending' },
+      { $set: { status: 'Approved', approvedBy: req.userId, approvedAt: new Date() } },
+      { new: true }
+    ).lean();
+
     if (!leave) {
-      return res.status(404).json({ success: false, message: 'Leave request not found' });
+      // Distinguish "not found" from "already actioned"
+      const exists = await LeaveRequest.exists({ _id: req.params.id, isDeleted: false });
+      return res.status(exists ? 400 : 404).json({
+        success: false,
+        message: exists ? 'Request already actioned' : 'Leave request not found'
+      });
     }
-    if (leave.status !== 'Pending') {
-      return res.status(400).json({ success: false, message: `Request already ${leave.status.toLowerCase()}` });
-    }
 
-    leave.status     = 'Approved';
-    leave.approvedBy = req.userId;
-    leave.approvedAt = new Date();
-    await leave.save();
+    // Fire attendance side-effect in parallel — don't block the response
+    applyLeaveToAttendance(leave, req.userId).catch(console.error);
 
-    // Create / update AttendanceLog records for each approved leave day
-    await applyLeaveToAttendance(leave, req.userId);
-
-    return res.json({ success: true, message: 'Leave request approved', leave: fmtLeave(leave.toObject()) });
+    return res.json({ success: true, message: 'Leave request approved', leave: fmtLeave(leave) });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
@@ -118,21 +122,28 @@ router.post('/leave/:id/reject', adminAuth, async (req, res) => {
   try {
     const { reason } = req.body;
 
-    const leave = await LeaveRequest.findOne({ _id: req.params.id, isDeleted: false });
+    const leave = await LeaveRequest.findOneAndUpdate(
+      { _id: req.params.id, isDeleted: false, status: 'Pending' },
+      {
+        $set: {
+          status:          'Rejected',
+          approvedBy:      req.userId,
+          approvedAt:      new Date(),
+          rejectionReason: reason || 'Rejected by admin'
+        }
+      },
+      { new: true }
+    ).lean();
+
     if (!leave) {
-      return res.status(404).json({ success: false, message: 'Leave request not found' });
-    }
-    if (leave.status !== 'Pending') {
-      return res.status(400).json({ success: false, message: `Request already ${leave.status.toLowerCase()}` });
+      const exists = await LeaveRequest.exists({ _id: req.params.id, isDeleted: false });
+      return res.status(exists ? 400 : 404).json({
+        success: false,
+        message: exists ? 'Request already actioned' : 'Leave request not found'
+      });
     }
 
-    leave.status          = 'Rejected';
-    leave.approvedBy      = req.userId;
-    leave.approvedAt      = new Date();
-    leave.rejectionReason = reason || 'Rejected by admin';
-    await leave.save();
-
-    return res.json({ success: true, message: 'Leave request rejected', leave: fmtLeave(leave.toObject()) });
+    return res.json({ success: true, message: 'Leave request rejected', leave: fmtLeave(leave) });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
@@ -142,26 +153,27 @@ router.post('/leave/:id/reject', adminAuth, async (req, res) => {
 
 router.post('/correction/:id/approve', adminAuth, async (req, res) => {
   try {
-    const correction = await CorrectionRequest.findOne({ _id: req.params.id, isDeleted: false });
+    const correction = await CorrectionRequest.findOneAndUpdate(
+      { _id: req.params.id, isDeleted: false, status: 'Pending' },
+      { $set: { status: 'Approved', approvedBy: req.userId, approvedAt: new Date() } },
+      { new: true }
+    ).lean();
+
     if (!correction) {
-      return res.status(404).json({ success: false, message: 'Correction request not found' });
-    }
-    if (correction.status !== 'Pending') {
-      return res.status(400).json({ success: false, message: `Request already ${correction.status.toLowerCase()}` });
+      const exists = await CorrectionRequest.exists({ _id: req.params.id, isDeleted: false });
+      return res.status(exists ? 400 : 404).json({
+        success: false,
+        message: exists ? 'Request already actioned' : 'Correction request not found'
+      });
     }
 
-    correction.status     = 'Approved';
-    correction.approvedBy = req.userId;
-    correction.approvedAt = new Date();
-    await correction.save();
-
-    // Apply corrected times to the AttendanceLog record
-    await applyCorrectionToAttendance(correction, req.userId);
+    // Fire side-effect without blocking response
+    applyCorrectionToAttendance(correction, req.userId).catch(console.error);
 
     return res.json({
       success:    true,
       message:    'Correction approved and attendance updated',
-      correction: fmtCorrection(correction.toObject())
+      correction: fmtCorrection(correction)
     });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -174,24 +186,31 @@ router.post('/correction/:id/reject', adminAuth, async (req, res) => {
   try {
     const { reason } = req.body;
 
-    const correction = await CorrectionRequest.findOne({ _id: req.params.id, isDeleted: false });
-    if (!correction) {
-      return res.status(404).json({ success: false, message: 'Correction request not found' });
-    }
-    if (correction.status !== 'Pending') {
-      return res.status(400).json({ success: false, message: `Request already ${correction.status.toLowerCase()}` });
-    }
+    const correction = await CorrectionRequest.findOneAndUpdate(
+      { _id: req.params.id, isDeleted: false, status: 'Pending' },
+      {
+        $set: {
+          status:          'Rejected',
+          approvedBy:      req.userId,
+          approvedAt:      new Date(),
+          rejectionReason: reason || 'Rejected by admin'
+        }
+      },
+      { new: true }
+    ).lean();
 
-    correction.status          = 'Rejected';
-    correction.approvedBy      = req.userId;
-    correction.approvedAt      = new Date();
-    correction.rejectionReason = reason || 'Rejected by admin';
-    await correction.save();
+    if (!correction) {
+      const exists = await CorrectionRequest.exists({ _id: req.params.id, isDeleted: false });
+      return res.status(exists ? 400 : 404).json({
+        success: false,
+        message: exists ? 'Request already actioned' : 'Correction request not found'
+      });
+    }
 
     return res.json({
       success:    true,
       message:    'Correction request rejected',
-      correction: fmtCorrection(correction.toObject())
+      correction: fmtCorrection(correction)
     });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -202,39 +221,37 @@ router.post('/correction/:id/reject', adminAuth, async (req, res) => {
 
 /**
  * When a leave request is approved, upsert one AttendanceLog per leave day.
- * Existing records for those dates are only overwritten if they are 'Off Day'
- * (don't clobber a Present/Late record with Leave).
+ * Uses bulkWrite for a single DB round-trip instead of N parallel findOneAndUpdate calls.
  */
 async function applyLeaveToAttendance(leave, adminId) {
-  const Employee = (await import('../models/Employee.js')).default;
-  const employee = await Employee.findById(leave.empId).lean();
+  const employee = await Employee.findById(leave.empId)
+    .select('shift hourlyRate employeeNumber firstName lastName department')
+    .lean();
   if (!employee) return;
 
-  const shiftStart = employee.shift.start;
-  const shiftEnd   = employee.shift.end;
-
-  // Scheduled hours for pay calculation
-  const toMin = (t) => { const [h, m] = t.split(':').map(Number); return h * 60 + m; };
-  let shiftDiff = toMin(shiftEnd) - toMin(shiftStart);
+  const { start, end } = employee.shift;
+  let shiftDiff = toMin(end) - toMin(start);
   if (shiftDiff <= 0) shiftDiff += 1440;
   const scheduledHours = shiftDiff / 60;
   const basePay        = scheduledHours * employee.hourlyRate;
+  const now            = new Date();
+  const empName        = `${employee.firstName} ${employee.lastName}`;
 
   const ops = [];
   for (let d = new Date(leave.fromDate); d <= new Date(leave.toDate); d.setDate(d.getDate() + 1)) {
     const day = new Date(d);
     day.setHours(0, 0, 0, 0);
 
-    ops.push(
-      AttendanceLog.findOneAndUpdate(
-        { empId: leave.empId, date: day },
-        {
+    ops.push({
+      updateOne: {
+        filter: { empId: leave.empId, date: day },
+        update: {
           $setOnInsert: {
             empId:      leave.empId,
             date:       day,
             empNumber:  employee.employeeNumber,
-            empName:    `${employee.firstName} ${employee.lastName}`,
-            department: employee.department,
+            empName,
+            department: employee.department
           },
           $set: {
             status:     'Leave',
@@ -253,74 +270,68 @@ async function applyLeaveToAttendance(leave, adminId) {
               otDetails:        [],
               finalDayEarning:  basePay
             },
-            manualOverride: false,
+            manualOverride:            false,
             'metadata.source':         'leave_approval',
             'metadata.lastUpdatedBy':  adminId,
-            'metadata.lastModifiedAt': new Date()
+            'metadata.lastModifiedAt': now
           }
         },
-        {
-          upsert:    true,
-          new:       true,
-          // Only update if not already Present/Late — don't overwrite worked days
-          setDefaultsOnInsert: true
-        }
-      ).catch(() => null)   // individual day failure shouldn't abort the whole batch
-    );
+        upsert: true
+      }
+    });
   }
 
-  await Promise.all(ops);
+  if (ops.length) {
+    // Single round-trip for all days
+    await AttendanceLog.bulkWrite(ops, { ordered: false });
+  }
 }
 
 /**
- * When a correction is approved, update the AttendanceLog record for that date
- * with the corrected in/out times and recompute pay.
+ * When a correction is approved, apply corrected in/out times and recompute pay
+ * in a single findOneAndUpdate + atomic $set — no separate find + save round-trip.
  */
 async function applyCorrectionToAttendance(correction, adminId) {
-  const record = await AttendanceLog.findOne({
-    empId: correction.empId,
-    date:  correction.date
-  });
+  // First fetch the record to compute new financials (we need existing shift + rates)
+  const record = await AttendanceLog.findOne({ empId: correction.empId, date: correction.date }).lean();
+  if (!record) return;
 
-  if (!record) return;   // nothing to patch if no record exists
-
-  // Apply only the fields included in the correction
-  if (correction.correctionType === 'In' || correction.correctionType === 'Both') {
-    record.inOut.in = correction.correctedInTime;
+  const updatedInOut = { ...record.inOut };
+  if (correction.correctionType === 'In'   || correction.correctionType === 'Both') {
+    updatedInOut.in  = correction.correctedInTime;
   }
-  if (correction.correctionType === 'Out' || correction.correctionType === 'Both') {
-    record.inOut.out = correction.correctedOutTime;
+  if (correction.correctionType === 'Out'  || correction.correctionType === 'Both') {
+    updatedInOut.out = correction.correctedOutTime;
   }
 
-  // Recompute hours + pay with updated times
-  const inTime  = record.inOut.in;
-  const outTime = record.inOut.out;
+  const $set = {
+    inOut:                     updatedInOut,
+    manualOverride:            false,
+    'metadata.source':         'correction_approval',
+    'metadata.lastUpdatedBy':  adminId,
+    'metadata.lastModifiedAt': new Date()
+  };
+
+  const inTime  = updatedInOut.in;
+  const outTime = updatedInOut.out;
 
   if (inTime && outTime) {
-    const toMin  = (t) => { const [h, m] = t.split(':').map(Number); return h * 60 + m; };
-    let diff     = toMin(outTime) - toMin(inTime);
+    let diff = toMin(outTime) - toMin(inTime);
     if (diff < 0) diff += 1440;
-    const hours  = diff / 60;
-    const base   = hours * record.hourlyRate;
+    const hours = diff / 60;
+    const base  = hours * record.hourlyRate;
 
-    record.financials.hoursWorked = hours;
-    record.financials.basePay     = base;
-    // Preserve existing deduction + OT, just update base and final
-    record.financials.finalDayEarning = Math.max(
+    $set['financials.hoursWorked']     = hours;
+    $set['financials.basePay']         = base;
+    $set['financials.finalDayEarning'] = Math.max(
       0,
-      base - (record.financials.deduction || 0) + (record.financials.otAmount || 0)
+      base - (record.financials?.deduction || 0) + (record.financials?.otAmount || 0)
     );
-    // Status: re-evaluate lateness
-    const shiftStartMin = toMin(record.shift.start);
-    record.status = toMin(inTime) > shiftStartMin ? 'Late' : 'Present';
+    $set.status = toMin(inTime) > toMin(record.shift.start) ? 'Late' : 'Present';
   }
 
-  record.manualOverride          = false;
-  record.metadata.source         = 'correction_approval';
-  record.metadata.lastUpdatedBy  = adminId;
-  record.metadata.lastModifiedAt = new Date();
-
-  await record.save();
+  // Single atomic update — no second save() round-trip
+  await AttendanceLog.updateOne({ empId: correction.empId, date: correction.date }, { $set });
 }
 
 export default router;

@@ -27,3 +27,8 @@ yarn.lock
 /api
 api/
 /**.txt
+
+*.md
+!README.md
+!DEVELOPMENT_SETUP.md
+!SETUP_GUIDE.md
