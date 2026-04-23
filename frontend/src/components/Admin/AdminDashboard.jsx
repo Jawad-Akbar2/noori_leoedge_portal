@@ -5,6 +5,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import ProfileHeader from "../Common/ProfileHeader";
+import { useAuthImage } from "../../hooks/useAuthImage";
 import {
   AreaChart,
   Area,
@@ -1350,6 +1351,12 @@ export default function AdminDashboard() {
   const [error, setError] = useState(null);
   const [lastRefresh, setLastRefresh] = useState(null);
   const navigate = useNavigate();
+ const profilePictureApiUrl = employee?.profilePicture?.fileId
+  ? `/api/employees/me/profile-picture`
+  : null;
+
+const { blobUrl: profileBlobUrl, loading: loadingProfilePic } =
+  useAuthImage(profilePictureApiUrl);
 
   const fetchAll = useCallback(async () => {
     setLoading(true);
@@ -1362,6 +1369,7 @@ export default function AdminDashboard() {
         axios.get("/api/stats/system", { headers }),
       ]);
       if (meRes.data.success) setEmployee(meRes.data.employee);
+
       if (statsRes.data.success) setStats(statsRes.data.data);
       else setError("Failed to load stats");
       setLastRefresh(new Date());
@@ -1416,7 +1424,14 @@ export default function AdminDashboard() {
     // Light gradient background — same palette as Login page
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50">
       {/* Profile Header (your existing component) */}
-      {employee && <ProfileHeader employee={employee} mode="view" />}
+      {employee && (
+  <ProfileHeader
+    employee={employee}
+    mode="view"
+    profileBlobUrl={profileBlobUrl}
+    loadingProfilePic={loadingProfilePic}
+  />
+)}
 
       {/* ── Main content ──────────────────────────────────────────────────── */}
       <main className="max-w-7xl mx-auto px-4 md:px-6 py-8 space-y-12">

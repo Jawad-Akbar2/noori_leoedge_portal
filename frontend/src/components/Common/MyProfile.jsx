@@ -462,7 +462,7 @@ export default function MyProfile() {
     newPassword: "",
     confirmPassword: "",
   });
-  const [showPw, setShowPw] = useState({
+  const [showPw, setShowPw] = useState>({
     current: false,
     new: false,
     confirm: false,
@@ -916,13 +916,14 @@ export default function MyProfile() {
         - uploadingPic: so the header can show its own spinner/overlay
       */}
       <ProfileHeader
-        employee={employee}
-        profileBlobUrl={profileBlobUrl}
-        loadingProfilePic={loadingProfilePic || uploadingPic}
-        mode="edit"
-        onProfileUpdate={uploadProfilePicture}
-        onProfileDelete={deleteProfilePicture}
-      />
+  employee={employee}
+  profileBlobUrl={profileBlobUrl}
+  loadingProfilePic={loadingProfilePic}  // ← remove || uploadingPic
+  loadingUpload={uploadingPic}           // ← separate prop if needed
+  mode="edit"
+  onProfileUpdate={uploadProfilePicture}
+  onProfileDelete={deleteProfilePicture}
+/>
 
       <div className="max-w-6xl mx-auto px-4 md:px-6 py-6 space-y-5">
         {/* ── Personal Information ── */}

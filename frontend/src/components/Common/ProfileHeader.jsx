@@ -80,18 +80,16 @@ export default function ProfileHeader({
   onProfileDelete,
   profileBlobUrl,
   loadingProfilePic,
+  loadingUpload,        // ← add this
 }) {
   const role = getCurrentUserRole();
   const config = ROLE_CONFIG[role] ?? ROLE_CONFIG.employee;
   const ac = ACCENT_CLASSES[config.accent] ?? ACCENT_CLASSES.emerald;
   const { Icon } = config;
 
- 
   const picInputRef = useRef(null);
 
   const isEditable = mode === "edit";
-
-
 
   const handlePicFileSelect = async (e) => {
     if (!isEditable) return; // Prevent upload in view mode
@@ -174,8 +172,6 @@ export default function ProfileHeader({
         {/* Right: avatar */}
         <div className="order-1 sm:order-2 shrink-0">
           <div className="relative group">
-
-
             <input
               ref={picInputRef}
               type="file"
@@ -193,21 +189,20 @@ export default function ProfileHeader({
                 flex items-center justify-center transition relative
                 ${!isEditable ? "cursor-default" : loadingProfilePic ? "opacity-60 cursor-not-allowed" : "cursor-pointer hover:ring-white"}`}
             >
-              {loadingProfilePic && (
-                <div className="absolute inset-0 flex items-center justify-center bg-black/40 rounded-full z-10">
-                  <div className="w-7 h-7 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                </div>
-              )}
-
+              {(loadingProfilePic || loadingUpload) && (
+  <div className="absolute inset-0 flex items-center justify-center bg-black/40 rounded-full z-10">
+    <div className="w-7 h-7 border-2 border-white border-t-transparent rounded-full animate-spin" />
+  </div>
+)}
               {profileBlobUrl ? (
                 <>
                   <img
                     src={profileBlobUrl}
                     alt="Profile"
-                    className="w-full h-full object-cover"
+                    className="w-full h-full object-cover rounded-full"
                   />
                   {isEditable && !loadingProfilePic && (
-                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition flex items-center justify-center">
+                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition flex items-center justify-center rounded-full">
                       <Camera
                         size={20}
                         className="text-white opacity-0 group-hover:opacity-100 transition"
@@ -215,10 +210,10 @@ export default function ProfileHeader({
                     </div>
                   )}
                 </>
-              ) : !loadingProfilePic ? (
+              ) : (
                 <>
                   <User size={40} className="text-white/70" />
-                  {isEditable && (
+                  {isEditable && !loadingProfilePic && (
                     <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition flex items-center justify-center">
                       <Camera
                         size={20}
@@ -227,7 +222,7 @@ export default function ProfileHeader({
                     </div>
                   )}
                 </>
-              ) : null}
+              )}
             </div>
 
             {profileBlobUrl && isEditable && !loadingProfilePic && (
@@ -248,7 +243,7 @@ export default function ProfileHeader({
           </div>
           {isEditable ? (
             <p className="text-center text-[11px] text-white/50 mt-2">
-              {loadingProfilePic
+           {(loadingProfilePic || loadingUpload)
   ? "Processing image..."
   : `Click to ${profileBlobUrl ? "change" : "upload"} · max 500 KB`}
             </p>
