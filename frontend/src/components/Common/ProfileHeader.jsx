@@ -1,7 +1,7 @@
-import React, { useRef, useState, useEffect } from 'react';
-import { User, Camera, Trash2, BadgeCheck, Eye } from 'lucide-react';
-import axios from 'axios';
-import toast from 'react-hot-toast';
+import React, { useRef, useState, useEffect } from "react";
+import { User, Camera, Trash2, BadgeCheck, Eye } from "lucide-react";
+import axios from "axios";
+import toast from "react-hot-toast";
 
 const getCurrentUserRole = () => {
   try {
@@ -51,37 +51,61 @@ const ROLE_CONFIG = {
 };
 
 const ACCENT_CLASSES = {
-  yellow: { headerGrad: "from-yellow-700 to-yellow-500", avatarRing: "ring-yellow-400" },
-  indigo: { headerGrad: "from-indigo-700 to-indigo-500", avatarRing: "ring-indigo-400" },
-  blue: { headerGrad: "from-blue-700 to-blue-500", avatarRing: "ring-blue-400" },
-  emerald: { headerGrad: "from-emerald-700 to-emerald-500", avatarRing: "ring-emerald-400" },
-  purple: { headerGrad: "from-purple-700 to-purple-500", avatarRing: "ring-purple-400" },
+  yellow: {
+    headerGrad: "from-yellow-700 to-yellow-500",
+    avatarRing: "ring-yellow-400",
+  },
+  indigo: {
+    headerGrad: "from-indigo-700 to-indigo-500",
+    avatarRing: "ring-indigo-400",
+  },
+  blue: {
+    headerGrad: "from-blue-700 to-blue-500",
+    avatarRing: "ring-blue-400",
+  },
+  emerald: {
+    headerGrad: "from-emerald-700 to-emerald-500",
+    avatarRing: "ring-emerald-400",
+  },
+  purple: {
+    headerGrad: "from-purple-700 to-purple-500",
+    avatarRing: "ring-purple-400",
+  },
 };
 
-export default function ProfileHeader({ employee, onProfileUpdate, mode = "view" , onProfileDelete }) {
+export default function ProfileHeader({
+  employee,
+  onProfileUpdate,
+  mode = "view",
+  onProfileDelete,
+  profileBlobUrl,
+  loadingProfilePic,
+}) {
   const role = getCurrentUserRole();
   const config = ROLE_CONFIG[role] ?? ROLE_CONFIG.employee;
   const ac = ACCENT_CLASSES[config.accent] ?? ACCENT_CLASSES.emerald;
   const { Icon } = config;
-  
-  const [profilePicture, setProfilePicture] = useState(employee?.profilePicture?.data || null);
-  const [uploadingPic, setUploadingPic] = useState(false);
+
+ 
   const picInputRef = useRef(null);
-  
+
   const isEditable = mode === "edit";
 
-  // Update local state when employee prop changes
-  useEffect(() => {
-    setProfilePicture(employee?.profilePicture?.data || null);
-  }, [employee]);
+
 
   const handlePicFileSelect = async (e) => {
     if (!isEditable) return; // Prevent upload in view mode
-    
+
     const file = e.target.files[0];
     if (!file) return;
-    
-    const validTypes = ["image/jpeg", "image/jpg", "image/png", "image/gif", "image/webp"];
+
+    const validTypes = [
+      "image/jpeg",
+      "image/jpg",
+      "image/png",
+      "image/gif",
+      "image/webp",
+    ];
     if (!validTypes.includes(file.type)) {
       toast.error("Please select a valid image (JPEG, PNG, GIF, or WebP)");
       return;
@@ -90,21 +114,21 @@ export default function ProfileHeader({ employee, onProfileUpdate, mode = "view"
       toast.error("Image must be under 500 KB — resize it first");
       return;
     }
-    
+
     const reader = new FileReader();
-   reader.onload = async (ev) => {
-  if (onProfileUpdate) {
-    await onProfileUpdate(ev.target.result); // 🔥 call parent function
-  }
-};
+    reader.onload = async (ev) => {
+      if (onProfileUpdate) {
+        await onProfileUpdate(ev.target.result, file.type);
+      }
+    };
     reader.onerror = () => toast.error("Failed to read image");
     reader.readAsDataURL(file);
     e.target.value = "";
   };
 
-
-
-  const fullName = employee ? `${employee.firstName || ''} ${employee.lastName || ''}`.trim() : "—";
+  const fullName = employee
+    ? `${employee.firstName || ""} ${employee.lastName || ""}`.trim()
+    : "—";
 
   return (
     <div className={`w-full bg-gradient-to-br ${ac.headerGrad} text-white`}>
@@ -133,11 +157,12 @@ export default function ProfileHeader({ employee, onProfileUpdate, mode = "view"
             {employee?.status && (
               <span
                 className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium
-                ${employee.status === "Active"
-                  ? "bg-green-400/30 text-green-100"
-                  : employee.status === "Frozen"
-                    ? "bg-blue-400/30 text-blue-100"
-                    : "bg-gray-400/30 text-gray-100"
+                ${
+                  employee.status === "Active"
+                    ? "bg-green-400/30 text-green-100"
+                    : employee.status === "Frozen"
+                      ? "bg-blue-400/30 text-blue-100"
+                      : "bg-gray-400/30 text-gray-100"
                 }`}
               >
                 {employee.status}
@@ -149,61 +174,71 @@ export default function ProfileHeader({ employee, onProfileUpdate, mode = "view"
         {/* Right: avatar */}
         <div className="order-1 sm:order-2 shrink-0">
           <div className="relative group">
+
+
             <input
               ref={picInputRef}
               type="file"
               accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
               onChange={handlePicFileSelect}
-              disabled={uploadingPic || !isEditable}
+              disabled={loadingProfilePic || !isEditable}
               className="hidden"
             />
             <div
-              onClick={() => isEditable && !uploadingPic && picInputRef.current.click()}
+              onClick={() =>
+                isEditable && !loadingProfilePic && picInputRef.current.click()
+              }
               className={`w-28 h-28 rounded-full ring-4 ${ac.avatarRing} ring-offset-2
                 overflow-hidden bg-white/20 backdrop-blur-sm
                 flex items-center justify-center transition relative
-                ${!isEditable ? "cursor-default" : uploadingPic ? "opacity-60 cursor-not-allowed" : "cursor-pointer hover:ring-white"}`}
+                ${!isEditable ? "cursor-default" : loadingProfilePic ? "opacity-60 cursor-not-allowed" : "cursor-pointer hover:ring-white"}`}
             >
-              {uploadingPic && (
+              {loadingProfilePic && (
                 <div className="absolute inset-0 flex items-center justify-center bg-black/40 rounded-full z-10">
                   <div className="w-7 h-7 border-2 border-white border-t-transparent rounded-full animate-spin" />
                 </div>
               )}
 
-              {profilePicture ? (
+              {profileBlobUrl ? (
                 <>
                   <img
-                    src={profilePicture}
+                    src={profileBlobUrl}
                     alt="Profile"
                     className="w-full h-full object-cover"
                   />
-                  {isEditable && !uploadingPic && (
+                  {isEditable && !loadingProfilePic && (
                     <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition flex items-center justify-center">
-                      <Camera size={20} className="text-white opacity-0 group-hover:opacity-100 transition" />
+                      <Camera
+                        size={20}
+                        className="text-white opacity-0 group-hover:opacity-100 transition"
+                      />
                     </div>
                   )}
                 </>
-              ) : !uploadingPic ? (
+              ) : !loadingProfilePic ? (
                 <>
                   <User size={40} className="text-white/70" />
                   {isEditable && (
                     <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition flex items-center justify-center">
-                      <Camera size={20} className="text-white opacity-0 group-hover:opacity-100 transition" />
+                      <Camera
+                        size={20}
+                        className="text-white opacity-0 group-hover:opacity-100 transition"
+                      />
                     </div>
                   )}
                 </>
               ) : null}
             </div>
 
-            {profilePicture && isEditable && !uploadingPic && (
+            {profileBlobUrl && isEditable && !loadingProfilePic && (
               <button
                 type="button"
-               onClick={(e) => {
-  e.stopPropagation();
-  if (onProfileDelete) {
-    onProfileDelete();   // ✅ CALL PARENT
-  }
-}}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (onProfileDelete) {
+                    onProfileDelete(); // ✅ CALL PARENT
+                  }
+                }}
                 className="absolute -bottom-1 -right-1 p-1.5 bg-red-500 hover:bg-red-600 text-white rounded-full shadow-lg transition"
                 title="Remove picture"
               >
@@ -213,11 +248,13 @@ export default function ProfileHeader({ employee, onProfileUpdate, mode = "view"
           </div>
           {isEditable ? (
             <p className="text-center text-[11px] text-white/50 mt-2">
-              {uploadingPic ? "Uploading…" : `Click to ${profilePicture ? "change" : "upload"} · max 500 KB`}
+              {loadingProfilePic
+  ? "Processing image..."
+  : `Click to ${profileBlobUrl ? "change" : "upload"} · max 500 KB`}
             </p>
           ) : (
             <p className="text-center text-[11px] text-white/50 mt-2">
-              {profilePicture ? "" : "No profile picture"}
+              {profileBlobUrl ? "" : "No profile picture"}
             </p>
           )}
         </div>

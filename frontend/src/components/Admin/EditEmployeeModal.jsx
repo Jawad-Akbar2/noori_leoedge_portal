@@ -9,6 +9,7 @@ import {
 import toast from 'react-hot-toast';
 import { formatToDDMMYYYY } from '../../utils/dateFormatter';
 import { useEscape } from "../../context/EscapeStack";
+import { useAuthImage } from '../../hooks/useAuthImage';
 
 // ─── reusable field primitives ────────────────────────────────────────────────
 
@@ -59,10 +60,10 @@ const IdCardSide = ({ label, side, currentFile, onUpload, onDelete, isLoading })
     const file = e.target.files[0];
     if (!file) return;
 
-    const valid = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+    const valid = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp', 'application/pdf'];
 
     if (!valid.includes(file.type)) {
-      toast.error('Only image formats allowed: JPEG, PNG, GIF, or WebP');
+      toast.error('Only image and PDF formats allowed: JPEG, PNG, GIF, WebP, or PDF');
       return;
     }
 
@@ -72,7 +73,12 @@ const IdCardSide = ({ label, side, currentFile, onUpload, onDelete, isLoading })
     }
 
     const reader = new FileReader();
-    reader.onload = (ev) => onUpload(side, { url: ev.target.result, fileName: file.name });
+    reader.onload = (ev) =>
+  onUpload(side, {
+    url: ev.target.result,
+    fileName: file.name,
+    mimeType: file.type,
+  });
     reader.readAsDataURL(file);
     e.target.value = '';
   };
@@ -143,7 +149,7 @@ const IdCardSide = ({ label, side, currentFile, onUpload, onDelete, isLoading })
       <input
         ref={ref}
         type="file"
-        accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
+        accept="image/jpeg,image/jpg,image/png,image/gif,image/webp,application/pdf"
         onChange={handleSelect}
         className="hidden"
       />
@@ -209,6 +215,9 @@ export default function EditEmployeeModal({ employee, onClose, onSave, currentUs
 
   // ── "Other info" upload state ────────────────────────────────────────────────
   const [profilePicture, setProfilePicture] = useState(null);
+  const [profilePicUrl, setProfilePicUrl] = useState(null);
+  const { blobUrl: profilePictureUrl } = useAuthImage(profilePicUrl);
+
   const [uploadingPic, setUploadingPic] = useState(false);
   const [idCard, setIdCard] = useState({ front: null, back: null });
   const [uploadingId, setUploadingId] = useState(false);
@@ -240,11 +249,19 @@ export default function EditEmployeeModal({ employee, onClose, onSave, currentUs
           emergencyContact: emp.emergencyContact || { name: '', relationship: '', phone: '' },
           address: emp.address || { street: '', city: '', state: '', zip: '', country: '' },
         });
-        if (emp.profilePicture?.data) setProfilePicture(emp.profilePicture.data);
-        setIdCard({
-          front: emp.idCard?.front?.url ? emp.idCard.front : null,
-          back: emp.idCard?.back?.url ? emp.idCard.back : null,
-        });
+       setProfilePicUrl(
+  emp.profilePicture?.fileId
+    ? `/api/employees/${employee._id}/profile-picture`
+    : null
+);
+    setIdCard({
+  front: emp.idCard?.front?.fileId
+    ? { url: `/api/employees/${employee._id}/id-card/front` }
+    : null,
+  back: emp.idCard?.back?.fileId
+    ? { url: `/api/employees/${employee._id}/id-card/back` }
+    : null,
+});
       } catch {
         setError('Failed to load employee data. The employee may no longer exist.');
       } finally {
@@ -273,21 +290,28 @@ export default function EditEmployeeModal({ employee, onClose, onSave, currentUs
     if (!valid.includes(file.type)) { toast.error('Please select JPEG, PNG, GIF, or WebP'); return; }
     if (file.size > 2 * 1024 * 1024) { toast.error('Image must be under 2 MB'); return; }
     const reader = new FileReader();
-    reader.onload = (ev) => uploadPic(ev.target.result);
+    reader.onload = (ev) =>
+  uploadPic({
+    data: ev.target.result,
+    fileName: file.name,
+    mimeType: file.type,
+  });
     reader.readAsDataURL(file);
     e.target.value = '';
   };
 
-  const uploadPic = async (base64) => {
+  const uploadPic = async (fileObj) => {
     setUploadingPic(true);
     try {
       const token = localStorage.getItem('token');
       const { data } = await axios.put(
         `/api/employees/${employee._id}/profile-picture`,
-        { profilePicture: base64 },
+        {
+ profilePicture: fileObj
+},
         { headers: { Authorization: `Bearer ${token}` } }
       );
-      if (data.success) { setProfilePicture(base64); toast.success('Profile picture updated'); }
+      if (data.success) { setProfilePicture(fileObj.data); toast.success('Profile picture updated'); }
       else toast.error(data.message || 'Upload failed');
     } catch (err) {
       toast.error(err.response?.data?.message || 'Upload failed');
@@ -319,12 +343,18 @@ export default function EditEmployeeModal({ employee, onClose, onSave, currentUs
     try {
       const token = localStorage.getItem('token');
       const { data } = await axios.put(
-        `/api/employees/${employee._id}`,
-        { idCard: { [side]: { url: fileData.url, fileName: fileData.fileName } } },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+  `/api/employees/${employee._id}/id-card/${side}`,
+  {
+ idCard: {
+  data: fileData.url,
+  fileName: fileData.fileName,
+  mimeType: fileData.mimeType,
+},
+  },
+  { headers: { Authorization: `Bearer ${token}` } }
+);
       if (data.success) {
-        setIdCard(prev => ({ ...prev, [side]: { url: fileData.url, fileName: fileData.fileName, uploadedAt: new Date() } }));
+        setIdCard(prev => ({ ...prev, [side]: { url: fileData.url, fileName: fileData.fileName, mimeType: fileData.mimeType, uploadedAt: new Date() } }));
         toast.success(`ID card ${side} uploaded`);
       } else toast.error(data.message || 'Upload failed');
     } catch (err) {
@@ -465,10 +495,11 @@ export default function EditEmployeeModal({ employee, onClose, onSave, currentUs
         <div className={`shrink-0 rounded-t-2xl border-b px-6 py-4 flex items-center justify-between ${isPrivileged ? 'bg-gradient-to-r from-purple-50/80 to-white' : 'bg-white'}`}>
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 rounded-full overflow-hidden bg-gradient-to-br from-gray-100 to-gray-200 shrink-0 ring-2 ring-offset-1 ring-gray-200 shadow-sm">
-              {profilePicture
-                ? <img src={profilePicture} alt="" className="w-full h-full object-cover" />
-                : <div className="w-full h-full flex items-center justify-center"><User size={20} className="text-gray-400" /></div>
-              }
+              {profilePicture || profilePictureUrl ? (
+                <img src={profilePicture || profilePictureUrl} alt="" className="w-full h-full object-cover" />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center"><User size={20} className="text-gray-400" /></div>
+              )}
             </div>
             <div>
               <div className="flex items-center gap-2 flex-wrap">
@@ -720,7 +751,10 @@ export default function EditEmployeeModal({ employee, onClose, onSave, currentUs
                       </>
                     ) : (
                       <>
-                        <p className="text-2xl font-bold text-blue-700">PKR {(formData.monthlySalary || 0).toLocaleString()}</p>
+                        <p className="text-2xl font-bold text-blue-700">PKR {(formData.monthlySalary || 0).toLocaleString("en-PK", {
+  minimumFractionDigits: 0,
+  maximumFractionDigits: 0,
+})}</p>
                         <p className="text-[10px] text-gray-500 mt-1">Fixed monthly salary, pro-rated by actual working days</p>
                       </>
                     )}
@@ -804,9 +838,9 @@ export default function EditEmployeeModal({ employee, onClose, onSave, currentUs
                           <div className="w-full h-full flex items-center justify-center">
                             <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
                           </div>
-                        ) : profilePicture ? (
+                        ) : profilePicture || profilePictureUrl ? (
                           <>
-                            <img src={profilePicture} alt="" className="w-full h-full object-cover" />
+                            <img src={profilePicture || profilePictureUrl} alt="" className="w-full h-full object-cover" />
                             <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition flex items-center justify-center">
                               <Camera size={18} className="text-white opacity-0 group-hover:opacity-100 transition" />
                             </div>

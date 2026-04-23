@@ -128,7 +128,7 @@ export default function PayrollReports() {
 
   const fetchEmployees = useCallback(async () => {
     try {
-      const res = await axios.get("/api/employees?includeFrozen=true", {
+      const res = await axios.get("/api/employees?images=false", {
         headers: { Authorization: `Bearer ${getToken()}` },
       });
       let list = res.data?.employees || [];

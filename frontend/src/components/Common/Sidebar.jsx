@@ -200,28 +200,6 @@ const UserProfile = ({ user, color, isCollapsed, onLogout }) => {
   return (
     <div className="border-t border-gray-200 py-4 mt-4">
       <div className="px-3">
-        <div className={`
-          flex items-center gap-3 p-3 rounded-xl bg-gradient-to-r ${colorClasses.gradient}
-          transition-all duration-200
-          ${isCollapsed ? 'justify-center' : ''}
-        `}>
-          <div className="flex-shrink-0">
-            <div className="w-10 h-10 rounded-xl bg-white/20 backdrop-blur flex items-center justify-center">
-              <User size={20} className="text-white" />
-            </div>
-          </div>
-          
-          {!isCollapsed && (
-            <div className="flex-1 min-w-0">
-              <p className="text-white text-sm font-semibold truncate">
-                {user?.firstName || 'Guest User'}
-              </p>
-              <p className="text-white/70 text-xs truncate">
-                {user?.email || 'user@example.com'}
-              </p>
-            </div>
-          )}
-        </div>
 
         {!isCollapsed && (
           <button

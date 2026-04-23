@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import axios from "axios";
 import {
   Eye,
@@ -24,11 +24,11 @@ import {
 } from "lucide-react";
 import toast from "react-hot-toast";
 import ProfileHeader from "../Common/ProfileHeader";
+import { useAuthImage } from "../../hooks/useAuthImage";
 
 // ═══════════════════════════════════════════════════════════════
 // ROLE DETECTION
 // ═══════════════════════════════════════════════════════════════
-
 function getCurrentUserRole() {
   try {
     const user = JSON.parse(localStorage.getItem("user") || "{}");
@@ -56,7 +56,6 @@ const ROLE_CONFIG = {
     canEditJoining: true,
     canEditDepartment: true,
   },
-
   superadmin: {
     label: "Super Administrator",
     Icon: Shield,
@@ -138,12 +137,18 @@ const ACCENT_CLASSES = {
     headerGrad: "from-purple-700 to-purple-500",
     avatarRing: "ring-purple-400",
   },
+  yellow: {
+    ring: "focus:ring-yellow-500",
+    border: "border-yellow-300",
+    bg: "bg-yellow-50/30",
+    headerGrad: "from-yellow-700 to-yellow-500",
+    avatarRing: "ring-yellow-400",
+  },
 };
 
 // ═══════════════════════════════════════════════════════════════
 // UTILS
 // ═══════════════════════════════════════════════════════════════
-
 const formatDateToDisplay = (dateStr) => {
   if (!dateStr) return "—";
   const d = new Date(dateStr);
@@ -157,7 +162,6 @@ const formatDateToDisplay = (dateStr) => {
 // ═══════════════════════════════════════════════════════════════
 // PRIMITIVES
 // ═══════════════════════════════════════════════════════════════
-
 const InfoBox = ({ label, value }) => (
   <div>
     <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">
@@ -265,7 +269,6 @@ const Card = ({
   </div>
 );
 
-// Reusable inline spinner
 const Spinner = ({ size = 16, color = "border-white" }) => (
   <div
     className={`border-2 ${color} border-t-transparent rounded-full animate-spin shrink-0`}
@@ -274,10 +277,12 @@ const Spinner = ({ size = 16, color = "border-white" }) => (
 );
 
 // ─── Single ID card side uploader ─────────────────────────────────────────────
+// Now uses useAuthImage internally to display the stored image via blob URL
 const IdCardSide = ({
   label,
   side,
-  currentFile,
+  apiUrl,
+  localPreview,
   onUpload,
   onDelete,
   accentBorder,
@@ -288,65 +293,74 @@ const IdCardSide = ({
   const fileInputRef = useRef(null);
   const isBusy = isLoading || globalBusy;
 
+  // Fetch the stored image with auth; only active when no local preview
+  const { blobUrl: storedBlobUrl, loading: fetchingStored } = useAuthImage(
+    !localPreview && apiUrl ? apiUrl : null,
+  );
+
+  // Displayed image: local preview (just uploaded) takes priority over stored
+  const displayUrl = localPreview || storedBlobUrl;
+  const hasImage = !!displayUrl;
+
   const handleFileSelect = (e) => {
     const file = e.target.files[0];
     if (!file) return;
-    
-    // ✅ IMAGES ONLY - No PDFs
     const validTypes = [
       "image/jpeg",
       "image/jpg",
       "image/png",
       "image/gif",
-      "image/webp"
+      "image/webp",
     ];
-    
     if (!validTypes.includes(file.type)) {
       toast.error("Only image formats allowed: JPEG, PNG, GIF, or WebP");
       return;
     }
-    
     if (file.size > 5 * 1024 * 1024) {
       toast.error("File must be under 5MB");
       return;
     }
-    
     const reader = new FileReader();
     reader.onload = (ev) =>
-      onUpload(side, { url: ev.target.result, fileName: file.name });
+      onUpload(side, {
+        data: ev.target.result,
+        fileName: file.name,
+        mimeType: file.type,
+      });
     reader.onerror = () => toast.error("Failed to read file");
     reader.readAsDataURL(file);
     e.target.value = "";
   };
+
+  const showSpinner = isLoading || fetchingStored;
 
   return (
     <div className="flex-1 min-w-0">
       <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
         {label}
         <span className="ml-1.5 normal-case font-normal text-gray-400">
-          {currentFile?.url ? "✓ uploaded" : "required"}
+          {hasImage ? "✓ uploaded" : "required"}
         </span>
       </p>
       <div
         onClick={() => !isBusy && fileInputRef.current.click()}
         className={`relative cursor-pointer rounded-xl border-2 border-dashed transition group
           ${
-            currentFile?.url
+            hasImage
               ? "border-green-300 bg-green-50/30 hover:border-green-400"
               : `${accentBorder} bg-gray-50/50 hover:bg-gray-100/60`
           } ${isBusy ? "opacity-50 cursor-not-allowed" : ""}`}
         style={{ minHeight: 140 }}
       >
-        {isLoading && (
+        {showSpinner && (
           <div className="absolute inset-0 flex items-center justify-center bg-white/70 rounded-[10px] z-20">
             <Spinner size={28} color="border-gray-400" />
           </div>
         )}
-
-        {currentFile?.url ? (
+        {hasImage ? (
           <>
             <img
-              src={currentFile.url}
+              src={displayUrl}
               alt={label}
               className="w-full h-36 object-cover rounded-[10px]"
             />
@@ -394,13 +408,11 @@ const IdCardSide = ({
 // ═══════════════════════════════════════════════════════════════
 // MAIN COMPONENT
 // ═══════════════════════════════════════════════════════════════
-
 export default function MyProfile() {
   const role = getCurrentUserRole();
   const config = ROLE_CONFIG[role] ?? ROLE_CONFIG.employee;
   const ac = ACCENT_CLASSES[config.accent] ?? ACCENT_CLASSES.emerald;
-  const { Icon, canEditPersonal, canEditEmail, canEditBank, btnBg, pwBtnBg } =
-    config;
+  const { canEditPersonal, canEditEmail, canEditBank, btnBg, pwBtnBg } = config;
 
   // ── State ────────────────────────────────────────────────────────────────────
   const [employee, setEmployee] = useState(null);
@@ -423,13 +435,26 @@ export default function MyProfile() {
     emergencyContact: { name: "", relationship: "", phone: "" },
     address: { street: "", city: "", state: "", zip: "", country: "" },
   });
-  const [idCard, setIdCard] = useState({ front: null, back: null });
-  const [profilePicture, setProfilePicture] = useState(null);
+
+  // Track whether each image slot is "active" (has a stored GridFS file)
+  // These are the API URLs used by useAuthImage hooks
+  const [profilePictureApiUrl, setProfilePictureApiUrl] = useState(null);
+  const [idCardApiUrls, setIdCardApiUrls] = useState({
+    front: null,
+    back: null,
+  });
+
+  // Local previews (base64 data URIs) shown immediately after user picks a file,
+  // before the upload completes. Cleared once the upload succeeds.
+  const [idCardLocalPreviews, setIdCardLocalPreviews] = useState({
+    front: null,
+    back: null,
+  });
+
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [uploadingPic, setUploadingPic] = useState(false);
-  // Granular ID upload state: null | 'front' | 'back' | 'delete-front' | 'delete-back'
-  const [uploadingIdSide, setUploadingIdSide] = useState(null);
+  const [uploadingIdSide, setUploadingIdSide] = useState(null); // null | 'front' | 'back' | 'delete-front' | 'delete-back'
 
   // Password
   const [pwForm, setPwForm] = useState({
@@ -447,13 +472,13 @@ export default function MyProfile() {
 
   const picInputRef = useRef(null);
 
-  // ── Master "anything is in flight" guard ────────────────────────────────────
-  // Used to disable all form inputs and the Save button whenever ANY async op runs.
-  // ID card uploads are excluded from disabling the main Save button — they have
-  // their own local overlay and don't touch form fields.
+  // Fetch profile picture with auth (blob URL)
+  const { blobUrl: profileBlobUrl, loading: loadingProfilePic } =
+    useAuthImage(profilePictureApiUrl);
+
   const anyBusy =
     loading || saving || uploadingPic || !!uploadingIdSide || pwSaving;
-  const formInputBusy = loading || saving || uploadingPic || pwSaving; // don't lock form for ID uploads
+  const formInputBusy = loading || saving || uploadingPic || pwSaving;
 
   // ── Fetch ────────────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -500,12 +525,22 @@ export default function MyProfile() {
             country: "",
           },
         });
-        if (emp.profilePicture?.data)
-          setProfilePicture(emp.profilePicture.data);
-        setIdCard({
-          front: emp.idCard?.front?.url ? emp.idCard.front : null,
-          back: emp.idCard?.back?.url ? emp.idCard.back : null,
+
+        // Set API URLs (triggers useAuthImage to fetch with auth)
+        setProfilePictureApiUrl(
+          emp.profilePicture?.fileId
+            ? `/api/employees/me/profile-picture`
+            : null,
+        );
+        setIdCardApiUrls({
+          front: emp.idCard?.front?.fileId
+            ? `/api/employees/me/id-card/front`
+            : null,
+          back: emp.idCard?.back?.fileId
+            ? `/api/employees/me/id-card/back`
+            : null,
         });
+        setIdCardLocalPreviews({ front: null, back: null });
       } else {
         toast.error("Failed to load profile");
       }
@@ -556,101 +591,101 @@ export default function MyProfile() {
       return;
     }
     const reader = new FileReader();
-    reader.onload = (ev) => uploadProfilePicture(ev.target.result);
+    reader.onload = (ev) => uploadProfilePicture(ev.target.result, file.type);
     reader.onerror = () => toast.error("Failed to read image");
     reader.readAsDataURL(file);
     e.target.value = "";
   };
 
-const uploadProfilePicture = async (base64Image) => {
-  setUploadingPic(true);
-  try {
-    const token = localStorage.getItem("token");
-
-    const { data } = await axios.put(
-      "/api/employees/me/profile-picture",
-      { profilePicture: base64Image },
-      { headers: { Authorization: `Bearer ${token}` } }
-    );
-
-    if (data.success) {
-      setProfilePicture(base64Image);   // ✅ update parent state
-
-      setEmployee(prev => ({
-        ...prev,
-        profilePicture: { data: base64Image }
-      }));
-
-      toast.success("Profile picture updated");
-    }
-  } catch (err) {
-    toast.error("Failed to update");
-  } finally {
-    setUploadingPic(false);
-  }
-};
-
-const deleteProfilePicture = async () => {
-  if (anyBusy) return;
-
-  setUploadingPic(true);
-  try {
-    const token = localStorage.getItem("token");
-
-    const { data } = await axios.delete(
-      "/api/employees/me/profile-picture",
-      {
-        headers: { Authorization: `Bearer ${token}` },
-      }
-    );
-
-    if (data.success) {
-      setProfilePicture(null);
-
-      // ✅ IMPORTANT: update employee state
-      setEmployee(prev => ({
-        ...prev,
-        profilePicture: null
-      }));
-
-      toast.success("Profile picture removed");
-    } else {
-      toast.error(data.message);
-    }
-  } catch (err) {
-    toast.error("Failed to remove profile picture");
-  } finally {
-    setUploadingPic(false);
-  }
-};
-
-  // ── ID card ──────────────────────────────────────────────────────────────────
-  const handleIdCardUpload = async (side, fileData) => {
-    if (anyBusy) return;
-    setUploadingIdSide(side);
+  // This is also passed to ProfileHeader
+  const uploadProfilePicture = async (base64Image, mimeType) => {
+    setUploadingPic(true);
     try {
       const token = localStorage.getItem("token");
       const { data } = await axios.put(
-        "/api/employees/me",
+        "/api/employees/me/profile-picture",
         {
-          idCard: {
-            [side]: { url: fileData.url, fileName: fileData.fileName },
+          profilePicture: {
+            data: base64Image,
+            fileName: `profile_${Date.now()}.jpg`,
+            mimeType: mimeType || "image/jpeg",
           },
         },
         { headers: { Authorization: `Bearer ${token}` } },
       );
       if (data.success) {
-        setIdCard((prev) => ({
-          ...prev,
-          [side]: {
-            url: fileData.url,
-            fileName: fileData.fileName,
-            uploadedAt: new Date(),
-          },
-        }));
-        toast.success(`ID card ${side} uploaded`);
-      } else toast.error(data.message || "Upload failed");
+        // Append cache-busting timestamp so useAuthImage refetches
+        setProfilePictureApiUrl(
+          `/api/employees/me/profile-picture?t=${Date.now()}`,
+        );
+        toast.success("Profile picture updated");
+      } else {
+        toast.error(data.message || "Upload failed");
+      }
     } catch (err) {
+      toast.error(
+        err.response?.data?.message || "Failed to update profile picture",
+      );
+    } finally {
+      setUploadingPic(false);
+    }
+  };
+
+  const deleteProfilePicture = async () => {
+    if (anyBusy) return;
+    setUploadingPic(true);
+    try {
+      const token = localStorage.getItem("token");
+      const { data } = await axios.delete("/api/employees/me/profile-picture", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (data.success) {
+        setProfilePictureApiUrl(null);
+        setEmployee((prev) => ({ ...prev, profilePicture: null }));
+        toast.success("Profile picture removed");
+      } else {
+        toast.error(data.message);
+      }
+    } catch {
+      toast.error("Failed to remove profile picture");
+    } finally {
+      setUploadingPic(false);
+    }
+  };
+
+  // ── ID card ──────────────────────────────────────────────────────────────────
+  const handleIdCardUpload = async (side, fileData) => {
+    // Show local preview immediately while upload runs
+    setIdCardLocalPreviews((prev) => ({ ...prev, [side]: fileData.data }));
+    setUploadingIdSide(side);
+    try {
+      const token = localStorage.getItem("token");
+      const { data } = await axios.put(
+        `/api/employees/me/id-card/${side}`,
+        {
+          idCard: {
+            data: fileData.data,
+            fileName: fileData.fileName,
+            mimeType: fileData.mimeType,
+          },
+        },
+        { headers: { Authorization: `Bearer ${token}` } },
+      );
+      if (data.success) {
+        // Switch from local preview to auth-fetched blob URL
+        setIdCardApiUrls((prev) => ({
+          ...prev,
+          [side]: `/api/employees/me/id-card/${side}?t=${Date.now()}`,
+        }));
+        setIdCardLocalPreviews((prev) => ({ ...prev, [side]: null }));
+        toast.success(`ID card ${side} uploaded`);
+      } else {
+        // Revert preview on failure
+        setIdCardLocalPreviews((prev) => ({ ...prev, [side]: null }));
+        toast.error(data.message || "Upload failed");
+      }
+    } catch (err) {
+      setIdCardLocalPreviews((prev) => ({ ...prev, [side]: null }));
       toast.error(err.response?.data?.message || "Upload failed");
     } finally {
       setUploadingIdSide(null);
@@ -658,21 +693,21 @@ const deleteProfilePicture = async () => {
   };
 
   const handleIdCardDelete = async (side) => {
-    if (anyBusy) return;
     setUploadingIdSide(`delete-${side}`);
     try {
       const token = localStorage.getItem("token");
-      const { data } = await axios.put(
-        "/api/employees/me",
-        { idCard: { [side]: null } },
-        { headers: { Authorization: `Bearer ${token}` } },
-      );
+      const { data } = await axios.delete(`/api/employees/me/id-card/${side}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
       if (data.success) {
-        setIdCard((prev) => ({ ...prev, [side]: null }));
+        setIdCardApiUrls((prev) => ({ ...prev, [side]: null }));
+        setIdCardLocalPreviews((prev) => ({ ...prev, [side]: null }));
         toast.success(`ID card ${side} removed`);
-      } else toast.error(data.message);
-    } catch (err) {
-      toast.error(err.response?.data?.message || "Remove failed");
+      } else {
+        toast.error(data.message || "Remove failed");
+      }
+    } catch {
+      toast.error("Remove failed");
     } finally {
       setUploadingIdSide(null);
     }
@@ -684,7 +719,6 @@ const deleteProfilePicture = async () => {
     if (!form.email?.trim()) return toast.error("Email is required");
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim()))
       return toast.error("Please enter a valid email address");
-
     setSaving(true);
     try {
       const token = localStorage.getItem("token");
@@ -698,7 +732,6 @@ const deleteProfilePicture = async () => {
         emergencyContact: form.emergencyContact,
         address: form.address,
       };
-
       let data;
       if (role === "superadmin" || role === "owner") {
         const res = await axios.put(
@@ -728,11 +761,12 @@ const deleteProfilePicture = async () => {
         });
         data = res.data;
       }
-
       if (data.success) {
         setEmployee(data.employee);
         toast.success("Profile saved");
-      } else toast.error(data.message || "Save failed");
+      } else {
+        toast.error(data.message || "Save failed");
+      }
     } catch (err) {
       toast.error(err.response?.data?.message || "Save failed");
     } finally {
@@ -752,7 +786,6 @@ const deleteProfilePicture = async () => {
       return toast.error("Password must be at least 8 characters");
     if (pwForm.currentPassword === pwForm.newPassword)
       return toast.error("New password must be different");
-
     setPwSaving(true);
     try {
       const token = localStorage.getItem("token");
@@ -785,7 +818,10 @@ const deleteProfilePicture = async () => {
       ((endMin - startMin) / 60) *
       22 *
       parseFloat(form.hourlyRate)
-    ).toLocaleString("en-PK", { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+    ).toLocaleString("en-PK", {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    });
   };
 
   const SalaryRows = () => {
@@ -795,7 +831,10 @@ const deleteProfilePicture = async () => {
         <InfoBox label="Salary Type" value="Monthly" />
         <InfoBox
           label="Monthly Salary (PKR)"
-          value={employee.monthlySalary?.toLocaleString("en-PK", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+          value={employee.monthlySalary?.toLocaleString("en-PK", {
+            minimumFractionDigits: 0,
+            maximumFractionDigits: 0,
+          })}
         />
       </>
     ) : (
@@ -803,7 +842,10 @@ const deleteProfilePicture = async () => {
         <InfoBox label="Salary Type" value="Hourly" />
         <InfoBox
           label="Hourly Rate (PKR)"
-          value={employee.hourlyRate?.toLocaleString("en-PK", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+          value={employee.hourlyRate?.toLocaleString("en-PK", {
+            minimumFractionDigits: 0,
+            maximumFractionDigits: 0,
+          })}
         />
       </>
     );
@@ -823,9 +865,6 @@ const deleteProfilePicture = async () => {
     );
   }
 
-  const fullName = employee ? `${employee.firstName} ${employee.lastName}` : "";
-
-  // Determine save button label based on what's busy
   const saveLabel = () => {
     if (saving)
       return (
@@ -852,10 +891,12 @@ const deleteProfilePicture = async () => {
     );
   };
 
+  const frontHasImage = !!(idCardLocalPreviews.front || idCardApiUrls.front);
+  const backHasImage = !!(idCardLocalPreviews.back || idCardApiUrls.back);
+
   // ── Render ───────────────────────────────────────────────────────────────────
   return (
     <div className="bg-gray-50 min-h-screen">
-      {/* ── Global save overlay (soft dimming, doesn't block ID/pic uploads) ── */}
       {saving && (
         <div className="fixed inset-0 bg-black/10 backdrop-blur-[1px] z-50 flex items-center justify-center">
           <div className="bg-white rounded-xl shadow-lg px-6 py-4 flex items-center gap-3 pointer-events-none">
@@ -867,14 +908,22 @@ const deleteProfilePicture = async () => {
         </div>
       )}
 
+      {/*
+        ProfileHeader receives:
+        - profileBlobUrl: the auth-fetched blob URL (or null) for display
+        - onProfileUpdate(base64, mimeType): called when user picks a new pic
+        - onProfileDelete(): called when user removes pic
+        - uploadingPic: so the header can show its own spinner/overlay
+      */}
       <ProfileHeader
         employee={employee}
-        mode="edit" // 👈 Edit mode
+        profileBlobUrl={profileBlobUrl}
+        loadingProfilePic={loadingProfilePic || uploadingPic}
+        mode="edit"
         onProfileUpdate={uploadProfilePicture}
-         onProfileDelete={deleteProfilePicture}   // ✅ ADD THIS
+        onProfileDelete={deleteProfilePicture}
       />
 
-      {/* ════ CONTENT ════ */}
       <div className="max-w-6xl mx-auto px-4 md:px-6 py-6 space-y-5">
         {/* ── Personal Information ── */}
         <Card
@@ -916,7 +965,6 @@ const deleteProfilePicture = async () => {
                 </>
               )}
             </div>
-
             <EditBox
               label="Email"
               name="email"
@@ -930,7 +978,6 @@ const deleteProfilePicture = async () => {
               accentBorder={ac.border}
               accentBg={ac.bg}
             />
-
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {config.canEditPersonal ? (
                 <EditBox
@@ -959,8 +1006,7 @@ const deleteProfilePicture = async () => {
                     value={form.department}
                     onChange={handleChange}
                     disabled={formInputBusy}
-                    className={`w-full px-4 py-2.5 border ${ac.border} ${ac.bg} rounded-lg focus:outline-none ${ac.ring} focus:ring-2 text-sm transition
-                      ${formInputBusy ? "opacity-50 cursor-not-allowed" : ""}`}
+                    className={`w-full px-4 py-2.5 border ${ac.border} ${ac.bg} rounded-lg focus:outline-none ${ac.ring} focus:ring-2 text-sm transition ${formInputBusy ? "opacity-50 cursor-not-allowed" : ""}`}
                   >
                     {[
                       "IT",
@@ -980,7 +1026,6 @@ const deleteProfilePicture = async () => {
                 <InfoBox label="Department" value={employee?.department} />
               )}
             </div>
-
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {config.canEditJoining ? (
                 <EditBox
@@ -1021,8 +1066,7 @@ const deleteProfilePicture = async () => {
                     value={form.status}
                     onChange={handleChange}
                     disabled={formInputBusy}
-                    className={`w-full px-4 py-2.5 border ${ac.border} ${ac.bg} rounded-lg focus:outline-none ${ac.ring} focus:ring-2 text-sm transition
-                      ${formInputBusy ? "opacity-50 cursor-not-allowed" : ""}`}
+                    className={`w-full px-4 py-2.5 border ${ac.border} ${ac.bg} rounded-lg focus:outline-none ${ac.ring} focus:ring-2 text-sm transition ${formInputBusy ? "opacity-50 cursor-not-allowed" : ""}`}
                   >
                     {["Active", "Inactive", "Frozen"].map((s) => (
                       <option key={s} value={s}>
@@ -1035,7 +1079,6 @@ const deleteProfilePicture = async () => {
                 <InfoBox label="Status" value={employee?.status} />
               )}
             </div>
-
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {config.canEditShift ? (
                 <>
@@ -1069,7 +1112,6 @@ const deleteProfilePicture = async () => {
                 </>
               )}
             </div>
-
             {employee?.salaryType &&
               (config.canEditSalary ? (
                 <div className="space-y-4">
@@ -1082,8 +1124,7 @@ const deleteProfilePicture = async () => {
                       value={form.salaryType}
                       onChange={handleChange}
                       disabled={formInputBusy}
-                      className={`w-full px-4 py-2.5 border ${ac.border} ${ac.bg} rounded-lg focus:outline-none ${ac.ring} focus:ring-2 text-sm transition
-                        ${formInputBusy ? "opacity-50 cursor-not-allowed" : ""}`}
+                      className={`w-full px-4 py-2.5 border ${ac.border} ${ac.bg} rounded-lg focus:outline-none ${ac.ring} focus:ring-2 text-sm transition ${formInputBusy ? "opacity-50 cursor-not-allowed" : ""}`}
                     >
                       <option value="hourly">Hourly</option>
                       <option value="monthly">Monthly</option>
@@ -1269,7 +1310,8 @@ const deleteProfilePicture = async () => {
             <IdCardSide
               label="Front Side"
               side="front"
-              currentFile={idCard.front}
+              apiUrl={idCardApiUrls.front}
+              localPreview={idCardLocalPreviews.front}
               onUpload={handleIdCardUpload}
               onDelete={handleIdCardDelete}
               accentBorder={ac.border}
@@ -1283,7 +1325,8 @@ const deleteProfilePicture = async () => {
             <IdCardSide
               label="Back Side"
               side="back"
-              currentFile={idCard.back}
+              apiUrl={idCardApiUrls.back}
+              localPreview={idCardLocalPreviews.back}
               onUpload={handleIdCardUpload}
               onDelete={handleIdCardDelete}
               accentBorder={ac.border}
@@ -1294,7 +1337,6 @@ const deleteProfilePicture = async () => {
               globalBusy={saving || uploadingPic || pwSaving}
             />
           </div>
-          {/* Status row */}
           <div className="mt-4 flex items-center gap-2 flex-wrap">
             {uploadingIdSide && (
               <span className="inline-flex items-center gap-1.5 text-xs text-blue-700 bg-blue-50 border border-blue-200 px-3 py-1 rounded-full">
@@ -1305,15 +1347,15 @@ const deleteProfilePicture = async () => {
               </span>
             )}
             {!uploadingIdSide &&
-              (idCard.front?.url && idCard.back?.url ? (
+              (frontHasImage && backHasImage ? (
                 <span className="inline-flex items-center gap-1.5 text-xs text-green-700 bg-green-50 border border-green-200 px-3 py-1 rounded-full">
                   <Check size={12} /> Both sides uploaded
                 </span>
               ) : (
                 <span className="inline-flex items-center gap-1.5 text-xs text-amber-700 bg-amber-50 border border-amber-200 px-3 py-1 rounded-full">
-                  {!idCard.front?.url && !idCard.back?.url
+                  {!frontHasImage && !backHasImage
                     ? "Neither side uploaded yet"
-                    : !idCard.front?.url
+                    : !frontHasImage
                       ? "Front side missing"
                       : "Back side missing"}
                 </span>
@@ -1387,8 +1429,7 @@ const deleteProfilePicture = async () => {
           <button
             onClick={handleSave}
             disabled={anyBusy}
-            className={`flex items-center gap-2 px-6 py-2.5 text-white rounded-lg transition font-semibold text-sm
-              disabled:opacity-60 disabled:cursor-not-allowed shadow-sm ${btnBg}`}
+            className={`flex items-center gap-2 px-6 py-2.5 text-white rounded-lg transition font-semibold text-sm disabled:opacity-60 disabled:cursor-not-allowed shadow-sm ${btnBg}`}
           >
             {saveLabel()}
           </button>
@@ -1405,8 +1446,7 @@ const deleteProfilePicture = async () => {
             <button
               onClick={() => !anyBusy && setPwOpen(true)}
               disabled={anyBusy}
-              className={`flex items-center gap-2 px-4 py-2 border rounded-lg transition text-sm font-medium
-                disabled:opacity-50 disabled:cursor-not-allowed ${pwBtnBg}`}
+              className={`flex items-center gap-2 px-4 py-2 border rounded-lg transition text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed ${pwBtnBg}`}
             >
               <Pencil size={14} /> Change Password
             </button>
@@ -1449,8 +1489,7 @@ const deleteProfilePicture = async () => {
                       required
                       disabled={pwSaving}
                       placeholder={placeholder}
-                      className={`w-full px-4 py-2.5 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none text-sm transition
-                        ${pwSaving ? "opacity-50 cursor-not-allowed bg-gray-100" : ""}`}
+                      className={`w-full px-4 py-2.5 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none text-sm transition ${pwSaving ? "opacity-50 cursor-not-allowed bg-gray-100" : ""}`}
                     />
                     <button
                       type="button"
@@ -1474,8 +1513,7 @@ const deleteProfilePicture = async () => {
                 <button
                   type="submit"
                   disabled={pwSaving}
-                  className={`flex items-center gap-2 px-5 py-2 text-white rounded-lg transition font-semibold text-sm
-                    disabled:opacity-60 disabled:cursor-not-allowed ${btnBg}`}
+                  className={`flex items-center gap-2 px-5 py-2 text-white rounded-lg transition font-semibold text-sm disabled:opacity-60 disabled:cursor-not-allowed ${btnBg}`}
                 >
                   {pwSaving ? (
                     <>

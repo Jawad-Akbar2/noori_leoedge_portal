@@ -30,6 +30,7 @@ import {
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { useEscape } from "../../context/EscapeStack";
+import { useAuthImage } from "../../hooks/useAuthImage";
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
@@ -134,12 +135,21 @@ export default function GhostModeView({ employee, onClose }) {
   const [activeSection, setActiveSection] = useState("overview");
   const [summaryData, setSummaryData] = useState(null);
   const [dailyBreakdown, setDailyBreakdown] = useState([]);
-  const [profilePic, setProfilePic] = useState(null);
+  const [profilePicUrl, setProfilePicUrl] = useState(null);
+const [idCardUrls, setIdCardUrls] = useState({
+  front: null,
+  back: null,
+});
   const [fullEmpData, setFullEmpData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [showSalary, setShowSalary] = useState(true);
   const fromRef = useRef(null);
   const toRef = useRef(null);
+
+  const { blobUrl: profilePicture } = useAuthImage(profilePicUrl);
+
+const { blobUrl: idFront } = useAuthImage(idCardUrls.front);
+const { blobUrl: idBack } = useAuthImage(idCardUrls.back);
 
   const [fromDate, setFromDate] = useState(defaultFromDate);
   const [toDate, setToDate] = useState(
@@ -153,16 +163,34 @@ export default function GhostModeView({ employee, onClose }) {
       const token = localStorage.getItem("token");
       const h = { Authorization: `Bearer ${token}` };
 
-      const [breakdownRes, picRes, empRes] = await Promise.allSettled([
-        axios.get(`/api/payroll/employee-breakdown/${employee._id}`, {
-          params: { fromDate: toApiDate(fromDate), toDate: toApiDate(toDate) },
-          headers: h,
-        }),
-        axios.get(`/api/employees/${employee._id}/profile-picture`, {
-          headers: h,
-        }),
-        axios.get(`/api/employees/${employee._id}`, { headers: h }),
-      ]);
+      const [breakdownRes, empRes] = await Promise.allSettled([
+  axios.get(`/api/payroll/employee-breakdown/${employee._id}`, {
+    params: { fromDate: toApiDate(fromDate), toDate: toApiDate(toDate) },
+    headers: h,
+  }),
+  axios.get(`/api/employees/${employee._id}`, { headers: h }),
+]);
+      if (empRes.status === "fulfilled" && empRes.value.data.success) {
+  const empData = empRes.value.data.employee;
+  setFullEmpData(empData);
+
+  // ✅ Profile picture
+  setProfilePicUrl(
+    empData.profilePicture?.fileId
+      ? `/api/employees/${employee._id}/profile-picture`
+      : null
+  );
+
+  // ✅ ID card
+  setIdCardUrls({
+    front: empData.idCard?.front?.fileId
+      ? `/api/employees/${employee._id}/id-card/front`
+      : null,
+    back: empData.idCard?.back?.fileId
+      ? `/api/employees/${employee._id}/id-card/back`
+      : null,
+  });
+}
 
       if (
         breakdownRes.status === "fulfilled" &&
@@ -171,12 +199,8 @@ export default function GhostModeView({ employee, onClose }) {
         setDailyBreakdown(breakdownRes.value.data.dailyBreakdown ?? []);
         setSummaryData(breakdownRes.value.data.totals ?? null);
       }
-      if (picRes.status === "fulfilled" && picRes.value.data.success) {
-        setProfilePic(picRes.value.data.profilePicture?.data ?? null);
-      }
-      if (empRes.status === "fulfilled" && empRes.value.data.success) {
-        setFullEmpData(empRes.value.data.employee ?? null);
-      }
+
+
     } catch (err) {
       toast.error(
         err.response?.data?.message || "Failed to load employee data",
@@ -233,17 +257,17 @@ export default function GhostModeView({ employee, onClose }) {
               {/* Avatar */}
               <div className="relative shrink-0 self-start">
                 <div className="w-20 h-20 rounded-xl ring-2 ring-white/20 overflow-hidden bg-gradient-to-br from-slate-600 to-slate-700 flex items-center justify-center shadow-lg">
-                  {profilePic ? (
-                    <img
-                      src={profilePic}
-                      alt={initials}
-                      className="w-full h-full object-cover"
-                    />
-                  ) : (
-                    <span className="text-2xl font-bold text-white/80">
-                      {initials}
-                    </span>
-                  )}
+              {profilePicture ? (
+  <img
+    src={profilePicture}
+    alt={initials}
+    className="w-full h-full object-cover"
+  />
+) : (
+  <span className="text-2xl font-bold text-white/80">
+    {initials}
+  </span>
+)}
                 </div>
                 <span
                   className={`absolute -bottom-1 -right-1 w-3.5 h-3.5 border-2 border-slate-800 rounded-full ${
@@ -1091,109 +1115,35 @@ export default function GhostModeView({ employee, onClose }) {
                   </div>
                 </div>
                 <div className="p-4">
-                  {emp.idCard?.front?.url || emp.idCard?.back?.url ? (
-                    <div className="grid md:grid-cols-2 gap-4">
-                      {["front", "back"].map((side) => {
-                        const card = emp.idCard?.[side];
-                        if (!card?.url) {
-                          return (
-                            <div
-                              key={side}
-                              className="border-2 border-dashed border-gray-200 rounded-xl h-44 flex items-center justify-center bg-gray-50/30"
-                            >
-                              <div className="text-center text-gray-400">
-                                <FileText
-                                  size={28}
-                                  className="mx-auto mb-2 opacity-40"
-                                />
-                                <p className="text-xs capitalize">
-                                  {side} side — not uploaded
-                                </p>
-                              </div>
-                            </div>
-                          );
-                        }
+                  <div className="grid md:grid-cols-2 gap-4">
+  {[
+    { side: "front", url: idFront },
+    { side: "back", url: idBack },
+  ].map(({ side, url }) => (
+    <div
+      key={side}
+      className="rounded-xl overflow-hidden border border-gray-200 bg-white shadow-sm"
+    >
+      <div className="bg-gray-50 border-b px-4 py-2 text-xs font-semibold text-gray-600 capitalize">
+        {side} Side
+      </div>
 
-                        const isValidImage = card.url.startsWith("data:image/");
-                        const isPDF = card.url.startsWith(
-                          "data:application/pdf",
-                        );
-
-                        if (!isValidImage || isPDF) {
-                          return (
-                            <div
-                              key={side}
-                              className="rounded-xl overflow-hidden border border-red-200 bg-red-50/30"
-                            >
-                              <div className="bg-red-100 border-b border-red-200 px-4 py-2 text-xs font-semibold text-red-700 capitalize flex items-center justify-between">
-                                <span>{side} Side</span>
-                                <span className="text-red-600 text-[10px] bg-red-200 px-2 py-0.5 rounded-full">
-                                  Invalid format
-                                </span>
-                              </div>
-                              <div className="h-44 flex items-center justify-center">
-                                <div className="text-center text-red-500">
-                                  <AlertCircle
-                                    size={32}
-                                    className="mx-auto mb-2 opacity-60"
-                                  />
-                                  <p className="text-xs font-medium">
-                                    Only image files supported
-                                  </p>
-                                  <p className="text-[10px] mt-1 text-red-400">
-                                    JPEG, PNG, GIF, or WebP
-                                  </p>
-                                </div>
-                              </div>
-                            </div>
-                          );
-                        }
-
-                        return (
-                          <div
-                            key={side}
-                            className="rounded-xl overflow-hidden border border-gray-200 bg-white shadow-sm"
-                          >
-                            <div className="bg-gray-50 border-b border-gray-200 px-4 py-2 text-xs font-semibold text-gray-600 capitalize flex items-center justify-between">
-                              <span>{side} Side</span>
-                              <span className="text-green-600 text-[10px] bg-green-100 px-2 py-0.5 rounded-full flex items-center gap-1">
-                                <Check size={10} /> Image
-                              </span>
-                            </div>
-                            <div className="relative h-44 bg-gray-100">
-                              <img
-                                src={card.url}
-                                alt={`ID Card ${side}`}
-                                className="w-full h-full object-contain"
-                                onError={(e) => {
-                                  e.target.onerror = null;
-                                  e.target.src =
-                                    'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 24 24" fill="none" stroke="%23999"%3E%3Crect x="2" y="2" width="20" height="20" rx="2"/%3E%3Cpath d="M8 2v20M16 2v20M2 8h20M2 16h20"/%3E%3C/svg%3E';
-                                }}
-                              />
-                            </div>
-                            {card.fileName && (
-                              <div className="px-3 py-1.5 bg-gray-50 border-t border-gray-100">
-                                <p className="text-[10px] text-gray-500 truncate">
-                                  {card.fileName}
-                                </p>
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  ) : (
-                    <div className="text-center py-10 text-gray-400">
-                      <FileText size={40} className="mx-auto mb-3 opacity-30" />
-                      <p className="text-sm italic">
-                        No ID card documents on file
-                      </p>
-                      <p className="text-xs text-gray-400 mt-1">
-                        ID card images will appear here once uploaded
-                      </p>
-                    </div>
-                  )}
+      {url ? (
+        <div className="relative h-44 bg-gray-100">
+          <img
+            src={url}
+            alt={`ID Card ${side}`}
+            className="w-full h-full object-contain"
+          />
+        </div>
+      ) : (
+        <div className="h-44 flex items-center justify-center text-gray-400 text-xs">
+          Not uploaded
+        </div>
+      )}
+    </div>
+  ))}
+</div>
                 </div>
               </div>
             </div>

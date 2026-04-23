@@ -8,8 +8,8 @@ import axios from "axios";
  */
 export function useProfileComplete() {
   const [complete, setComplete] = useState(null); // null = not checked yet
-  const [missing, setMissing]   = useState([]);
-  const [loading, setLoading]   = useState(true);
+  const [missing, setMissing] = useState([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const check = async () => {
@@ -19,26 +19,32 @@ export function useProfileComplete() {
           headers: { Authorization: `Bearer ${token}` },
         });
 
-        if (!data.success) { setComplete(false); return; }
+        if (!data.success) {
+          setComplete(false);
+          return;
+        }
 
         const emp = data.employee;
         const role = emp.role;
 
         // Admins are always "complete"
- if (["owner", "superadmin"].includes(role)) {
-  setComplete(true);
-  setMissing([]);
-  return;
-}
+        if (["owner", "superadmin"].includes(role)) {
+          setComplete(true);
+          setMissing([]);
+          return;
+        }
 
         const gaps = [];
-        if (!emp.bank?.bankName?.trim())      gaps.push("Bank name");
-        if (!emp.bank?.accountName?.trim())   gaps.push("Account name");
-        if (!emp.bank?.accountNumber?.trim()) gaps.push("IBAN / Account number");
-        if (!emp.idCard?.front?.url)          gaps.push("ID card — front side");
-        if (!emp.idCard?.back?.url)           gaps.push("ID card — back side");
-        if (!emp.emergencyContact?.name?.trim())  gaps.push("Emergency contact name");
-        if (!emp.emergencyContact?.phone?.trim()) gaps.push("Emergency contact phone");
+        if (!emp.bank?.bankName?.trim()) gaps.push("Bank name");
+        if (!emp.bank?.accountName?.trim()) gaps.push("Account name");
+        if (!emp.bank?.accountNumber?.trim())
+          gaps.push("IBAN / Account number");
+        if (!emp.idCard?.front?.url) gaps.push("ID card — front side");
+        if (!emp.idCard?.back?.url) gaps.push("ID card — back side");
+        if (!emp.emergencyContact?.name?.trim())
+          gaps.push("Emergency contact name");
+        if (!emp.emergencyContact?.phone?.trim())
+          gaps.push("Emergency contact phone");
 
         setMissing(gaps);
         setComplete(gaps.length === 0);

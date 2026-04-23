@@ -20,6 +20,8 @@ import {
 import { logout, getUser } from "../../services/auth";
 import axios from "axios";
 import toast from "react-hot-toast";
+import { useAuthImage } from "../../hooks/useAuthImage";
+
 
 export default function Header({ onMenuClick }) {
   const navigate = useNavigate();
@@ -27,31 +29,25 @@ export default function Header({ onMenuClick }) {
   const user = getUser();
   const [showDropdown, setShowDropdown] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
-  const [profilePic, setProfilePic] = useState(null);
+  const [profilePictureApiUrl, setProfilePictureApiUrl] = useState(null);
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(false);
   const [processingId, setProcessingId] = useState(null);
   const dropdownRef = useRef(null);
   const notificationRef = useRef(null);
+const { blobUrl: profileBlobUrl } = useAuthImage(profilePictureApiUrl);
 
-  // Fetch profile picture on mount
-  useEffect(() => {
-    const fetchPic = async () => {
-      try {
-        const token = localStorage.getItem("token");
-        if (!token) return;
-        const { data } = await axios.get("/api/employees/me", {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (data.success && data.employee?.profilePicture?.data) {
-          setProfilePic(data.employee.profilePicture.data);
-        }
-      } catch {
-        // silently fail — fallback to initials
-      }
-    };
-    fetchPic();
-  }, []);
+
+useEffect(() => {
+  const token = localStorage.getItem("token");
+
+  if (!token) {
+    setProfilePictureApiUrl(null); // 🔥 clear old image
+    return;
+  }
+
+  setProfilePictureApiUrl("/api/employees/me/profile-picture");
+}, [user?.id]); // 👈 VERY IMPORTANT
 
   // Fetch notifications based on user role
   useEffect(() => {
@@ -320,9 +316,8 @@ export default function Header({ onMenuClick }) {
 
   const Avatar = ({ size = "w-8 h-8", textSize = "text-xs", showStatus = false }) => (
     <div className="relative">
-      {profilePic ? (
-        <img
-          src={profilePic}
+      {profileBlobUrl ? (
+  <img src={profileBlobUrl}
           alt="Profile"
           className={`${size} rounded-full object-cover ring-2 ring-white shadow-sm shrink-0`}
         />

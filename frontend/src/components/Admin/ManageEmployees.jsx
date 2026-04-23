@@ -176,7 +176,7 @@ export default function ManageEmployees() {
     setLoading(true);
     try {
       const token = localStorage.getItem("token");
-      const response = await axios.get("/api/employees", {
+      const response = await axios.get("/api/employees?images=true", {
         params: {
           includeArchived: includeArchived ? "true" : "false",
           includeLeft: "true",

@@ -6,10 +6,11 @@ const SYSTEM_ROLES  = ["owner", "superadmin"];
 const PAYROLL_ROLES = ["admin", "employee", "hybrid"];
 
 const uploadedFileSchema = {
-  url:        { type: String, default: null },
+  fileId:     { type: mongoose.Schema.Types.ObjectId, default: null }, // was: url
   fileName:   { type: String, default: null },
-  uploadedAt: { type: Date,   default: null },
+  uploadedAt: { type: Date, default: null },
 };
+
 
 const employeeSchema = new mongoose.Schema(
   {
@@ -21,28 +22,12 @@ const employeeSchema = new mongoose.Schema(
       index:     true,
     },
 
-    profilePicture: {
-      data: {
-        type:    String,
-        default: null,
-        validate: {
-          validator: function (v) {
-            if (!v) return true;
-            const base64Regex = /^data:image\/(jpeg|jpg|png|gif|webp);base64,/;
-            if (!base64Regex.test(v)) return false;
-            return v.length * 0.75 <= 2 * 1024 * 1024;
-          },
-          message: "Invalid image format or size exceeds 2MB",
-        },
-      },
-      fileName:   { type: String, default: null },
-      mimeType: {
-        type:    String,
-        default: null,
-        enum:    ["image/jpeg","image/jpg","image/png","image/gif","image/webp", null],
-      },
-      uploadedAt: { type: Date, default: null },
-    },
+  profilePicture: {
+  fileId:    { type: mongoose.Schema.Types.ObjectId, default: null }, // GridFS file _id
+  fileName:  { type: String, default: null },
+  mimeType:  { type: String, default: null, enum: ["image/jpeg","image/jpg","image/png","image/gif","image/webp", null] },
+  uploadedAt: { type: Date, default: null },
+},
 
     employeeNumber: { type: String, required: true, unique: true, index: true },
     firstName:      { type: String, required: true },
@@ -250,7 +235,7 @@ employeeSchema.methods.getEffectiveHourlyRate = function (
 employeeSchema.methods.isSystemAccount  = function () { return SYSTEM_ROLES.includes(this.role);  };
 employeeSchema.methods.isPayrollAccount = function () { return PAYROLL_ROLES.includes(this.role); };
 employeeSchema.methods.hasCompleteIdCard = function () {
-  return !!(this.idCard?.front?.url && this.idCard?.back?.url);
+  return !!(this.idCard?.front?.fileId && this.idCard?.back?.fileId);
 };
 
 const Employee = mongoose.model("Employee", employeeSchema);

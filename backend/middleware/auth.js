@@ -21,11 +21,11 @@ async function resolveUser(req, res) {
   try {
     decoded = jwt.verify(token, process.env.JWT_SECRET);
   } catch (err) {
-    return res.status(401).json({
+    res.status(401).json({          // ← don't `return` this
       success: false,
-      message:
-        err.name === "TokenExpiredError" ? "Token expired" : "Invalid token",
+      message: err.name === "TokenExpiredError" ? "Token expired" : "Invalid token",
     });
+    return null;                    // ← return null separately
   }
 
   try {

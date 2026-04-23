@@ -2,6 +2,7 @@ import express   from 'express';
 import cors      from 'cors';
 import mongoose  from 'mongoose';
 import dotenv    from 'dotenv';
+import { initGridFS } from './utils/gridfs.js';
 dotenv.config();
 
 // ── Env validation ───────────────────────────────────────────────
@@ -20,6 +21,7 @@ const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:3000';
 // ── DB connection ────────────────────────────────────────────────
 const connectDB = async () => {
   if (mongoose.connection.readyState >= 1) return;
+
   await mongoose.connect(MONGODB_URI, {
     family: 4,
     maxPoolSize: 10,
@@ -28,8 +30,17 @@ const connectDB = async () => {
     socketTimeoutMS: 45000,
     connectTimeoutMS: 10000,
   });
-  console.log('✓ MongoDB connected');
+
+  // ✅ Safe here — mongoose.connect() resolves only after connection is open
+  initGridFS();
+  console.log("✓ MongoDB connected");
 };
+
+// ✅ Also re-init on reconnect — bucket reference is stale after a disconnect
+mongoose.connection.on("reconnected", () => {
+  initGridFS();
+  console.log("✓ MongoDB reconnected");
+});
 
 (async () => {
   await connectDB();

@@ -1,5 +1,4 @@
 // routes/requests.js
-
 import express from 'express';
 import LeaveRequest      from '../models/LeaveRequest.js';
 import CorrectionRequest from '../models/CorrectionRequest.js';
@@ -11,26 +10,22 @@ import { parseDDMMYYYY, formatDate } from '../utils/dateUtils.js';
 const router = express.Router();
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
-
 const toMin = (t) => {
   if (!t) return 0;
   const [h, m] = t.split(':').map(Number);
   return h * 60 + m;
 };
-
 const calcHours = (inT, outT, outNextDay = false) => {
   if (!inT || !outT) return 0;
   let diff = toMin(outT) - toMin(inT);
   if (outNextDay || diff < 0) diff += 1440;
   return Math.max(0, diff / 60);
 };
-
 const shiftHours = (shift) => {
   if (!shift?.start || !shift?.end) return 8;
   const isNight = toMin(shift.end) < toMin(shift.start);
   return calcHours(shift.start, shift.end, isNight);
 };
-
 const effectiveHourlyRate = (emp, workingDaysInPeriod = 21) => {
   if (emp.salaryType === 'monthly' && emp.monthlySalary) {
     const scheduledHrsPerDay = shiftHours(emp.shift) || 8;
@@ -38,7 +33,6 @@ const effectiveHourlyRate = (emp, workingDaysInPeriod = 21) => {
   }
   return emp.hourlyRate || 0;
 };
-
 const resolveCorrectionType = (correctedIn, correctedOut) => {
   if (correctedIn  && correctedOut)  return 'Both';
   if (correctedIn  && !correctedOut) return 'In';
@@ -46,12 +40,14 @@ const resolveCorrectionType = (correctedIn, correctedOut) => {
   return 'Both';
 };
 
-// ─── POST /api/requests/leave/submit  (employee) ─────────────────────────────
+// Minimal employee fields needed for attendance ops — avoids fetching images etc.
+const EMP_ATTENDANCE_FIELDS =
+  'employeeNumber firstName lastName department shift salaryType hourlyRate monthlySalary';
 
+// ─── POST /api/requests/leave/submit  (employee) ─────────────────────────────
 router.post('/leave/submit', employeeAuth, async (req, res) => {
   try {
     const { fromDate, toDate, leaveType, reason } = req.body;
-
     if (!fromDate || !toDate || !leaveType || !reason) {
       return res.status(400).json({
         success: false,
@@ -61,7 +57,6 @@ router.post('/leave/submit', employeeAuth, async (req, res) => {
 
     const parsedFrom = parseDDMMYYYY(fromDate) || new Date(fromDate);
     const parsedTo   = parseDDMMYYYY(toDate)   || new Date(toDate);
-
     if (!parsedFrom || isNaN(parsedFrom) || !parsedTo || isNaN(parsedTo)) {
       return res.status(400).json({ success: false, message: 'Invalid date format. Use dd/mm/yyyy or YYYY-MM-DD' });
     }
@@ -73,8 +68,20 @@ router.post('/leave/submit', employeeAuth, async (req, res) => {
       return res.status(400).json({ success: false, message: 'toDate must be on or after fromDate' });
     }
 
-    // ── 90-day eligibility check ──────────────────────────────────────────────
-    const employee = await Employee.findById(req.userId).lean();
+    // ── fetch employee + overlap check in parallel ────────────────────────────
+    const [employee, overlap] = await Promise.all([
+      Employee.findById(req.userId)
+        .select('joiningDate employeeNumber firstName lastName department')
+        .lean(),
+      LeaveRequest.findOne({
+        empId:     req.userId,
+        status:    { $in: ['Pending', 'Approved'] },
+        fromDate:  { $lte: parsedTo },
+        toDate:    { $gte: parsedFrom },
+        isDeleted: false
+      }).select('_id').lean()
+    ]);
+
     if (!employee) {
       return res.status(404).json({ success: false, message: 'Employee not found' });
     }
@@ -87,15 +94,6 @@ router.post('/leave/submit', employeeAuth, async (req, res) => {
         daysUntilEligible: 90 - daysElapsed
       });
     }
-
-    // ── overlap check ─────────────────────────────────────────────────────────
-    const overlap = await LeaveRequest.findOne({
-      empId:     employee._id,
-      status:    { $in: ['Pending', 'Approved'] },
-      fromDate:  { $lte: parsedTo },
-      toDate:    { $gte: parsedFrom },
-      isDeleted: false
-    });
 
     if (overlap) {
       return res.status(400).json({
@@ -116,8 +114,7 @@ router.post('/leave/submit', employeeAuth, async (req, res) => {
       status:             'Pending',
       eligibilityChecked: true
     });
-
-    await leaveRequest.save();   // totalDays auto-computed by pre-save hook
+    await leaveRequest.save();
 
     return res.status(201).json({
       success:   true,
@@ -135,15 +132,12 @@ router.post('/leave/submit', employeeAuth, async (req, res) => {
 });
 
 // ─── POST /api/requests/correction/submit  (employee) ────────────────────────
-
 router.post('/correction/submit', employeeAuth, async (req, res) => {
   try {
     const { date, correctedInTime, correctedOutTime, reason } = req.body;
-
     if (!date || !reason) {
       return res.status(400).json({ success: false, message: 'date and reason are required' });
     }
-
     if (!correctedInTime && !correctedOutTime) {
       return res.status(400).json({
         success: false,
@@ -151,7 +145,6 @@ router.post('/correction/submit', employeeAuth, async (req, res) => {
       });
     }
 
-    // ── HH:mm format validation ───────────────────────────────────────────────
     const TIME_RE = /^([0-1][0-9]|2[0-3]):[0-5][0-9]$/;
     if (correctedInTime  && !TIME_RE.test(correctedInTime)) {
       return res.status(400).json({ success: false, message: 'correctedInTime must be HH:mm (24-hour)' });
@@ -166,19 +159,25 @@ router.post('/correction/submit', employeeAuth, async (req, res) => {
     }
     parsedDate.setHours(0, 0, 0, 0);
 
-    const employee = await Employee.findById(req.userId).lean();
+    // ── fetch employee + duplicate check + existing attendance in parallel ────
+    const [employee, existing, attendance] = await Promise.all([
+      Employee.findById(req.userId)
+        .select('employeeNumber firstName lastName department shift')
+        .lean(),
+      CorrectionRequest.findOne({
+        empId:     req.userId,
+        date:      parsedDate,
+        status:    'Pending',
+        isDeleted: false
+      }).select('_id').lean(),
+      AttendanceLog.findOne({ empId: req.userId, date: parsedDate })
+        .select('inOut _id')
+        .lean()
+    ]);
+
     if (!employee) {
       return res.status(404).json({ success: false, message: 'Employee not found' });
     }
-
-    // ── duplicate pending correction guard ────────────────────────────────────
-    const existing = await CorrectionRequest.findOne({
-      empId:     employee._id,
-      date:      parsedDate,
-      status:    'Pending',
-      isDeleted: false
-    });
-
     if (existing) {
       return res.status(400).json({
         success: false,
@@ -186,19 +185,10 @@ router.post('/correction/submit', employeeAuth, async (req, res) => {
       });
     }
 
-    const attendance = await AttendanceLog.findOne({
-      empId: employee._id,
-      date:  parsedDate
-    }).lean();
-
     const correctionType = resolveCorrectionType(correctedInTime, correctedOutTime);
-
-    // ── determine outNextDay for night-shift corrections ──────────────────────
-    // If correcting Out on a night-shift employee and the corrected out time
-    // is earlier than the in time (or the shift start), flag outNextDay.
-    const isNightShift = toMin(employee.shift?.end) < toMin(employee.shift?.start);
-    const effectiveIn  = correctedInTime || attendance?.inOut?.in || null;
-    let outNextDay = attendance?.inOut?.outNextDay || false;
+    const isNightShift   = toMin(employee.shift?.end) < toMin(employee.shift?.start);
+    const effectiveIn    = correctedInTime || attendance?.inOut?.in || null;
+    let outNextDay       = attendance?.inOut?.outNextDay || false;
     if (correctedOutTime && effectiveIn) {
       outNextDay = isNightShift && toMin(correctedOutTime) < toMin(effectiveIn);
     }
@@ -220,7 +210,6 @@ router.post('/correction/submit', employeeAuth, async (req, res) => {
       source: 'employee',
       status: 'Pending'
     });
-
     await correctionRequest.save();
 
     return res.status(201).json({
@@ -235,11 +224,9 @@ router.post('/correction/submit', employeeAuth, async (req, res) => {
 });
 
 // ─── GET /api/requests/my-requests  (employee) ───────────────────────────────
-
 router.get('/my-requests', employeeAuth, async (req, res) => {
   try {
     const { status, type, fromDate, toDate } = req.query;
-
     const baseQuery = { empId: req.userId, isDeleted: false };
 
     if (fromDate && toDate) {
@@ -256,11 +243,11 @@ router.get('/my-requests', employeeAuth, async (req, res) => {
 
     const [leaveRequests, correctionRequests] = await Promise.all([
       (!type || type === 'leave')
-        ? LeaveRequest.find(leaveQuery).sort({ createdAt: -1 }).lean()
-        : Promise.resolve([]),
+        ? LeaveRequest.find(leaveQuery).select('-__v').sort({ createdAt: -1 }).lean()
+        : [],
       (!type || type === 'correction')
-        ? CorrectionRequest.find(correctionQuery).sort({ createdAt: -1 }).lean()
-        : Promise.resolve([])
+        ? CorrectionRequest.find(correctionQuery).select('-__v').sort({ createdAt: -1 }).lean()
+        : []
     ]);
 
     return res.json({
@@ -282,18 +269,20 @@ router.get('/my-requests', employeeAuth, async (req, res) => {
 });
 
 // ─── GET /api/requests/admin/pending  (admin) ────────────────────────────────
-
 router.get('/admin/pending', adminAuth, async (req, res) => {
   try {
     const days   = Math.min(Number(req.query.days) || 45, 180);
     const cutoff = new Date(Date.now() - days * 86_400_000);
+    const baseFilter = { status: 'Pending', isDeleted: false, createdAt: { $gte: cutoff } };
 
     const [leaveRequests, correctionRequests] = await Promise.all([
-      LeaveRequest.find({ status: 'Pending', isDeleted: false, createdAt: { $gte: cutoff } })
+      LeaveRequest.find(baseFilter)
+        .select('-__v')
         .populate('empId', 'firstName lastName employeeNumber department shift')
         .sort({ createdAt: -1 })
         .lean(),
-      CorrectionRequest.find({ status: 'Pending', isDeleted: false, createdAt: { $gte: cutoff } })
+      CorrectionRequest.find(baseFilter)
+        .select('-__v')
         .populate('empId', 'firstName lastName employeeNumber department shift')
         .sort({ createdAt: -1 })
         .lean()
@@ -322,12 +311,9 @@ router.get('/admin/pending', adminAuth, async (req, res) => {
 });
 
 // ─── GET /api/requests/admin/all  (admin) ────────────────────────────────────
-// Full history with optional filters: status, type, empId, fromDate, toDate
-
 router.get('/admin/all', adminAuth, async (req, res) => {
   try {
     const { status, type, empId, fromDate, toDate, page = 1, limit = 50 } = req.query;
-
     const baseQuery = { isDeleted: false };
     if (status) baseQuery.status = status;
     if (empId)  baseQuery.empId  = empId;
@@ -341,23 +327,26 @@ router.get('/admin/all', adminAuth, async (req, res) => {
       }
     }
 
-    const skip = (Number(page) - 1) * Number(limit);
+    const skip     = (Number(page) - 1) * Number(limit);
+    const limitNum = Number(limit);
 
     const [leaveRequests, correctionRequests] = await Promise.all([
       (!type || type === 'leave')
         ? LeaveRequest.find(baseQuery)
+            .select('-__v')
             .populate('empId', 'firstName lastName employeeNumber department')
             .sort({ createdAt: -1 })
-            .skip(skip).limit(Number(limit))
+            .skip(skip).limit(limitNum)
             .lean()
-        : Promise.resolve([]),
+        : [],
       (!type || type === 'correction')
         ? CorrectionRequest.find(baseQuery)
+            .select('-__v')
             .populate('empId', 'firstName lastName employeeNumber department')
             .sort({ createdAt: -1 })
-            .skip(skip).limit(Number(limit))
+            .skip(skip).limit(limitNum)
             .lean()
-        : Promise.resolve([])
+        : []
     ]);
 
     return res.json({
@@ -372,12 +361,13 @@ router.get('/admin/all', adminAuth, async (req, res) => {
 });
 
 // ─── PATCH /api/requests/leave/:requestId/approve  (admin) ───────────────────
-
 router.patch('/leave/:requestId/approve', adminAuth, async (req, res) => {
   try {
+    // ── fetch leave request + employee in parallel ────────────────────────────
     const leaveRequest = await LeaveRequest.findOne({
       _id: req.params.requestId, isDeleted: false
-    });
+    }).select('-__v');
+
     if (!leaveRequest) {
       return res.status(404).json({ success: false, message: 'Leave request not found' });
     }
@@ -385,18 +375,14 @@ router.patch('/leave/:requestId/approve', adminAuth, async (req, res) => {
       return res.status(400).json({ success: false, message: `Request already ${leaveRequest.status.toLowerCase()}` });
     }
 
-    const employee = await Employee.findById(leaveRequest.empId).lean();
+    const employee = await Employee.findById(leaveRequest.empId)
+      .select(EMP_ATTENDANCE_FIELDS)
+      .lean();
     if (!employee) {
       return res.status(404).json({ success: false, message: 'Employee not found' });
     }
 
-    // ── mark approved FIRST so a DB error in attendance ops doesn't leave
-    //    the request in Pending with partial attendance rows written ───────────
-    leaveRequest.status     = 'Approved';
-    leaveRequest.approvedBy = req.userId;
-    leaveRequest.approvedAt = new Date();
-
-    // Build the list of affected dates BEFORE saving so we can store them
+    // ── compute affected dates ────────────────────────────────────────────────
     const affectedDates = [];
     for (
       let d = new Date(leaveRequest.fromDate);
@@ -407,61 +393,64 @@ router.patch('/leave/:requestId/approve', adminAuth, async (req, res) => {
       day.setHours(0, 0, 0, 0);
       affectedDates.push(day.toISOString().slice(0, 10));
     }
+
+    leaveRequest.status                  = 'Approved';
+    leaveRequest.approvedBy              = req.userId;
+    leaveRequest.approvedAt              = new Date();
     leaveRequest.affectedAttendanceDates = affectedDates;
 
-    await leaveRequest.save();
-
-    // ── upsert AttendanceLog for each leave day ───────────────────────────────
     const schedHours = shiftHours(employee.shift);
     const rate       = effectiveHourlyRate(employee, 21);
     const basePay    = schedHours * rate;
+    const now        = new Date();
 
-    const ops = affectedDates.map(iso => {
-      const day = new Date(iso);
-      day.setHours(0, 0, 0, 0);
-
-      return AttendanceLog.findOneAndUpdate(
-        { empId: leaveRequest.empId, date: day },
-        {
-          $setOnInsert: {
-            empId:      leaveRequest.empId,
-            date:       day,
-            empNumber:  employee.employeeNumber,
-            empName:    `${employee.firstName} ${employee.lastName}`,
-            department: employee.department
+    // ── save leave + all attendance upserts in parallel ───────────────────────
+    await Promise.all([
+      leaveRequest.save(),
+      ...affectedDates.map(iso => {
+        const day = new Date(iso);
+        day.setHours(0, 0, 0, 0);
+        return AttendanceLog.findOneAndUpdate(
+          { empId: leaveRequest.empId, date: day },
+          {
+            $setOnInsert: {
+              empId:      leaveRequest.empId,
+              date:       day,
+              empNumber:  employee.employeeNumber,
+              empName:    `${employee.firstName} ${employee.lastName}`,
+              department: employee.department
+            },
+            $set: {
+              status:  'Leave',
+              inOut:   { in: null, out: null, outNextDay: false },
+              shift: {
+                start:        employee.shift.start,
+                end:          employee.shift.end,
+                isNightShift: toMin(employee.shift.end) < toMin(employee.shift.start)
+              },
+              hourlyRate: rate,
+              financials: {
+                hoursWorked:      schedHours,
+                scheduledHours:   schedHours,
+                basePay,
+                deduction:        0,
+                deductionDetails: [],
+                otMultiplier:     1,
+                otHours:          0,
+                otAmount:         0,
+                otDetails:        [],
+                finalDayEarning:  basePay
+              },
+              manualOverride:            false,
+              'metadata.source':         'leave_approval',
+              'metadata.lastUpdatedBy':  req.userId,
+              'metadata.lastModifiedAt': now
+            }
           },
-          $set: {
-            status:     'Leave',
-            inOut:      { in: null, out: null, outNextDay: false },
-            shift: {
-              start:        employee.shift.start,
-              end:          employee.shift.end,
-              isNightShift: toMin(employee.shift.end) < toMin(employee.shift.start)
-            },
-            hourlyRate: rate,
-            financials: {
-              hoursWorked:      schedHours,
-              scheduledHours:   schedHours,
-              basePay,
-              deduction:        0,
-              deductionDetails: [],
-              otMultiplier:     1,
-              otHours:          0,
-              otAmount:         0,
-              otDetails:        [],
-              finalDayEarning:  basePay
-            },
-            manualOverride:            false,
-            'metadata.source':         'leave_approval',
-            'metadata.lastUpdatedBy':  req.userId,
-            'metadata.lastModifiedAt': new Date()
-          }
-        },
-        { upsert: true, new: true, setDefaultsOnInsert: true }
-      ).catch(err => ({ error: err.message }));
-    });
-
-    await Promise.all(ops);
+          { upsert: true, new: false, setDefaultsOnInsert: true }
+        );
+      })
+    ]);
 
     return res.json({
       success: true,
@@ -478,14 +467,13 @@ router.patch('/leave/:requestId/approve', adminAuth, async (req, res) => {
 });
 
 // ─── PATCH /api/requests/leave/:requestId/reject  (admin) ────────────────────
-
 router.patch('/leave/:requestId/reject', adminAuth, async (req, res) => {
   try {
     const { reason } = req.body;
-
     const leaveRequest = await LeaveRequest.findOne({
       _id: req.params.requestId, isDeleted: false
-    });
+    }).select('status empId fromDate toDate');
+
     if (!leaveRequest) {
       return res.status(404).json({ success: false, message: 'Leave request not found' });
     }
@@ -514,12 +502,12 @@ router.patch('/leave/:requestId/reject', adminAuth, async (req, res) => {
 });
 
 // ─── PATCH /api/requests/correction/:requestId/approve  (admin) ──────────────
-
 router.patch('/correction/:requestId/approve', adminAuth, async (req, res) => {
   try {
     const correctionRequest = await CorrectionRequest.findOne({
       _id: req.params.requestId, isDeleted: false
-    });
+    }).select('-__v');
+
     if (!correctionRequest) {
       return res.status(404).json({ success: false, message: 'Correction request not found' });
     }
@@ -527,24 +515,27 @@ router.patch('/correction/:requestId/approve', adminAuth, async (req, res) => {
       return res.status(400).json({ success: false, message: `Request already ${correctionRequest.status.toLowerCase()}` });
     }
 
-    const employee = await Employee.findById(correctionRequest.empId).lean();
+    const dateObj = new Date(correctionRequest.date);
+    dateObj.setHours(0, 0, 0, 0);
+
+    // ── fetch employee + existing attendance log in parallel ──────────────────
+    const [employee, existingRecord] = await Promise.all([
+      Employee.findById(correctionRequest.empId)
+        .select(EMP_ATTENDANCE_FIELDS)
+        .lean(),
+      correctionRequest.attendanceLogRef
+        ? AttendanceLog.findById(correctionRequest.attendanceLogRef)
+        : AttendanceLog.findOne({ empId: correctionRequest.empId, date: dateObj })
+    ]);
+
     if (!employee) {
       return res.status(404).json({ success: false, message: 'Employee not found' });
     }
 
-    const dateObj = new Date(correctionRequest.date);
-    dateObj.setHours(0, 0, 0, 0);
-
-    // ── load or create the AttendanceLog row ──────────────────────────────────
-    // Use attendanceLogRef if available (populated by the DB model) for an
-    // indexed direct hit; fall back to the compound { empId, date } lookup.
-    let record = correctionRequest.attendanceLogRef
-      ? await AttendanceLog.findById(correctionRequest.attendanceLogRef)
-      : await AttendanceLog.findOne({ empId: correctionRequest.empId, date: dateObj });
-
     const isNightShift = toMin(employee.shift.end) < toMin(employee.shift.start);
     const rate         = effectiveHourlyRate(employee, 21);
 
+    let record = existingRecord;
     if (!record) {
       record = new AttendanceLog({
         empId:      correctionRequest.empId,
@@ -552,20 +543,14 @@ router.patch('/correction/:requestId/approve', adminAuth, async (req, res) => {
         empNumber:  employee.employeeNumber,
         empName:    `${employee.firstName} ${employee.lastName}`,
         department: employee.department,
-        shift: {
-          start:        employee.shift.start,
-          end:          employee.shift.end,
-          isNightShift
-        },
+        shift:      { start: employee.shift.start, end: employee.shift.end, isNightShift },
         hourlyRate: rate,
         status:     'OffDay'
       });
     }
 
-    // ── apply only the corrected fields ───────────────────────────────────────
-    const currentInOut = record.inOut?.toObject?.()
-      ? record.inOut.toObject()
-      : { ...(record.inOut || {}) };
+    // ── apply corrected fields ────────────────────────────────────────────────
+    const currentInOut = record.inOut?.toObject?.() ?? { ...(record.inOut || {}) };
 
     if (['In', 'Both'].includes(correctionRequest.correctionType)) {
       currentInOut.in = correctionRequest.correctedInTime;
@@ -574,26 +559,20 @@ router.patch('/correction/:requestId/approve', adminAuth, async (req, res) => {
       currentInOut.out = correctionRequest.correctedOutTime;
     }
 
-    // Re-derive outNextDay after applying the corrected times
-    if (currentInOut.in && currentInOut.out) {
-      currentInOut.outNextDay = isNightShift && toMin(currentInOut.out) < toMin(currentInOut.in);
-    } else {
-      // If the correction supplied an outNextDay override (stored on the request), honour it
-      currentInOut.outNextDay = correctionRequest.outNextDay || false;
-    }
+    currentInOut.outNextDay = (currentInOut.in && currentInOut.out)
+      ? isNightShift && toMin(currentInOut.out) < toMin(currentInOut.in)
+      : (correctionRequest.outNextDay || false);
 
     record.inOut = currentInOut;
 
-    // ── recompute financials — preserve existing deductions & OT ─────────────
+    // ── recompute financials ──────────────────────────────────────────────────
+    const existingFin       = record.financials?.toObject?.() ?? { ...(record.financials || {}) };
+    const existingDeduction = existingFin.deduction  || 0;
+    const existingOtAmount  = existingFin.otAmount   || 0;
+
     if (currentInOut.in && currentInOut.out) {
-      const hours  = calcHours(currentInOut.in, currentInOut.out, currentInOut.outNextDay);
-      const base   = hours * rate;
-
-      // Pull existing financials safely whether doc is new or existing
-      const existingFin        = record.financials?.toObject?.() || { ...(record.financials || {}) };
-      const existingDeduction  = existingFin.deduction  || 0;
-      const existingOtAmount   = existingFin.otAmount   || 0;
-
+      const hours = calcHours(currentInOut.in, currentInOut.out, currentInOut.outNextDay);
+      const base  = hours * rate;
       record.financials = {
         ...existingFin,
         hoursWorked:     hours,
@@ -601,17 +580,10 @@ router.patch('/correction/:requestId/approve', adminAuth, async (req, res) => {
         basePay:         base,
         finalDayEarning: Math.max(0, base - existingDeduction + existingOtAmount)
       };
-
-      // Re-evaluate status based on corrected in-time
       record.status = toMin(currentInOut.in) > toMin(employee.shift.start) ? 'Late' : 'Present';
     } else if (currentInOut.in || currentInOut.out) {
-      // Only one side present after correction → 50% pay penalty
-      const schedHrs           = shiftHours(employee.shift);
-      const base               = schedHrs * rate * 0.5;
-      const existingFin        = record.financials?.toObject?.() || { ...(record.financials || {}) };
-      const existingDeduction  = existingFin.deduction  || 0;
-      const existingOtAmount   = existingFin.otAmount   || 0;
-
+      const schedHrs = shiftHours(employee.shift);
+      const base     = schedHrs * rate * 0.5;
       record.financials = {
         ...existingFin,
         hoursWorked:     schedHrs,
@@ -625,19 +597,19 @@ router.patch('/correction/:requestId/approve', adminAuth, async (req, res) => {
     record.hourlyRate     = rate;
     record.manualOverride = false;
     record.metadata = {
-      ...(record.metadata?.toObject?.() || { ...(record.metadata || {}) }),
+      ...(record.metadata?.toObject?.() ?? { ...(record.metadata || {}) }),
       source:         'correction_approval',
       lastUpdatedBy:  req.userId,
       lastModifiedAt: new Date()
     };
 
+    // ── save attendance then mark approved ────────────────────────────────────
     await record.save();
 
-    // ── mark correction as approved AFTER attendance is successfully saved ────
-    correctionRequest.status          = 'Approved';
-    correctionRequest.approvedBy      = req.userId;
-    correctionRequest.approvedAt      = new Date();
-    correctionRequest.attendanceLogRef = record._id;   // keep ref in sync
+    correctionRequest.status           = 'Approved';
+    correctionRequest.approvedBy       = req.userId;
+    correctionRequest.approvedAt       = new Date();
+    correctionRequest.attendanceLogRef = record._id;
     await correctionRequest.save();
 
     return res.json({
@@ -652,14 +624,13 @@ router.patch('/correction/:requestId/approve', adminAuth, async (req, res) => {
 });
 
 // ─── PATCH /api/requests/correction/:requestId/reject  (admin) ───────────────
-
 router.patch('/correction/:requestId/reject', adminAuth, async (req, res) => {
   try {
     const { reason } = req.body;
-
     const correctionRequest = await CorrectionRequest.findOne({
       _id: req.params.requestId, isDeleted: false
-    });
+    }).select('status date empId');
+
     if (!correctionRequest) {
       return res.status(404).json({ success: false, message: 'Correction request not found' });
     }

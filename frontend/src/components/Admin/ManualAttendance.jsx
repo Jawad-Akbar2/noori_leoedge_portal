@@ -703,7 +703,7 @@ const [form, setForm] = useState({
     if (!isEdit) {
       setLoadingEmp(true);
       axios
-        .get("/api/employees?includeFrozen=true", { headers: authHeader() })
+        .get("/api/employees?images=false", { headers: authHeader() })
         .then((res) => {
           let list = res.data?.employees || [];
           if (currentUserRole === "admin")
@@ -1323,7 +1323,7 @@ function MarkTab({ userRole, isSuperAdmin, isAdmin, isHybrid }) {
       setLoading(true);
       try {
         const [empRes, attRes] = await Promise.all([
-          axios.get("/api/employees?includeFrozen=true", {
+          axios.get("/api/employees?images=false", {
             headers: authHeader(),
           }),
           axios.get(

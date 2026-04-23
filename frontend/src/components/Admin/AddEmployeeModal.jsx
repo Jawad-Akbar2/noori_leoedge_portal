@@ -1,6 +1,16 @@
 import React, { useState, useRef } from "react";
 import axios from "axios";
-import { X, Save, AlertCircle, Calendar, Shield, Upload, Trash2, Camera, FileText } from "lucide-react";
+import {
+  X,
+  Save,
+  AlertCircle,
+  Calendar,
+  Shield,
+  Upload,
+  Trash2,
+  Camera,
+  FileText,
+} from "lucide-react";
 import toast from "react-hot-toast";
 import EmployeeLinkDialog from "./EmployeeLinkDialog";
 import { formatToDDMMYYYY } from "../../utils/dateFormatter";
@@ -38,7 +48,11 @@ const IdCardSide = ({
     }
     const reader = new FileReader();
     reader.onload = (ev) =>
-      onUpload(side, { url: ev.target.result, fileName: file.name });
+      onUpload(side, {
+        url: ev.target.result,
+        fileName: file.name,
+        mimeType: file.type,
+      });
     reader.readAsDataURL(file);
     e.target.value = "";
   };
@@ -119,7 +133,8 @@ const IdCardSide = ({
 
 // currentUserRole is passed from ManageEmployees
 export default function AddEmployeeModal({ onClose, onSave, currentUserRole }) {
-  const isSuperAdmin = currentUserRole === "superadmin" || currentUserRole === "owner";
+  const isSuperAdmin =
+    currentUserRole === "superadmin" || currentUserRole === "owner";
 
   const [activeTab, setActiveTab] = useState("basic");
   const [profilePicture, setProfilePicture] = useState(null);
@@ -153,7 +168,13 @@ export default function AddEmployeeModal({ onClose, onSave, currentUserRole }) {
     if (!file) return;
 
     const reader = new FileReader();
-    reader.onload = (ev) => setProfilePicture(ev.target.result);
+    reader.onload = (ev) =>
+      setProfilePicture({
+        data: ev.target.result,
+        fileName: file.name,
+        mimeType: file.type,
+      });
+
     reader.readAsDataURL(file);
   };
 
@@ -191,8 +212,10 @@ export default function AddEmployeeModal({ onClose, onSave, currentUserRole }) {
       ((endMin - startMin) / 60) *
       22 *
       parseFloat(formData.hourlyRate)
-    ).toLocaleString("en-PK", { minimumFractionDigits: 0, maximumFractionDigits: 0 })
-                      
+    ).toLocaleString("en-PK", {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    });
   };
 
   const isValidTime = (time) => /^([0-1][0-9]|2[0-3]):[0-5][0-9]$/.test(time);
@@ -276,10 +299,6 @@ export default function AddEmployeeModal({ onClose, onSave, currentUserRole }) {
             ? parseFloat(formData.monthlySalary)
             : null,
         bank: formData.bank,
-
-        // ✅ NEW
-        profilePicture,
-        idCard,
       };
 
       const response = await axios.post("/api/employees", payload, {
@@ -287,6 +306,46 @@ export default function AddEmployeeModal({ onClose, onSave, currentUserRole }) {
       });
 
       const { employee, inviteLink } = response.data;
+
+      const uploads = [];
+
+      if (profilePicture) {
+        uploads.push(
+          axios.put(
+            `/api/employees/${employee._id}/profile-picture`,
+            {
+              profilePicture,
+            },
+            { headers: { Authorization: `Bearer ${token}` } },
+          ),
+        );
+      }
+
+      if (idCard.front?.url) {
+        uploads.push(
+          axios.put(
+            `/api/employees/${employee._id}/id-card/front`,
+            {
+              idCard: idCard.front,
+            },
+            { headers: { Authorization: `Bearer ${token}` } },
+          ),
+        );
+      }
+
+      if (idCard.back?.url) {
+        uploads.push(
+          axios.put(
+            `/api/employees/${employee._id}/id-card/back`,
+            {
+              idCard: idCard.back,
+            },
+            { headers: { Authorization: `Bearer ${token}` } },
+          ),
+        );
+      }
+
+      await Promise.all(uploads);
       setNewEmployee(employee);
       setGeneratedLink(inviteLink);
       setShowLinkDialog(true);
@@ -311,23 +370,23 @@ export default function AddEmployeeModal({ onClose, onSave, currentUserRole }) {
   };
 
   const handleShare = async () => {
-  if (!generatedLink) return;
-  const shareData = {
-    title: `Employee Invite – ${newEmployee?.firstName} ${newEmployee?.lastName}`,
-    text: `You've been invited to join as an employee. Click the link to complete your registration.`,
-    url: generatedLink,
-  };
-  try {
-    if (navigator.share) {
-      await navigator.share(shareData);
-    } else {
-      await navigator.clipboard.writeText(generatedLink);
-      toast.success("Link copied to clipboard!");
+    if (!generatedLink) return;
+    const shareData = {
+      title: `Employee Invite – ${newEmployee?.firstName} ${newEmployee?.lastName}`,
+      text: `You've been invited to join as an employee. Click the link to complete your registration.`,
+      url: generatedLink,
+    };
+    try {
+      if (navigator.share) {
+        await navigator.share(shareData);
+      } else {
+        await navigator.clipboard.writeText(generatedLink);
+        toast.success("Link copied to clipboard!");
+      }
+    } catch (err) {
+      if (err.name !== "AbortError") toast.error("Could not share link");
     }
-  } catch (err) {
-    if (err.name !== "AbortError") toast.error("Could not share link");
-  }
-};
+  };
 
   // Role badge preview shown when superadmin selects admin/superadmin role
   const selectedRoleIsPrivileged =
@@ -705,7 +764,14 @@ export default function AddEmployeeModal({ onClose, onSave, currentUserRole }) {
                         Fixed Monthly Salary:
                       </p>
                       <p className="text-3xl font-bold text-blue-600">
-                        PKR {(formData.monthlySalary || 0).toLocaleString( { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        PKR{" "}
+                        {Number(formData.monthlySalary || 0).toLocaleString(
+                          "en-PK",
+                          {
+                            minimumFractionDigits: 0,
+                            maximumFractionDigits: 0,
+                          },
+                        )}
                       </p>
                       <p className="text-xs text-gray-500 mt-2">
                         Pro-rated by actual working days attended each pay
