@@ -462,11 +462,12 @@ export default function MyProfile() {
     newPassword: "",
     confirmPassword: "",
   });
-  const [showPw, setShowPw] = useState>({
-    current: false,
-    new: false,
-    confirm: false,
-  });
+
+  const [showPw, setShowPw] = useState({
+  current: false,
+  new: false,
+  confirm: false,
+});
   const [pwOpen, setPwOpen] = useState(false);
   const [pwSaving, setPwSaving] = useState(false);
 
