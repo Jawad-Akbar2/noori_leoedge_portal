@@ -1,5 +1,5 @@
 // backend/server.js
-
+process.env.TZ = "Asia/Karachi";
 import express   from 'express';
 import cors      from 'cors';
 import mongoose  from 'mongoose';
@@ -108,8 +108,8 @@ app.get('/api/health', (_req, res) => res.json({
   status: 'OK',
   env: NODE_ENV,
   timezone: process.env.TZ,
-  serverTime: new Date(),
-  serverISO: new Date(),
+  serverTime: new Date().toString(),
+  serverISO: new Date().toISOString(),
   dbState: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected',
   uptime: `${Math.floor(process.uptime())}s`,
 }));

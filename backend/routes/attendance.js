@@ -611,7 +611,8 @@ router.post(
 
       const logMap = new Map();
       for (const l of existingLogs) {
-        const key = `${l.empId}_${l.date.toISOString().slice(0, 10)}`;
+        const pktDate = new Date(l.date.getTime() + 5 * 3600_000);
+        const key = `${l.empId}_${pktDate.toISOString().slice(0, 10)}`;
         logMap.set(key, l);
       }
 
@@ -672,7 +673,8 @@ if (isNightShiftEmp) {
 
     const shiftDate = startOfDay(date);
     const prevDay = addDaysUTC(shiftDate, -1);
-    const prevKey = `${employee._id}_${prevDay.toISOString().slice(0, 10)}`;
+    const prevDayPkt = new Date(prevDay.getTime() + 5 * 3600_000);
+    const prevKey = `${employee._id}_${prevDayPkt.toISOString().slice(0, 10)}`;
 
     const prevExisting = logMap.get(prevKey) || null;
 
@@ -741,7 +743,8 @@ if (isNightShiftEmp) {
   if (todaysIns.length > 0) {
     const todayIn = todaysIns.sort((a, b) => toMin(a) - toMin(b))[0];
     const shiftDate = startOfDay(date);
-    const todayKey = `${employee._id}_${shiftDate.toISOString().slice(0, 10)}`;
+    const shiftDatePkt = new Date(shiftDate.getTime() + 5 * 3600_000);
+    const todayKey = `${employee._id}_${shiftDatePkt.toISOString().slice(0, 10)}`;
 
     const existing = logMap.get(todayKey) || null;
     // ✅ Preserve existing OUT if already in DB (e.g. from a previous partial import)
@@ -839,7 +842,8 @@ if (isNightShiftEmp) {
         }
 
         const shiftDate = startOfDay(date);
-        const existingKey = `${employee._id}_${shiftDate.toISOString().slice(0, 10)}`;
+        const shiftDatePkt = new Date(shiftDate.getTime() + 5 * 3600_000);
+        const existingKey = `${employee._id}_${shiftDatePkt.toISOString().slice(0, 10)}`;
         const existing = logMap.get(existingKey) || null;
 
         try {
@@ -1161,7 +1165,8 @@ router.post("/worksheet", adminAuth, async (req, res) => {
     const logMap = {};
     for (const l of logs) {
       // Shift stored date by +5h to get PKT date string
-      const key = `${l.empId}_${l.date.toISOString().slice(0, 10)}`;
+      const pktDate = new Date(l.date.getTime() + 5 * 3600_000);
+      const key = `${l.empId}_${pktDate.toISOString().slice(0, 10)}`;
       logMap[key] = l;
     }
 
@@ -1172,7 +1177,8 @@ router.post("/worksheet", adminAuth, async (req, res) => {
       d = new Date(d.getTime() + 86_400_000)
     ) {
       // d is already PKT midnight (T19:00Z), shift +5h to get PKT date string
-      const iso = d.toISOString().slice(0, 10); // "2028-03-20"
+      const pktDate = new Date(d.getTime() + 5 * 3600_000);
+      const iso = pktDate.toISOString().slice(0, 10); // "2028-03-20"
       const disp = formatDate(d);
       const dateForRate = new Date(d); // capture current loop date for rate calc
 

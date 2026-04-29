@@ -6,15 +6,22 @@ export function parseDDMMYYYY(dateStr) {
   if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(s)) {
     const [d, m, y] = s.split('/').map(Number);
     const month = m - 1;
-
-    return new Date(Date.UTC(y, month, d)); // ✅ FIX
+    if (y < 1900 || y > 2100) return null;
+    // Use local midnight — avoids UTC offset shifting the date backward in PKT
+    const date = new Date(y, month, d, 0, 0, 0, 0);
+    if (date.getFullYear() !== y || date.getMonth() !== month || date.getDate() !== d)
+      return null;
+    return date;
   }
 
   if (/^\d{4}-\d{2}-\d{2}/.test(s)) {
     const [y, m, d] = s.slice(0, 10).split('-').map(Number);
     const month = m - 1;
-
-    return new Date(Date.UTC(y, month, d)); // ✅ FIX
+    if (y < 1900 || y > 2100) return null;
+    const date = new Date(y, month, d, 0, 0, 0, 0);
+    if (date.getFullYear() !== y || date.getMonth() !== month || date.getDate() !== d)
+      return null;
+    return date;
   }
 
   return null;
@@ -24,17 +31,12 @@ export const parseDate = parseDDMMYYYY;
 
 export function startOfDay(date) {
   const d = new Date(date);
-  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0);
 }
 
 export function endOfDay(date) {
   const d = new Date(date);
-  return new Date(Date.UTC(
-    d.getUTCFullYear(),
-    d.getUTCMonth(),
-    d.getUTCDate(),
-    23, 59, 59, 999
-  ));
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999);
 }
 
 export function addDaysUTC(date, days) {
@@ -45,12 +47,13 @@ export function addDaysUTC(date, days) {
 
 export function formatDate(date) {
   if (!date) return '';
-
   const d = new Date(date);
-
-  return d.toLocaleDateString('en-GB', {
-    timeZone: 'Asia/Karachi'
-  });
+  if (isNaN(d.getTime())) return '';
+  return [
+    String(d.getDate()).padStart(2, '0'),
+    String(d.getMonth() + 1).padStart(2, '0'),
+    d.getFullYear()
+  ].join('/');
 }
 
 export function formatDateTimeForDisplay(date) {
