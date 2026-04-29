@@ -105,10 +105,13 @@ app.use('/api/stats', employeeStatsRoutes); // ← fixed
 
 app.get('/api/health', (_req, res) => res.json({
   success: true,
-  status:  'OK',
-  env:     NODE_ENV,
+  status: 'OK',
+  env: NODE_ENV,
+  timezone: process.env.TZ,
+  serverTime: new Date().toString(),
+  serverISO: new Date().toISOString(),
   dbState: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected',
-  uptime:  `${Math.floor(process.uptime())}s`,
+  uptime: `${Math.floor(process.uptime())}s`,
 }));
 
 app.use((req, res) => {
