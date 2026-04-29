@@ -35,15 +35,15 @@ export function useProfileComplete() {
         }
 
         const gaps = [];
-        if (emp.bank?.bankName?.trim()) gaps.push("Bank name");
-        if (emp.bank?.accountName?.trim()) gaps.push("Account name");
-        if (emp.bank?.accountNumber?.trim())
+        if (!emp.bank?.bankName?.trim()) gaps.push("Bank name");
+        if (!emp.bank?.accountName?.trim()) gaps.push("Account name");
+        if (!emp.bank?.accountNumber?.trim())
           gaps.push("IBAN / Account number");
-        if (emp.idCard?.front?.fileId) gaps.push("ID card — front side");
-        if (emp.idCard?.back?.fileId) gaps.push("ID card — back side");
-        if (emp.emergencyContact?.name?.trim())
+        if (!emp.idCard?.front?.fileId) gaps.push("ID card — front side");
+        if (!emp.idCard?.back?.fileId) gaps.push("ID card — back side");
+        if (!emp.emergencyContact?.name?.trim())
           gaps.push("Emergency contact name");
-        if (emp.emergencyContact?.phone?.trim())
+        if (!emp.emergencyContact?.phone?.trim())
           gaps.push("Emergency contact phone");
 
         setMissing(gaps);
