@@ -103,13 +103,13 @@ function latestTime(a, b) {
  * e.g. January → 31, April → 30, February (leap) → 29.
  */
 // function calendarDaysInMonth(date) {
-//   const d = date ? new Date(date) : new Date().toLocaleString("en-US", {timeZone: "Asia/Karachi"});
+//   const d = date ? new Date(date) : new Date();
 //   // Day 0 of next month === last day of current month
 //   return new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
 // }
 
 function calendarDaysInMonth(date) {
-  const d = date ? new Date(date) : new Date().toLocaleString("en-US", {timeZone: "Asia/Karachi"});
+  const d = date ? new Date(date) : new Date();
   const day = d.getDate();
 
   let cycleStart, cycleEnd;
@@ -517,8 +517,8 @@ router.post("/bulk-delete", adminAuth, async (req, res) => {
         $set: {
           isDeleted: true,
           "metadata.deletedBy": req.userId,
-          "metadata.deletedAt": new Date().toLocaleString("en-US", {timeZone: "Asia/Karachi"}),
-          "metadata.lastModifiedAt": new Date().toLocaleString("en-US", {timeZone: "Asia/Karachi"}),
+          "metadata.deletedAt": new Date(),
+          "metadata.lastModifiedAt": new Date(),
         },
       },
     );
@@ -611,8 +611,7 @@ router.post(
 
       const logMap = new Map();
       for (const l of existingLogs) {
-        const pktDate = new Date(l.date.getTime() + 5 * 3600_000);
-        const key = `${l.empId}_${pktDate.toISOString().slice(0, 10)}`;
+        const key = `${l.empId}_${l.date.toISOString().slice(0, 10)}`;
         logMap.set(key, l);
       }
 
@@ -673,8 +672,7 @@ if (isNightShiftEmp) {
 
     const shiftDate = startOfDay(date);
     const prevDay = addDaysUTC(shiftDate, -1);
-    const prevDayPkt = new Date(prevDay.getTime() + 5 * 3600_000);
-    const prevKey = `${employee._id}_${prevDayPkt.toISOString().slice(0, 10)}`;
+    const prevKey = `${employee._id}_${prevDay.toISOString().slice(0, 10)}`;
 
     const prevExisting = logMap.get(prevKey) || null;
 
@@ -723,7 +721,7 @@ if (isNightShiftEmp) {
             financials: prevFinancials,
             "metadata.source": "csv",
             "metadata.lastUpdatedBy": req.userId,
-            "metadata.lastModifiedAt": new Date().toLocaleString("en-US", {timeZone: "Asia/Karachi"}),
+            "metadata.lastModifiedAt": new Date(),
           },
           // ✅ Only set empId/date on insert — NOT inOut.in here
           $setOnInsert: {
@@ -743,8 +741,7 @@ if (isNightShiftEmp) {
   if (todaysIns.length > 0) {
     const todayIn = todaysIns.sort((a, b) => toMin(a) - toMin(b))[0];
     const shiftDate = startOfDay(date);
-    const shiftDatePkt = new Date(shiftDate.getTime() + 5 * 3600_000);
-    const todayKey = `${employee._id}_${shiftDatePkt.toISOString().slice(0, 10)}`;
+    const todayKey = `${employee._id}_${shiftDate.toISOString().slice(0, 10)}`;
 
     const existing = logMap.get(todayKey) || null;
     // ✅ Preserve existing OUT if already in DB (e.g. from a previous partial import)
@@ -781,7 +778,7 @@ if (isNightShiftEmp) {
             financials,
             "metadata.source": "csv",
             "metadata.lastUpdatedBy": req.userId,
-            "metadata.lastModifiedAt": new Date().toLocaleString("en-US", {timeZone: "Asia/Karachi"}),
+            "metadata.lastModifiedAt": new Date(),
           },
           $setOnInsert: {
             empId: employee._id,
@@ -842,8 +839,7 @@ if (isNightShiftEmp) {
         }
 
         const shiftDate = startOfDay(date);
-        const shiftDatePkt = new Date(shiftDate.getTime() + 5 * 3600_000);
-        const existingKey = `${employee._id}_${shiftDatePkt.toISOString().slice(0, 10)}`;
+        const existingKey = `${employee._id}_${shiftDate.toISOString().slice(0, 10)}`;
         const existing = logMap.get(existingKey) || null;
 
         try {
@@ -911,7 +907,7 @@ if (isNightShiftEmp) {
                     financials: mergedFinancials,
                     "metadata.source": "csv",
                     "metadata.lastUpdatedBy": req.userId,
-                    "metadata.lastModifiedAt": new Date().toLocaleString("en-US", {timeZone: "Asia/Karachi"}),
+                    "metadata.lastModifiedAt": new Date(),
                   },
                 },
               },
@@ -970,7 +966,7 @@ if (isNightShiftEmp) {
                     isDeleted: false,
                     "metadata.source": "csv",
                     "metadata.lastUpdatedBy": req.userId,
-                    "metadata.lastModifiedAt": new Date().toLocaleString("en-US", {timeZone: "Asia/Karachi"}),
+                    "metadata.lastModifiedAt": new Date(),
                   },
                 },
                 upsert: true,
@@ -1165,8 +1161,7 @@ router.post("/worksheet", adminAuth, async (req, res) => {
     const logMap = {};
     for (const l of logs) {
       // Shift stored date by +5h to get PKT date string
-      const pktDate = new Date(l.date.getTime() + 5 * 3600_000);
-      const key = `${l.empId}_${pktDate.toISOString().slice(0, 10)}`;
+      const key = `${l.empId}_${l.date.toISOString().slice(0, 10)}`;
       logMap[key] = l;
     }
 
@@ -1177,8 +1172,7 @@ router.post("/worksheet", adminAuth, async (req, res) => {
       d = new Date(d.getTime() + 86_400_000)
     ) {
       // d is already PKT midnight (T19:00Z), shift +5h to get PKT date string
-      const pktDate = new Date(d.getTime() + 5 * 3600_000);
-      const iso = pktDate.toISOString().slice(0, 10); // "2028-03-20"
+      const iso = d.toISOString().slice(0, 10); // "2028-03-20"
       const disp = formatDate(d);
       const dateForRate = new Date(d); // capture current loop date for rate calc
 
@@ -1425,7 +1419,7 @@ router.post("/save-row", adminAuth, async (req, res) => {
       ...(record.metadata?.toObject?.() || { ...(record.metadata || {}) }),
       source: "manual",
       lastUpdatedBy: req.userId,
-      lastModifiedAt: new Date().toLocaleString("en-US", {timeZone: "Asia/Karachi"}),
+      lastModifiedAt: new Date(),
       ...(notes !== undefined ? { notes: notes || "" } : {}),
     };
 
@@ -1435,7 +1429,7 @@ router.post("/save-row", adminAuth, async (req, res) => {
       success: true,
       message: "Attendance saved",
       record,
-      lastModified: formatDateTimeForDisplay(new Date().toLocaleString("en-US", {timeZone: "Asia/Karachi"})),
+      lastModified: formatDateTimeForDisplay(new Date()),
     });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -1486,8 +1480,8 @@ router.delete("/:id", adminAuth, async (req, res) => {
         $set: {
           isDeleted: true,
           "metadata.deletedBy": req.userId,
-          "metadata.deletedAt": new Date().toLocaleString("en-US", {timeZone: "Asia/Karachi"}),
-          "metadata.lastModifiedAt": new Date().toLocaleString("en-US", {timeZone: "Asia/Karachi"}),
+          "metadata.deletedAt": new Date(),
+          "metadata.lastModifiedAt": new Date(),
         },
       },
     );
@@ -1623,7 +1617,7 @@ router.post("/bulk-save", adminAuth, async (req, res) => {
               isDeleted: false,
               "metadata.source": "manual",
               "metadata.lastUpdatedBy": req.userId,
-              "metadata.lastModifiedAt": new Date().toLocaleString("en-US", {timeZone: "Asia/Karachi"}),
+              "metadata.lastModifiedAt": new Date(),
             },
           },
           upsert: true,

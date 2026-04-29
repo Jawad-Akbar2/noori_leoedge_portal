@@ -126,7 +126,7 @@ const parseImagePayload = (payload) => {
 export async function purgeLeftEmployees() {
   const result = await Employee.deleteMany({
     "leftBusiness.isLeft": true,
-    "leftBusiness.scheduledDeletion": { $lte: new Date().toLocaleString("en-US", {timeZone: "Asia/Karachi"}) },
+    "leftBusiness.scheduledDeletion": { $lte: new Date() },
   });
   if (result.deletedCount) {
     console.log(`[purge] Deleted ${result.deletedCount} employee(s) whose 30-day retention window elapsed.`);
@@ -165,13 +165,13 @@ router.put("/me/profile-picture", auth, async (req, res) => {
 
     await Employee.updateOne(
       { _id: req.userId },
-      { $set: { profilePicture: { fileId, fileName: parsed.fileName, mimeType: parsed.mimeType, uploadedAt: new Date().toLocaleString("en-US", {timeZone: "Asia/Karachi"}) } } }
+      { $set: { profilePicture: { fileId, fileName: parsed.fileName, mimeType: parsed.mimeType, uploadedAt: new Date() } } }
     );
 
     return res.json({
       success: true,
       message: "Profile picture updated",
-      profilePicture: { fileId, fileName: parsed.fileName, mimeType: parsed.mimeType, uploadedAt: new Date().toLocaleString("en-US", {timeZone: "Asia/Karachi"}) },
+      profilePicture: { fileId, fileName: parsed.fileName, mimeType: parsed.mimeType, uploadedAt: new Date() },
     });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -269,13 +269,13 @@ router.put("/:id/profile-picture", adminAuth, async (req, res) => {
 
     await Employee.updateOne(
       { _id: req.params.id },
-      { $set: { profilePicture: { fileId, fileName: parsed.fileName, mimeType: parsed.mimeType, uploadedAt: new Date().toLocaleString("en-US", {timeZone: "Asia/Karachi"}) } } }
+      { $set: { profilePicture: { fileId, fileName: parsed.fileName, mimeType: parsed.mimeType, uploadedAt: new Date() } } }
     );
 
     return res.json({
       success: true,
       message: "Profile picture updated",
-      profilePicture: { fileId, fileName: parsed.fileName, mimeType: parsed.mimeType, uploadedAt: new Date().toLocaleString("en-US", {timeZone: "Asia/Karachi"}) },
+      profilePicture: { fileId, fileName: parsed.fileName, mimeType: parsed.mimeType, uploadedAt: new Date() },
     });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -356,12 +356,12 @@ router.put("/me/id-card/:side", auth, async (req, res) => {
     );
     await Employee.updateOne(
       { _id: req.userId },
-      { $set: { [`idCard.${side}`]: { fileId, fileName: parsed.fileName, uploadedAt: new Date().toLocaleString("en-US", {timeZone: "Asia/Karachi"}) } } }
+      { $set: { [`idCard.${side}`]: { fileId, fileName: parsed.fileName, uploadedAt: new Date() } } }
     );
     return res.json({
       success: true,
       message: `ID card ${side} updated`,
-      idCard: { [side]: { fileId, fileName: parsed.fileName, uploadedAt: new Date().toLocaleString("en-US", {timeZone: "Asia/Karachi"}) } },
+      idCard: { [side]: { fileId, fileName: parsed.fileName, uploadedAt: new Date() } },
     });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -453,13 +453,13 @@ router.put("/:id/id-card/:side", adminAuth, async (req, res) => {
 
     await Employee.updateOne(
       { _id: req.params.id },
-      { $set: { [`idCard.${side}`]: { fileId, fileName: parsed.fileName, uploadedAt: new Date().toLocaleString("en-US", {timeZone: "Asia/Karachi"}) } } }
+      { $set: { [`idCard.${side}`]: { fileId, fileName: parsed.fileName, uploadedAt: new Date() } } }
     );
 
     return res.json({
       success: true,
       message: `ID card ${side} updated`,
-      idCard: { [side]: { fileId, fileName: parsed.fileName, uploadedAt: new Date().toLocaleString("en-US", {timeZone: "Asia/Karachi"}) } },
+      idCard: { [side]: { fileId, fileName: parsed.fileName, uploadedAt: new Date() } },
     });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -998,8 +998,8 @@ router.patch("/:id/left-business", adminAuth, async (req, res) => {
     if (employee.leftBusiness?.isLeft) {
       return res.status(409).json({ success: false, message: "Employee is already marked as having left the business.", employee: publicEmployee(employee) });
     }
-    const leftDate = req.body.leftDate ? new Date(req.body.leftDate) : new Date().toLocaleString("en-US", {timeZone: "Asia/Karachi"});
-    if (leftDate > new Date().toLocaleString("en-US", {timeZone: "Asia/Karachi"})) return res.status(400).json({ success: false, message: "Left date cannot be in the future." });
+    const leftDate = req.body.leftDate ? new Date(req.body.leftDate) : new Date();
+    if (leftDate > new Date()) return res.status(400).json({ success: false, message: "Left date cannot be in the future." });
     const scheduledDeletion = new Date(leftDate.getTime() + 30 * 24 * 60 * 60 * 1000);
     employee.leftBusiness = {
       isLeft: true, leftDate, scheduledDeletion,
@@ -1019,7 +1019,7 @@ router.patch("/:id/reinstate", adminAuth, async (req, res) => {
     const employee = await Employee.findOne({ _id: req.params.id, isDeleted: false, ...roleVisibilityFilter(req.role) });
     if (!employee) return res.status(404).json({ success: false, message: "Employee not found" });
     if (!employee.leftBusiness?.isLeft) return res.status(409).json({ success: false, message: "This employee has not been marked as left." });
-    if (employee.leftBusiness.scheduledDeletion <= new Date().toLocaleString("en-US", {timeZone: "Asia/Karachi"})) return res.status(410).json({ success: false, message: "The 30-day reinstatement window has expired." });
+    if (employee.leftBusiness.scheduledDeletion <= new Date()) return res.status(410).json({ success: false, message: "The 30-day reinstatement window has expired." });
     employee.leftBusiness = { ...employee.leftBusiness.toObject(), isLeft: false, scheduledDeletion: null, reinstatedAt: new Date(), reinstatedBy: req.userId };
     employee.status = "Active";
     await employee.save();

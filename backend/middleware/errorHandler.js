@@ -5,7 +5,7 @@ const isDev = process.env.NODE_ENV !== 'production';
 const errorHandler = (err, req, res, next) => {
   // Always log in dev; in prod log only 5xx
   if (isDev || !err.statusCode || err.statusCode >= 500) {
-    console.error(`[${new Date().toLocaleString("en-US", {timeZone: "Asia/Karachi"}).toISOString()}] ${req.method} ${req.originalUrl}`);
+    console.error(`[${new Date().toISOString()}] ${req.method} ${req.originalUrl}`);
     console.error(err);
   }
 

@@ -49,13 +49,12 @@ export function parseDate(dateStr) {
 /** Date → "dd/mm/yyyy" (display) */
 export function formatDate(date) {
   if (!date) return '';
+
   const d = new Date(date);
-  if (isNaN(d.getTime())) return '';
-  return [
-    String(d.getDate()).padStart(2, '0'),
-    String(d.getMonth() + 1).padStart(2, '0'),
-    d.getFullYear()
-  ].join('/');
+
+  return d.toLocaleDateString('en-GB', {
+    timeZone: 'Asia/Karachi'
+  });
 }
 
 /** Date → "dd/mm/yyyy HH:mm" (display with time) */

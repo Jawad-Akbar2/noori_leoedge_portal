@@ -36,7 +36,7 @@ const createAdmin = async () => {
       lastName:       'Admin',
       department:     'Manager',
       role:           'admin',           // explicit — don't rely on default
-      joiningDate:    new Date().toLocaleString("en-US", {timeZone: "Asia/Karachi"}),
+      joiningDate:    new Date(),
       shift:          { start: '09:00', end: '18:00' },
       salaryType:     'monthly',
       hourlyRate:     500,               // required by schema

@@ -229,7 +229,7 @@ employeeSchema.pre("save", async function (next) {
     if (this.isModified("password") && this.password) {
       const salt = await bcryptjs.genSalt(10);
       this.password = await bcryptjs.hash(this.password, salt);
-      this.passwordChangedAt = new Date().toLocaleString("en-US", {timeZone: "Asia/Karachi"});
+      this.passwordChangedAt = new Date();
     }
     if (this.isModified("tempPassword") && this.tempPassword) {
       const salt = await bcryptjs.genSalt(10);
