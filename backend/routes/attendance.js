@@ -18,6 +18,7 @@ import {
   addDaysUTC,
   parseDDMMYYYY,
 } from "../utils/dateUtils.js";
+import { pktDayKey, pktStartToUTC, pktEndToUTC } from "../utils/tz.js";
 
 const router = express.Router();
 const SYSTEM_ROLES = ["superadmin", "owner"];
@@ -387,16 +388,18 @@ function buildFinancials({
     deductionAmt = autoTotal;
   }
   // In buildFinancials — replace the manual deduction override block:
-if (Array.isArray(manualDeductions)) {
-  // Client sends the complete desired deduction list (auto + manual, possibly edited)
-  // Don't re-compute auto-deductions; trust what the admin sent
-  deductionDets = manualDeductions.map(d => ({
-    type: d.type || "manual",
-    amount: Number(d.amount) || 0,
-    reason: String(d.reason || "").trim(),
-  })).filter(d => d.amount >= 0 && d.reason);
-  deductionAmt = deductionDets.reduce((s, d) => s + (d.amount || 0), 0);
-}
+  if (Array.isArray(manualDeductions)) {
+    // Client sends the complete desired deduction list (auto + manual, possibly edited)
+    // Don't re-compute auto-deductions; trust what the admin sent
+    deductionDets = manualDeductions
+      .map((d) => ({
+        type: d.type || "manual",
+        amount: Number(d.amount) || 0,
+        reason: String(d.reason || "").trim(),
+      }))
+      .filter((d) => d.amount >= 0 && d.reason);
+    deductionAmt = deductionDets.reduce((s, d) => s + (d.amount || 0), 0);
+  }
 
   // ── OT resolution ─────────────────────────────────────────────────────────
   const hourlyEquiv = scheduledHrs > 0 ? dayRate / scheduledHrs : 0;
@@ -611,8 +614,7 @@ router.post(
 
       const logMap = new Map();
       for (const l of existingLogs) {
-        const pktDate = new Date(l.date.getTime() + 5 * 3600_000);
-        const key = `${l.empId}_${pktDate.toISOString().slice(0, 10)}`;
+        const key = `${l.empId}_${pktDayKey(l.date)}`;
         logMap.set(key, l);
       }
 
@@ -649,161 +651,182 @@ router.post(
           toMin(employee.shift.end) < toMin(employee.shift.start);
 
         // ── NIGHT-SHIFT BRANCH ────────────────────────────────────────────
-// ── NIGHT-SHIFT BRANCH ────────────────────────────────────────────
-if (isNightShiftEmp) {
-  const shiftStartMin = toMin(employee.shift.start);
-  const todaysIns = [], todaysOuts = [], prevDayOuts = [];
+        // ── NIGHT-SHIFT BRANCH ────────────────────────────────────────────
+        if (isNightShiftEmp) {
+          const shiftStartMin = toMin(employee.shift.start);
+          const todaysIns = [],
+            todaysOuts = [],
+            prevDayOuts = [];
 
-  for (const r of rows) {
-    const tMin = toMin(r.time);
-    if (r.isCheckIn) todaysIns.push(r.time);
-    if (r.isCheckOut) {
-      if (tMin < shiftStartMin) prevDayOuts.push(r.time);
-      else todaysOuts.push(r.time);
-    }
-  }
+          for (const r of rows) {
+            const tMin = toMin(r.time);
+            if (r.isCheckIn) todaysIns.push(r.time);
+            if (r.isCheckOut) {
+              if (tMin < shiftStartMin) prevDayOuts.push(r.time);
+              else todaysOuts.push(r.time);
+            }
+          }
 
-  // ── Handle OUT punch (belongs to PREVIOUS day's shift) ──────────
-  if (prevDayOuts.length > 0 || todaysOuts.length > 0) {
-    let todayOut = null;
-    if (prevDayOuts.length)
-      todayOut = prevDayOuts.sort((a, b) => toMin(a) - toMin(b))[0];
-    else if (todaysOuts.length)
-      todayOut = todaysOuts.sort((a, b) => toMin(a) - toMin(b))[0];
+          // ── Handle OUT punch (belongs to PREVIOUS day's shift) ──────────
+          if (prevDayOuts.length > 0 || todaysOuts.length > 0) {
+            let todayOut = null;
+            if (prevDayOuts.length)
+              todayOut = prevDayOuts.sort((a, b) => toMin(a) - toMin(b))[0];
+            else if (todaysOuts.length)
+              todayOut = todaysOuts.sort((a, b) => toMin(a) - toMin(b))[0];
 
-    const shiftDate = startOfDay(date);
-    const prevDay = addDaysUTC(shiftDate, -1);
-    const prevDayPkt = new Date(prevDay.getTime() + 5 * 3600_000);
-    const prevKey = `${employee._id}_${prevDayPkt.toISOString().slice(0, 10)}`;
+            const shiftDate = startOfDay(date);
+            const prevDay = addDaysUTC(shiftDate, -1);
+            const prevDayPkt = new Date(prevDay.getTime() + 5 * 3600_000);
+            const prevKey = `${employee._id}_${pktDayKey(prevDay)}`;
 
-    const prevExisting = logMap.get(prevKey) || null;
+            const prevExisting = logMap.get(prevKey) || null;
 
-    // Check pendingInMap first (set in this same batch), then DB record
-    const prevIn = pendingInMap.get(prevKey)
-      ?? prevExisting?.inOut?.in
-      ?? null;
+            // Check pendingInMap first (set in this same batch), then DB record
+            const prevIn =
+              pendingInMap.get(prevKey) ?? prevExisting?.inOut?.in ?? null;
 
-    const finalOut = latestTime(prevExisting?.inOut?.out, todayOut);
+            const finalOut = latestTime(prevExisting?.inOut?.out, todayOut);
 
-    const status = prevIn
-      ? isLate(prevIn, employee.shift.start) ? "Late" : "Present"
-      : "Present";
+            const status = prevIn
+              ? isLate(prevIn, employee.shift.start)
+                ? "Late"
+                : "Present"
+              : "Present";
 
-    const prevDayRate = perDaySalary(employee, prevDay);
-    const prevFinancials = buildFinancials({
-      status,
-      inTime: prevIn,
-      outTime: finalOut,
-      outNextDay: true,
-      shift: employee.shift,
-      dayRate: prevDayRate,
-      salaryType: employee.salaryType,
-      otHours: prevExisting?.financials?.otHours || 0,
-      otAmount: prevExisting?.financials?.otAmount || 0,
-      otMultiplier: prevExisting?.financials?.otMultiplier || 1,
-      otDetails: prevExisting?.financials?.otDetails || [],
-    });
+            const prevDayRate = perDaySalary(employee, prevDay);
+            const prevFinancials = buildFinancials({
+              status,
+              inTime: prevIn,
+              outTime: finalOut,
+              outNextDay: true,
+              shift: employee.shift,
+              dayRate: prevDayRate,
+              salaryType: employee.salaryType,
+              otHours: prevExisting?.financials?.otHours || 0,
+              otAmount: prevExisting?.financials?.otAmount || 0,
+              otMultiplier: prevExisting?.financials?.otMultiplier || 1,
+              otDetails: prevExisting?.financials?.otDetails || [],
+            });
 
-    bulkOps.push({
-      updateOne: {
-        filter: { empId: employee._id, date: prevDay },
-        update: {
-          $set: {
-            empNumber: employee.employeeNumber,
-            empName: `${employee.firstName} ${employee.lastName}`,
-            department: employee.department,
-            shift: { start: employee.shift.start, end: employee.shift.end, isNightShift: true },
-            hourlyRate: prevDayRate,
-            salaryType: employee.salaryType,
-            // ✅ Always set inOut.in — use prevIn if known, preserve existing if not
-            "inOut.in": prevIn,
-            "inOut.out": finalOut,
-            "inOut.outNextDay": true,
-            status,
-            financials: prevFinancials,
-            "metadata.source": "csv",
-            "metadata.lastUpdatedBy": req.userId,
-            "metadata.lastModifiedAt": new Date(),
-          },
-          // ✅ Only set empId/date on insert — NOT inOut.in here
-          $setOnInsert: {
-            empId: employee._id,
-            date: prevDay,
-          },
-        },
-        upsert: true,
-      },
-    });
+            bulkOps.push({
+              updateOne: {
+                filter: { empId: employee._id, date: prevDay },
+                update: {
+                  $set: {
+                    empNumber: employee.employeeNumber,
+                    empName: `${employee.firstName} ${employee.lastName}`,
+                    department: employee.department,
+                    shift: {
+                      start: employee.shift.start,
+                      end: employee.shift.end,
+                      isNightShift: true,
+                    },
+                    hourlyRate: prevDayRate,
+                    salaryType: employee.salaryType,
+                    // ✅ Always set inOut.in — use prevIn if known, preserve existing if not
+                    "inOut.in": prevIn,
+                    "inOut.out": finalOut,
+                    "inOut.outNextDay": true,
+                    status,
+                    financials: prevFinancials,
+                    "metadata.source": "csv",
+                    "metadata.lastUpdatedBy": req.userId,
+                    "metadata.lastModifiedAt": new Date(),
+                  },
+                  // ✅ Only set empId/date on insert — NOT inOut.in here
+                  $setOnInsert: {
+                    empId: employee._id,
+                    date: prevDay,
+                  },
+                },
+                upsert: true,
+              },
+            });
 
-    log.push({ type: "SUCCESS", message: `  ✓ OUT (${todayOut}) merged into ${formatDate(prevDay)}` });
-    recordsUpdated++;
-  }
+            log.push({
+              type: "SUCCESS",
+              message: `  ✓ OUT (${todayOut}) merged into ${formatDate(prevDay)}`,
+            });
+            recordsUpdated++;
+          }
 
-  // ── Handle IN punch (belongs to TODAY's shift date) ──────────────
-  if (todaysIns.length > 0) {
-    const todayIn = todaysIns.sort((a, b) => toMin(a) - toMin(b))[0];
-    const shiftDate = startOfDay(date);
-    const shiftDatePkt = new Date(shiftDate.getTime() + 5 * 3600_000);
-    const todayKey = `${employee._id}_${shiftDatePkt.toISOString().slice(0, 10)}`;
+          // ── Handle IN punch (belongs to TODAY's shift date) ──────────────
+          if (todaysIns.length > 0) {
+            const todayIn = todaysIns.sort((a, b) => toMin(a) - toMin(b))[0];
+            const shiftDate = startOfDay(date);
+            const shiftDatePkt = new Date(shiftDate.getTime() + 5 * 3600_000);
+            const todayKey = `${employee._id}_${pktDayKey(shiftDate)}`;
 
-    const existing = logMap.get(todayKey) || null;
-    // ✅ Preserve existing OUT if already in DB (e.g. from a previous partial import)
-    const mergedOut = existing?.inOut?.out || null;
-    const mergedOutNextDay = mergedOut ? toMin(mergedOut) < toMin(todayIn) : false;
+            const existing = logMap.get(todayKey) || null;
+            // ✅ Preserve existing OUT if already in DB (e.g. from a previous partial import)
+            const mergedOut = existing?.inOut?.out || null;
+            const mergedOutNextDay = mergedOut
+              ? toMin(mergedOut) < toMin(todayIn)
+              : false;
 
-    const inStatus = isLate(todayIn, employee.shift.start) ? "Late" : "Present";
+            const inStatus = isLate(todayIn, employee.shift.start)
+              ? "Late"
+              : "Present";
 
-    const financials = buildFinancials({
-      status: inStatus,
-      inTime: todayIn,
-      outTime: mergedOut,
-      outNextDay: mergedOutNextDay,
-      shift: employee.shift,
-      dayRate,
-      salaryType: employee.salaryType,
-    });
+            const financials = buildFinancials({
+              status: inStatus,
+              inTime: todayIn,
+              outTime: mergedOut,
+              outNextDay: mergedOutNextDay,
+              shift: employee.shift,
+              dayRate,
+              salaryType: employee.salaryType,
+            });
 
-    bulkOps.push({
-      updateOne: {
-        filter: { empId: employee._id, date: shiftDate },
-        update: {
-          $set: {
-            empNumber: employee.employeeNumber,
-            empName: `${employee.firstName} ${employee.lastName}`,
-            department: employee.department,
-            shift: { start: employee.shift.start, end: employee.shift.end, isNightShift: true },
-            hourlyRate: dayRate,
-            salaryType: employee.salaryType,
-            "inOut.in": todayIn,          // ✅ always set IN
-            "inOut.out": mergedOut,
-            "inOut.outNextDay": mergedOutNextDay,
-            status: inStatus,
-            financials,
-            "metadata.source": "csv",
-            "metadata.lastUpdatedBy": req.userId,
-            "metadata.lastModifiedAt": new Date(),
-          },
-          $setOnInsert: {
-            empId: employee._id,
-            date: shiftDate,
-            isDeleted: false,
-            manualOverride: false,
-          },
-        },
-        upsert: true,
-      },
-    });
+            bulkOps.push({
+              updateOne: {
+                filter: { empId: employee._id, date: shiftDate },
+                update: {
+                  $set: {
+                    empNumber: employee.employeeNumber,
+                    empName: `${employee.firstName} ${employee.lastName}`,
+                    department: employee.department,
+                    shift: {
+                      start: employee.shift.start,
+                      end: employee.shift.end,
+                      isNightShift: true,
+                    },
+                    hourlyRate: dayRate,
+                    salaryType: employee.salaryType,
+                    "inOut.in": todayIn, // ✅ always set IN
+                    "inOut.out": mergedOut,
+                    "inOut.outNextDay": mergedOutNextDay,
+                    status: inStatus,
+                    financials,
+                    "metadata.source": "csv",
+                    "metadata.lastUpdatedBy": req.userId,
+                    "metadata.lastModifiedAt": new Date(),
+                  },
+                  $setOnInsert: {
+                    empId: employee._id,
+                    date: shiftDate,
+                    isDeleted: false,
+                    manualOverride: false,
+                  },
+                },
+                upsert: true,
+              },
+            });
 
-    // ✅ Register in pendingInMap so subsequent OUT processing in same batch finds it
-    pendingInMap.set(todayKey, todayIn);
+            // ✅ Register in pendingInMap so subsequent OUT processing in same batch finds it
+            pendingInMap.set(todayKey, todayIn);
 
-    log.push({ type: "SUCCESS", message: `  ✓ IN (${todayIn}) saved for ${dateStr}` });
-    recordsCreated++;
-  }
+            log.push({
+              type: "SUCCESS",
+              message: `  ✓ IN (${todayIn}) saved for ${dateStr}`,
+            });
+            recordsCreated++;
+          }
 
-  rowsSuccess += rows.length;
-  continue;
-}
+          rowsSuccess += rows.length;
+          continue;
+        }
 
         // ── DAY-SHIFT BRANCH ──────────────────────────────────────────────
         const punchTimes = rows.map((r) => r.time).filter(Boolean);
@@ -843,7 +866,7 @@ if (isNightShiftEmp) {
 
         const shiftDate = startOfDay(date);
         const shiftDatePkt = new Date(shiftDate.getTime() + 5 * 3600_000);
-        const existingKey = `${employee._id}_${shiftDatePkt.toISOString().slice(0, 10)}`;
+        const existingKey = `${employee._id}_${pktDayKey(shiftDate)}`;
         const existing = logMap.get(existingKey) || null;
 
         try {
@@ -1061,7 +1084,13 @@ router.get("/range", adminAuth, async (req, res) => {
         ? { role: { $nin: ["superadmin"] } }
         : { role: "employee" };
 
-    const baseQuery = { date: { $gte: from, $lte: to }, isDeleted: false };
+    const baseQuery = {
+      date: {
+        $gte: pktStartToUTC(from),
+        $lte: pktEndToUTC(to),
+      },
+      isDeleted: false,
+    };
     if (search.trim()) {
       const rx = new RegExp(search.trim(), "i");
       baseQuery.$or = [
@@ -1153,7 +1182,10 @@ router.post("/worksheet", adminAuth, async (req, res) => {
       Employee.countDocuments(payrollEmployeeFilter()).then((count) => {
         if (count === 0) return [];
         return AttendanceLog.find({
-          date: { $gte: start, $lte: endOfRange },
+         date: {
+  $gte: pktStartToUTC(start),
+  $lte: pktEndToUTC(end),
+},
           isDeleted: false,
         }).lean();
       }),
@@ -1166,7 +1198,7 @@ router.post("/worksheet", adminAuth, async (req, res) => {
     for (const l of logs) {
       // Shift stored date by +5h to get PKT date string
       const pktDate = new Date(l.date.getTime() + 5 * 3600_000);
-      const key = `${l.empId}_${pktDate.toISOString().slice(0, 10)}`;
+      const key = `${l.empId}_${pktDayKey(l.date)}`;
       logMap[key] = l;
     }
 
@@ -1177,8 +1209,8 @@ router.post("/worksheet", adminAuth, async (req, res) => {
       d = new Date(d.getTime() + 86_400_000)
     ) {
       // d is already PKT midnight (T19:00Z), shift +5h to get PKT date string
-      const pktDate = new Date(d.getTime() + 5 * 3600_000);
-      const iso = pktDate.toISOString().slice(0, 10); // "2028-03-20"
+      // const pktDate = new Date(d.getTime() + 5 * 3600_000);
+      const iso = pktDayKey(d);
       const disp = formatDate(d);
       const dateForRate = new Date(d); // capture current loop date for rate calc
 
@@ -1345,13 +1377,13 @@ router.post("/save-row", adminAuth, async (req, res) => {
     const hasManualDeductions = Array.isArray(manualDeductionDetails);
     const cleanDeductionDetails = hasManualDeductions
       ? manualDeductionDetails
-      .map((d) => ({
-        type: d?.type || "manual",  // preserves auto types if admin kept them
-        amount: Number(d?.amount) || 0,
-        reason: String(d?.reason || "").trim(),
-      }))
-      .filter((d) => d.reason && d.amount >= 0)
-  : null;
+          .map((d) => ({
+            type: d?.type || "manual", // preserves auto types if admin kept them
+            amount: Number(d?.amount) || 0,
+            reason: String(d?.reason || "").trim(),
+          }))
+          .filter((d) => d.reason && d.amount >= 0)
+      : null;
 
     // Per-day rate for this specific date
     const dayRate = perDaySalary(employee, dateObj);
