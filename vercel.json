@@ -1,0 +1,32 @@
+{
+  "version": 2,
+  "builds": [
+    {
+      "src": "frontend/package.json",
+      "use": "@vercel/static-build",
+      "config": { "distDir": "build" }
+    },
+    {
+      "src": "backend/server.js",
+      "use": "@vercel/node"
+    },
+    {
+      "src": "backend/api/cron/purge.js",
+      "use": "@vercel/node"
+    }
+  ],
+  "routes": [
+    { "src": "/api/cron/purge", "dest": "backend/api/cron/purge.js" },
+    { "src": "/api/(.*)", "dest": "/backend/server.js" },
+    { "src": "/static/(.*)", "dest": "/frontend/static/$1" },
+    { "src": "/favicon.ico", "dest": "/frontend/favicon.ico" },
+    { "src": "/manifest.json", "dest": "/frontend/manifest.json" },
+    { "src": "/(.*)", "dest": "/frontend/index.html" }
+  ],
+  "crons": [
+    {
+      "path": "/api/cron/purge",
+      "schedule": "0 21 * * *"
+    }
+  ]
+}
