@@ -29,7 +29,7 @@ const router = express.Router();
 router.get('/employee', employeeAuth, async (req, res) => {
   try {
     const empId = req.user._id;
-    const now   = new Date();
+    const now   = new Date().toLocaleString("en-US", {timeZone: "Asia/Karachi"});
 
     // ── Time anchors ──────────────────────────────────────────────────────────
     const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());

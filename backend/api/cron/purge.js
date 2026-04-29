@@ -4,7 +4,7 @@ import { purgeLeftEmployees } from "../../services/purgeService.js";
 
 export default async function handler(req, res) {
   try {
-    console.log("[CRON] purge triggered at", new Date().toISOString());
+    console.log("[CRON] purge triggered at", new Date().toLocaleString("en-US", {timeZone: "Asia/Karachi"}).toISOString());
 
     const deleted = await purgeLeftEmployees();
 

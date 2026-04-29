@@ -51,7 +51,7 @@ verificationSchema.statics.findValid = async function (email, plainToken) {
   return this.findOne({
     identifier: email.toLowerCase(),
     value:      hashed,
-    expiresAt:  { $gt: new Date() },
+    expiresAt:  { $gt: new Date().toLocaleString("en-US", {timeZone: "Asia/Karachi"}) },
   });
 };
 

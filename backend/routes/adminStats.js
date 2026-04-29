@@ -26,7 +26,7 @@ const BASE    = { isDeleted: false };     // shared — never mutated, spread wh
  */
 router.get('/system', adminAuth, async (req, res) => {
   try {
-    const now          = new Date();
+    const now          = new Date().toLocaleString("en-US", {timeZone: "Asia/Karachi"});
     const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
     const startOfWeek  = new Date(now);

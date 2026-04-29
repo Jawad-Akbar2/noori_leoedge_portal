@@ -646,7 +646,7 @@ router.get("/employee-breakdown/:empId", adminAuth, async (req, res) => {
 router.get("/live-payroll", adminAuth, async (req, res) => {
   try {
     const { startDate, endDate } = getCompanyMonthDates();
-    const now = new Date();
+    const now = new Date().toLocaleString("en-US", {timeZone: "Asia/Karachi"});
 
     // ── get employee ids + logs in parallel ───────────────────────────────────
     const empIds = await Employee.find(payrollFilter(req.userRole)).distinct(
@@ -1212,9 +1212,9 @@ router.patch("/status", adminAuth, async (req, res) => {
     const update = { status };
     if (status === "approved") {
       update.approvedBy = req.userId;
-      update.approvedAt = new Date();
+      update.approvedAt = new Date().toLocaleString("en-US", {timeZone: "Asia/Karachi"});
     }
-    if (status === "paid") update.paidAt = new Date();
+    if (status === "paid") update.paidAt = new Date().toLocaleString("en-US", {timeZone: "Asia/Karachi"});
 
     const result = await PayrollRecord.updateMany(
       { periodStart: start, periodEnd: end, isDeleted: false },

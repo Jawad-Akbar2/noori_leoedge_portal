@@ -94,7 +94,7 @@ router.post('/leave/:id/approve', adminAuth, async (req, res) => {
     // findOneAndUpdate in a single round-trip instead of find → mutate → save
     const leave = await LeaveRequest.findOneAndUpdate(
       { _id: req.params.id, isDeleted: false, status: 'Pending' },
-      { $set: { status: 'Approved', approvedBy: req.userId, approvedAt: new Date() } },
+      { $set: { status: 'Approved', approvedBy: req.userId, approvedAt: new Date().toLocaleString("en-US", {timeZone: "Asia/Karachi"}) } },
       { new: true }
     ).lean();
 
@@ -128,7 +128,7 @@ router.post('/leave/:id/reject', adminAuth, async (req, res) => {
         $set: {
           status:          'Rejected',
           approvedBy:      req.userId,
-          approvedAt:      new Date(),
+          approvedAt:      new Date().toLocaleString("en-US", {timeZone: "Asia/Karachi"}),
           rejectionReason: reason || 'Rejected by admin'
         }
       },
@@ -155,7 +155,7 @@ router.post('/correction/:id/approve', adminAuth, async (req, res) => {
   try {
     const correction = await CorrectionRequest.findOneAndUpdate(
       { _id: req.params.id, isDeleted: false, status: 'Pending' },
-      { $set: { status: 'Approved', approvedBy: req.userId, approvedAt: new Date() } },
+      { $set: { status: 'Approved', approvedBy: req.userId, approvedAt: new Date().toLocaleString("en-US", {timeZone: "Asia/Karachi"}) } },
       { new: true }
     ).lean();
 
@@ -192,7 +192,7 @@ router.post('/correction/:id/reject', adminAuth, async (req, res) => {
         $set: {
           status:          'Rejected',
           approvedBy:      req.userId,
-          approvedAt:      new Date(),
+          approvedAt:      new Date().toLocaleString("en-US", {timeZone: "Asia/Karachi"}),
           rejectionReason: reason || 'Rejected by admin'
         }
       },
@@ -234,7 +234,7 @@ async function applyLeaveToAttendance(leave, adminId) {
   if (shiftDiff <= 0) shiftDiff += 1440;
   const scheduledHours = shiftDiff / 60;
   const basePay        = scheduledHours * employee.hourlyRate;
-  const now            = new Date();
+  const now            = new Date().toLocaleString("en-US", {timeZone: "Asia/Karachi"});
   const empName        = `${employee.firstName} ${employee.lastName}`;
 
   const ops = [];
@@ -309,7 +309,7 @@ async function applyCorrectionToAttendance(correction, adminId) {
     manualOverride:            false,
     'metadata.source':         'correction_approval',
     'metadata.lastUpdatedBy':  adminId,
-    'metadata.lastModifiedAt': new Date()
+    'metadata.lastModifiedAt': new Date().toLocaleString("en-US", {timeZone: "Asia/Karachi"})
   };
 
   const inTime  = updatedInOut.in;

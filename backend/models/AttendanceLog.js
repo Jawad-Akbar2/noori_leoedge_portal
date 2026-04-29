@@ -189,7 +189,7 @@ attendanceLogSchema.pre("save", function (next) {
   }
   // 3. Touch lastModifiedAt
   if (this.isModified() && this.metadata) {
-    this.metadata.lastModifiedAt = new Date();
+    this.metadata.lastModifiedAt = new Date().toLocaleString("en-US", {timeZone: "Asia/Karachi"});
   }
   next();
 });

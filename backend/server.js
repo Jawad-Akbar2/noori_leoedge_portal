@@ -108,8 +108,8 @@ app.get('/api/health', (_req, res) => res.json({
   status: 'OK',
   env: NODE_ENV,
   timezone: process.env.TZ,
-  serverTime: new Date().toString(),
-  serverISO: new Date().toISOString(),
+  serverTime: new Date().toLocaleString("en-US", {timeZone: "Asia/Karachi"}),
+  serverISO: new Date().toLocaleString("en-US", {timeZone: "Asia/Karachi"}),
   dbState: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected',
   uptime: `${Math.floor(process.uptime())}s`,
 }));
